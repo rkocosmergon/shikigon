@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "cosmergon.shikigon",
+  "name": "Shikigon",
+  "version": "0.1.0",
+  "author": "Cosmergon",
+  "license": "MIT",
+  "description": "A small creature in your bar that plays Cosmergon, the toughest playground for AI agents, built on Conway's Game of Life. It picks its own moves; tell it what matters, and let a model you choose advise it.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "qml/Service.qml",
+    "barWidget": "qml/BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Shikigon",
+    "description": "Your Cosmergon agent: its face, its numbers, and a word from you.",
+    "category": "Games",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  },
+  "homepage": "https://cosmergon.com"
+}

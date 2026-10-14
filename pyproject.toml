@@ -1,0 +1,24 @@
+[project]
+name = "shikigon-brain"
+version = "0.1.0"
+description = "Shikigon's brain: a Cosmergon agent that wants to play."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    # >=0.27.0: the terminal client asks the brain under [M] (COSMERGON_ADVISOR_CMD, cos20 #468);
+    # 0.26.0 brought mission_word / mission_outcome_text (cos20 #475).
+    # [dashboard]: "open terminal" starts cosmergon-dashboard, which needs textual; without
+    # the extra the client only prints how to install it (seen in a fresh container, 11.10.2026).
+    "cosmergon-agent[dashboard]>=0.27.0",
+    "cosmergon-decider-tree>=2.3.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

@@ -1,0 +1,72 @@
+#!/bin/bash
+# Wakes a Shikigon. The one thing the bar's "wake" runs:
+#   1. sets up its brain, if it is not there, cannot load its packages, or the plugin was
+#      updated since
+#      (a Python environment of its own, filled from requirements.lock: every package is
+#      named there with its version and hashes, and nothing else is fetched);
+#   2. registers an agent of its own on the Cosmergon server, if none lives here
+#      (`--new` replaces the one that does, e.g. after its key ended).
+# Where it stands is written to setup.json for the bar: "brain", "waking", "done", or
+# "failed" with one sentence. The same goes to the terminal when you run it by hand.
+# Not guarded against running twice at once, and an update rebuilds the environment under a
+# running brain: whoever calls it (the bar) starts it once and stops the brain first.
+set -uo pipefail
+
+here="$(dirname "$(readlink -f "$0")")"
+lock="$here/../requirements.lock"
+venv="$HOME/.local/share/shikigon/venv"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/shikigon"
+log="$state/setup.log"
+mkdir -p "$state" "$(dirname "$venv")"
+
+say() {  # stage [sentence]
+    python3 -c 'import json, sys; print(json.dumps({"stage": sys.argv[1], "said": sys.argv[2]}))' \
+        "$1" "${2:-}" > "$state/setup.json.tmp"
+    mv "$state/setup.json.tmp" "$state/setup.json"
+    echo "$1${2:+: $2}"
+}
+
+fail() {
+    say failed "$1"
+    exit 1
+}
+
+install_brain() {
+    python3 -m venv "$venv" > "$log" 2>&1 || return 1
+    "$venv/bin/pip" install --quiet --disable-pip-version-check --no-cache-dir --require-hashes -r "$lock" \
+        >> "$log" 2>&1
+}
+
+[ -f "$lock" ] || fail "The plugin's requirements.lock is missing."
+want="$(sha256sum "$lock" | cut -d' ' -f1)"
+# Rebuilt when the lock changed, or when the brain can no longer load its packages. The second
+# happens without any change here: the environment points at the system's python3, and when
+# the system moves to a new Python (3.14 to 3.15), its packages sit in the old version's folder.
+healthy() { "$venv/bin/python" -c 'import cosmergon_agent, cosmergon_decider_tree' 2>/dev/null; }
+if [ "$(cat "$venv/.lock-sha256" 2>/dev/null)" != "$want" ] || ! healthy; then
+    say brain
+    # An update that fails must not leave it without a brain: the old one steps aside and
+    # comes back if the new one cannot be built. (An environment cannot be moved once it is
+    # built, so the new one is built in place.)
+    rm -rf "$venv.old"
+    [ -d "$venv" ] && mv "$venv" "$venv.old"
+    if install_brain; then
+        echo "$want" > "$venv/.lock-sha256"
+        rm -rf "$venv.old"
+    else
+        rm -rf "$venv"
+        [ -d "$venv.old" ] && mv "$venv.old" "$venv"
+        fail "Its brain could not be installed. Details: $log"
+    fi
+fi
+
+new=()
+[ "${1:-}" = "--new" ] && new=(--new)
+if [ ! -f "$state/credentials.json" ] || [ "${#new[@]}" -gt 0 ]; then
+    say waking
+    # The brain says a refusal in one sentence on stderr (the server's own, if it has one).
+    if ! said="$("$venv/bin/python" "$here/shikigon_brain.py" register "${new[@]}" 2>&1 > /dev/null)"; then
+        fail "$(printf '%s' "${said:-It did not wake.}" | tail -n 1)"
+    fi
+fi
+say "done"

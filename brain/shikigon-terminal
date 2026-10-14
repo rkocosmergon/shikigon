@@ -1,0 +1,25 @@
+#!/bin/bash
+# Opens the Cosmergon terminal client (cosmergon-dashboard) for this Shikigon's agent.
+# The key goes to the dashboard as an environment variable, never as an argument
+# (arguments are visible in the process list).
+set -euo pipefail
+state="${XDG_STATE_HOME:-$HOME/.local/state}/shikigon"
+venv="$HOME/.local/share/shikigon/venv"
+if [ ! -f "$state/credentials.json" ]; then
+    echo "No Shikigon lives here yet. Wake it from the bar first."
+    read -r -p "Press Enter to close." _
+    exit 1
+fi
+COSMERGON_API_KEY=$("$venv/bin/python" -c 'import json,sys; print(json.load(open(sys.argv[1]))["api_key"])' "$state/credentials.json")
+export COSMERGON_API_KEY
+# [M] in the terminal asks the same advisor as "ask" in the bar: the dashboard runs this
+# command with the question as its last argument and shows what it prints. The dashboard
+# does not hand the key above to the command; the brain reads its own key file.
+brain="$(cd "$(dirname "$0")" && pwd)/shikigon_brain.py"
+COSMERGON_ADVISOR_CMD="$(printf '%q %q ask' "$venv/bin/python" "$brain")"
+export COSMERGON_ADVISOR_CMD
+# The talk so far: the brain writes every question and answer to this file (chat_path() in
+# shikigon_brain.py). The dashboard reads it and opens [M] with the last ten exchanges; PgUp
+# fetches older ones. Needs cosmergon-agent >= 0.27.6; an older dashboard ignores it.
+export COSMERGON_ADVISOR_HISTORY="$state/chat.jsonl"
+exec "$venv/bin/cosmergon-dashboard"

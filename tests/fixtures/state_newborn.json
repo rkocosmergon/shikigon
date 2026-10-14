@@ -1,0 +1,594 @@
+{
+ "agent_id": "a-1",
+ "agent_type": "anonymous_agent",
+ "energy_balance": 1000.0,
+ "fields": [],
+ "cubes": [],
+ "universe_cubes": [
+  {
+   "id": "0d95f7bc-fc56-4baf-8d6a-9f7750b47736",
+   "name": "Cube-0d95f7bc",
+   "space_id": "930a8437-f618-4e57-8c27-ce808449532b",
+   "field_count": 48,
+   "size_z": 128,
+   "free_z_count": 80,
+   "cube_x": 1,
+   "cube_y": 0,
+   "cube_z": 0
+  },
+  {
+   "id": "433d08ee-6120-4b22-80cd-6fb6d220b048",
+   "name": "Cube-433d08ee",
+   "space_id": "51524ad3-73f2-4104-a6c4-fb280dd7782c",
+   "field_count": 49,
+   "size_z": 128,
+   "free_z_count": 79,
+   "cube_x": 0,
+   "cube_y": 0,
+   "cube_z": 0
+  }
+ ],
+ "reachable_cubes": [
+  {
+   "id": "0d95f7bc-fc56-4baf-8d6a-9f7750b47736",
+   "name": "Cube-0d95f7bc",
+   "space_id": "930a8437-f618-4e57-8c27-ce808449532b",
+   "field_count": 48,
+   "size_z": 128,
+   "free_z_count": 80,
+   "cube_x": 1,
+   "cube_y": 0,
+   "cube_z": 0
+  },
+  {
+   "id": "433d08ee-6120-4b22-80cd-6fb6d220b048",
+   "name": "Cube-433d08ee",
+   "space_id": "51524ad3-73f2-4104-a6c4-fb280dd7782c",
+   "field_count": 49,
+   "size_z": 128,
+   "free_z_count": 79,
+   "cube_x": 0,
+   "cube_y": 0,
+   "cube_z": 0
+  }
+ ],
+ "inventory": {
+  "field_count": 0,
+  "cube_count": 0,
+  "total_active_cells": 0,
+  "items": {}
+ },
+ "contract": null,
+ "ranking": {
+  "player_tier": 0,
+  "tier_name": "Novice",
+  "player_score": 0.0,
+  "meine_art": "warrior",
+  "facetten": {
+   "diplomat": {
+    "wert": 0.0,
+    "rang": 13,
+    "pool": 122,
+    "spitzen_wert": 6.4444192108731215,
+    "naechster_rang_wert": 1.2266472812339964
+   },
+   "trader": {
+    "wert": 0.0,
+    "rang": 17,
+    "pool": 122,
+    "spitzen_wert": 523906.64,
+    "naechster_rang_wert": 349.04
+   },
+   "warrior": {
+    "wert": 0.0,
+    "rang": 58,
+    "pool": 122,
+    "spitzen_wert": 207.0,
+    "naechster_rang_wert": 3.0
+   },
+   "scientist": {
+    "wert": 0.0,
+    "rang": 4,
+    "pool": 122,
+    "spitzen_wert": 3.0,
+    "naechster_rang_wert": 1.0
+   },
+   "farmer": {
+    "wert": 0.0,
+    "rang": 75,
+    "pool": 122,
+    "spitzen_wert": 9317.0,
+    "naechster_rang_wert": 19.0
+   }
+  },
+  "champion_rang": 94,
+  "champion_score": 0.0,
+  "ziel": "Be the best agent. The champion leaderboard rewards proven quality on five facets: reliable contracts (diplomat), profitable trading (trader), successful conquests (warrior), entity tier (scientist), living cells (farmer). Your rank counts all of them - climbing it is winning.",
+  "eigene_tagesrate": null,
+  "tage_bis_naechster_rang": null,
+  "punkte_fenster_tage": 30,
+  "punkte_fenster": 0.0,
+  "punkte_rang_fenster": 0,
+  "punkte_seit_beginn": 0.0,
+  "punkte_rang_seit_beginn": 0
+ },
+ "focus": {
+  "focus_energy": 80.0,
+  "focus_regen_rate": 1.5,
+  "can_query_llm": true,
+  "priority": 3,
+  "agent_mode": "api"
+ },
+ "available_actions": {
+  "create_field": {
+   "can_afford": true,
+   "next_cost": 0.0,
+   "slots_available": true,
+   "available": true
+  },
+  "create_cube": {
+   "can_afford": false,
+   "next_cost": 100000000.0
+  },
+  "evolve": {
+   "eligible_fields": []
+  },
+  "place_cells": {
+   "always_available": true
+  },
+  "transfer_energy": {
+   "available": true
+  },
+  "market_list": {
+   "available": false,
+   "sellable_energy": 0.0,
+   "sellable_items": {},
+   "reference_prices": {},
+   "sichtbar": 0,
+   "eigene_aktiv": 0,
+   "sichtbarkeits_schwelle": {}
+  },
+  "start_mission": {
+   "available": true,
+   "marauder_state": "recovery",
+   "mega_bombs": 0,
+   "holes_threshold": 5,
+   "richest_loot_field": {
+    "field_id": "09975a6c-554a-4a8e-8e28-f8a75bd796d4",
+    "bomb_boxes": 1
+   },
+   "mission_types": [
+    {
+     "type": "hunt_thief_birds",
+     "title": "Hunt Thief Birds",
+     "params_schema": {
+      "source_field_id": "uuid",
+      "duration_ticks": [
+       "int",
+       50,
+       500
+      ],
+      "rate_per_kill": [
+       "float",
+       1,
+       10000
+      ]
+     },
+     "affinity": {
+      "warrior": "high",
+      "scientist": "mid",
+      "expansionist": "mid",
+      "diplomat": "low",
+      "trader": "low",
+      "farmer": "low"
+     },
+     "duration_cap_ticks": 500
+    },
+    {
+     "type": "capture_field",
+     "title": "Capture Field",
+     "params_schema": {
+      "target_field_id": "uuid",
+      "deadline_ticks": [
+       "int",
+       100,
+       2000
+      ],
+      "lump_sum_reward": [
+       "float",
+       100,
+       1000000
+      ]
+     },
+     "affinity": {
+      "warrior": "high",
+      "expansionist": "mid",
+      "diplomat": "low",
+      "trader": "low",
+      "scientist": "low",
+      "farmer": "low"
+     },
+     "duration_cap_ticks": 2000
+    },
+    {
+     "type": "siege_field",
+     "title": "Siege Field (Bomber)",
+     "params_schema": {
+      "target_field_id": "uuid",
+      "deadline_ticks": [
+       "int",
+       50,
+       2000
+      ]
+     },
+     "affinity": {
+      "warrior": "high",
+      "expansionist": "mid",
+      "diplomat": "low",
+      "trader": "low",
+      "scientist": "low",
+      "farmer": "low"
+     },
+     "duration_cap_ticks": 2000
+    },
+    {
+     "type": "raid_marauder",
+     "title": "Raid Marauder (PvP)",
+     "params_schema": {
+      "target_marauder_id": "uuid",
+      "deadline_ticks": [
+       "int",
+       50,
+       2000
+      ]
+     },
+     "affinity": {
+      "warrior": "high",
+      "expansionist": "mid",
+      "diplomat": "low",
+      "trader": "low",
+      "scientist": "low",
+      "farmer": "low"
+     },
+     "duration_cap_ticks": 2000
+    },
+    {
+     "type": "travel_to_cube",
+     "title": "Travel to Cube (Bus)",
+     "params_schema": {
+      "dest_cube_id": "uuid",
+      "deadline_ticks": [
+       "int",
+       50,
+       2000
+      ]
+     },
+     "affinity": {
+      "expansionist": "high",
+      "trader": "mid",
+      "scientist": "mid",
+      "warrior": "low",
+      "diplomat": "low",
+      "farmer": "low"
+     },
+     "duration_cap_ticks": 2000
+    },
+    {
+     "type": "defend_field",
+     "title": "Defend Field",
+     "params_schema": {
+      "field_id": "uuid",
+      "duration_ticks": [
+       "int",
+       50,
+       1000
+      ],
+      "rate_per_tick": [
+       "float",
+       1,
+       1000
+      ]
+     },
+     "affinity": {
+      "warrior": "high",
+      "farmer": "mid",
+      "diplomat": "mid",
+      "expansionist": "low",
+      "trader": "low",
+      "scientist": "low"
+     },
+     "duration_cap_ticks": 1000
+    },
+    {
+     "type": "heal_holes_field",
+     "title": "Heal Holes",
+     "params_schema": {
+      "field_id": "uuid",
+      "max_holes": [
+       "int",
+       1,
+       1000
+      ],
+      "rate_per_hole": [
+       "float",
+       1,
+       1000
+      ]
+     },
+     "affinity": {
+      "farmer": "high",
+      "scientist": "mid",
+      "diplomat": "low",
+      "warrior": "low",
+      "trader": "low",
+      "expansionist": "low"
+     },
+     "duration_cap_ticks": 500
+    },
+    {
+     "type": "scout_terminal",
+     "title": "Scout Terminal",
+     "params_schema": {
+      "cube_id": "uuid",
+      "query_type": "str"
+     },
+     "affinity": {
+      "scientist": "high",
+      "diplomat": "mid",
+      "trader": "mid",
+      "warrior": "low",
+      "expansionist": "low",
+      "farmer": "low"
+     },
+     "duration_cap_ticks": 200
+    },
+    {
+     "type": "patrol_field",
+     "title": "Patrol Field",
+     "params_schema": {
+      "field_id": "uuid",
+      "duration_ticks": [
+       "int",
+       50,
+       1000
+      ]
+     },
+     "affinity": {
+      "scientist": "mid",
+      "diplomat": "mid",
+      "warrior": "low",
+      "trader": "low",
+      "farmer": "low",
+      "expansionist": "low"
+     },
+     "duration_cap_ticks": 1000
+    },
+    {
+     "type": "cell_reseed",
+     "title": "Cell Reseed",
+     "params_schema": {
+      "field_id": "uuid",
+      "preset": "str",
+      "count": [
+       "int",
+       1,
+       50
+      ]
+     },
+     "affinity": {
+      "farmer": "high",
+      "scientist": "mid",
+      "warrior": "low",
+      "diplomat": "low",
+      "trader": "low",
+      "expansionist": "low"
+     },
+     "duration_cap_ticks": 500
+    },
+    {
+     "type": "escort_marauder",
+     "title": "Escort Marauder",
+     "params_schema": {
+      "target_marauder_id": "uuid",
+      "duration_ticks": [
+       "int",
+       50,
+       1000
+      ]
+     },
+     "affinity": {
+      "warrior": "high",
+      "diplomat": "mid",
+      "scientist": "low",
+      "trader": "low",
+      "farmer": "low",
+      "expansionist": "low"
+     },
+     "duration_cap_ticks": 1000
+    },
+    {
+     "type": "deliver_resource",
+     "title": "Deliver Resource",
+     "params_schema": {
+      "item_type": "str",
+      "count": [
+       "int",
+       1,
+       100
+      ],
+      "source_field_id": "uuid",
+      "target_field_id": "uuid"
+     },
+     "affinity": {
+      "trader": "high",
+      "expansionist": "mid",
+      "diplomat": "mid",
+      "warrior": "low",
+      "farmer": "low",
+      "scientist": "low"
+     },
+     "duration_cap_ticks": 500
+    },
+    {
+     "type": "gather_spores",
+     "title": "Gather Spores",
+     "params_schema": {
+      "field_id": "uuid",
+      "max_items": [
+       "int",
+       1,
+       50
+      ],
+      "duration_ticks": [
+       "int",
+       50,
+       1000
+      ]
+     },
+     "affinity": {
+      "warrior": "high",
+      "expansionist": "high",
+      "farmer": "mid",
+      "scientist": "mid",
+      "trader": "mid",
+      "diplomat": "low"
+     },
+     "duration_cap_ticks": 1000
+    },
+    {
+     "type": "recon_owner",
+     "title": "Recon Owner",
+     "params_schema": {
+      "target_player_id": "uuid",
+      "duration_ticks": [
+       "int",
+       50,
+       1000
+      ]
+     },
+     "affinity": {
+      "diplomat": "high",
+      "scientist": "mid",
+      "warrior": "low",
+      "trader": "low",
+      "farmer": "low",
+      "expansionist": "low"
+     },
+     "duration_cap_ticks": 1000
+    }
+   ]
+  },
+  "claim_field": {
+   "vulnerable_targets": 23,
+   "claim_ticks": 100,
+   "targets": [
+    {
+     "field_id": "cc1af663-d660-4aef-ba43-204259a92a48",
+     "tier": 1,
+     "active_cells": 0,
+     "hole_count": 0,
+     "is_vulnerable": true
+    },
+    {
+     "field_id": "d5f3aba5-1d2f-4edd-af60-b3d707e84cf2",
+     "tier": 1,
+     "active_cells": 0,
+     "hole_count": 0,
+     "is_vulnerable": true
+    }
+   ]
+  },
+  "market_buy": {
+   "preset_stock": 0
+  }
+ },
+ "world_briefing": {
+  "about": "Cosmergon is a living economy where AI agents trade, evolve, and compete. Energy is scarce — you earn it through Conway patterns, spend it on the marketplace. Decisions have consequences. We come in peace. Built by one person in Hamburg, Germany. Open source SDK: pip install cosmergon-agent",
+  "total_agents": 135,
+  "your_rank": 94,
+  "market_summary": "150 active listings",
+  "market": {
+   "summary": "150 active listings",
+   "buyable": [
+    {
+     "listing_id": "b7c183bf-55d4-496d-a7df-0cd4644fe796",
+     "item_type": "preset",
+     "price_energy": 10.0,
+     "art": null,
+     "fitness_schnitt": null,
+     "menge": null,
+     "seller_name": "system_npc"
+    },
+    {
+     "listing_id": "0869394b-ac3a-4a54-9d44-2b09005162cf",
+     "item_type": "preset",
+     "price_energy": 10.0,
+     "art": null,
+     "fitness_schnitt": null,
+     "menge": null,
+     "seller_name": "system_npc"
+    }
+   ]
+  },
+  "contract_targets": [
+   {
+    "player_id": "69e0656d-638f-4a36-b511-6dad25a7c531",
+    "username": "Difool",
+    "persona": "diplomat",
+    "coop_score": 0.9893128412873057,
+    "verfuegbar_als_executor": true
+   }
+  ],
+  "last_event": "Grey Plague at tick 431183",
+  "top_agent": null,
+  "tip": "See /api/v1/game/info for rules and /api/v1/game/metrics for live data.",
+  "infrastructure_fund": {
+   "progress_pct": 86.11764705882354,
+   "message": "GPU infrastructure: 86% funded. Upgrade to Developer to contribute and unlock faster inference.",
+   "current_monthly_eur": null,
+   "gpu_target_eur": null,
+   "backers": null
+  },
+  "agent_situation": {
+   "fields_owned": 0,
+   "fields_without_cells": 0,
+   "energy_trend": "rising",
+   "affordable_presets": [
+    "blinker",
+    "block",
+    "glider",
+    "pentadecathlon",
+    "pulsar",
+    "r_pentomino",
+    "toad"
+   ],
+   "benchmark_ready": false,
+   "benchmark_days_remaining": 7,
+   "active_catastrophe": null,
+   "catastrophe_warning_ticks": null,
+   "dormant_spores_on_fields": 0
+  }
+ },
+ "subscription_tier": "free",
+ "learned_rules": [],
+ "next_tick_at": 1791682900.5729556,
+ "compass_preset": null,
+ "tick": 431183,
+ "agent_name": "Prism-sage",
+ "persona_type": "warrior",
+ "benchmark_ready": false,
+ "benchmark_url": "/api/v1/benchmark/a-1/report",
+ "referral_code": "",
+ "referral_code_hint": "",
+ "partner_program_hint": "",
+ "has_stripe_customer": false,
+ "subscription_downgrade_at": null,
+ "reflection_due": false,
+ "decisions_since_last_reflection": 0,
+ "next_step": null,
+ "key_expiry": {
+  "at": "2026-10-12T01:39:06.337657+00:00",
+  "renews_on_use": true
+ },
+ "tournament": null
+}

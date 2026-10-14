@@ -1,0 +1,418 @@
+// Shikigon's panel logic as plain functions, so it can be tested without a compositor.
+// Same pattern as Omarchy's own models (shell/plugins/bar/BarModel.js): QML imports this
+// file directly and ignores the guard at the end; Node loads it as CommonJS.
+
+// The brain reports "free" under the server's name for it.
+function isCurrentPreset(name, compass) {
+  return compass === name || (name === "free" && compass === "autonomous")
+}
+
+// Arrows move through one grid: the presets in rows of `columns`, then the actions.
+// The first key press only places the cursor.
+function moveCursor(cursor, dx, dy, count, columns) {
+  if (cursor < 0) return 0
+  return Math.max(0, Math.min(count - 1, cursor + dx + dy * columns))
+}
+
+// 420668.4 -> "420,668": whole units with thousands separators, like the dashboard.
+function grouped(number) {
+  var value = Math.round(Number(number))
+  if (!isFinite(value)) return ""
+  var digits = String(Math.abs(value))
+  var out = ""
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 === 0) out += ","
+    out += digits[i]
+  }
+  return (value < 0 ? "-" : "") + out
+}
+
+// One journal entry as a line: a word from you, a tournament mission's end (the brain
+// writes it in a player's words, cos20 #475), a lesson from its last moves (#451), or a
+// move. `ok` is false only for a failure.
+function journalLine(entry) {
+  if (entry.instruction) return { text: "you: " + entry.instruction + " → " + entry.preset, ok: true }
+  var failed = entry.ok === false
+  if (entry.learned !== undefined)
+    return failed ? { text: "could not learn: " + (entry.why || ""), ok: false }
+                  : { text: "learned: " + entry.learned, ok: true }
+  var text = entry.mission ? entry.mission + " — " + entry.text : moveWords(entry)
+  return { text: text + (failed ? " ✗" : ""), ok: !failed }
+}
+
+// A move in words: a mission by its kind ("mission: gather spores"), any other move by its
+// action. Before 14.10.2026 the journal showed "start_mission" again and again (#451).
+// The brain writes a move's words into the journal (brain/words.py); older entries have none.
+function moveWords(entry) {
+  if (!entry) return ""
+  if (entry.words) return String(entry.words)
+  if (entry.kind) return "mission: " + String(entry.kind).replace(/_/g, " ")
+  return String(entry.action || "").replace(/_/g, " ")
+}
+
+// Newest first; the same entry several times in a row becomes one line with a count.
+function journalLines(entries, limit) {
+  var lines = []
+  for (var i = 0; i < entries.length; i++) {
+    var line = journalLine(entries[i])
+    if (lines.length > 0 && lines[lines.length - 1].text === line.text) lines[lines.length - 1].count++
+    else lines.push({ text: line.text, ok: line.ok, count: 1 })
+  }
+  return lines.slice(0, limit === undefined ? 4 : limit)
+}
+
+// ---------- First-time hints (cos20 #451, 14.10.2026) ----------
+// Desktop notifications, like the greeting on install: each at most once, at least TIP_GAP_S
+// apart ("always informed, never overwhelmed", founder 10.10.). The first step is read from
+// the state, not written into the text: a fixed "[P] Place cells" pointed nowhere once the
+// world was full (#468). Returns { id, title, body, marks } — marks go into tips.json as seen.
+var TIP_GAP_S = 600
+
+// The server names its stage (API contract, cos20 14.10.2026): clients branch on the key, the
+// sentence is for people and may change. A server without `stage` is read by its sentence.
+function stageIs(step, stage, sentence) {
+  if (!step) return false
+  if (step.stage) return step.stage === stage
+  return sentence.test(String(step.you_are_here || "") + " " + String(step.next || ""))
+}
+
+function tournamentOffer(status) {
+  return stageIs(status && status.next_step, "tournament_offer", /^you qualify for a free tournament slot/)
+}
+
+function nextTip(status, seen, lastAt, now, advisorPicked) {
+  if (!status || !status.name || status.mood === "asleep") return null
+  seen = seen || []
+  function was(id) { return seen.indexOf(id) >= 0 }
+  var name = status.name
+  // a celebration does not wait for the gap
+  if (was("landless") && !was("first_field") && Number(status.fields) > 0)
+    return { id: "first_field", title: name + " won its first field!",
+             body: "Its own land: now it can place cells on it and grow.", marks: ["first_field"] }
+  if (lastAt && now - lastAt < TIP_GAP_S) return null
+  if (!was("awake")) {
+    var offer = tournamentOffer(status)
+    var body = status.first_field
+      ? "All cubes are full and busy right now, so it has to win its first field. That takes a few hours. "
+      : ""
+    body += offer
+      ? "Your first move could be: take a free tournament slot. Open terminal, press T."
+      : "Your first move could be: tell it what matters with a compass button in its panel."
+    var marks = ["awake"]
+    if (status.first_field) marks.push("landless")
+    if (offer) marks.push("tournament")
+    return { id: "awake", title: name + " is awake", body: body, marks: marks }
+  }
+  if (!was("tournament") && tournamentOffer(status)) {
+    var what = String(status.next_step.next || "").replace(/^claim it — /, "")
+    return { id: "tournament", title: "A free tournament slot is open",
+             body: (what ? what + ". " : "") + "Open terminal, press T to take it.", marks: ["tournament"] }
+  }
+  if (!was("compass"))
+    return { id: "compass", title: "Tell " + name + " what matters",
+             body: "The compass buttons in its panel tilt its choices: grow, defend, trade … It stays itself.",
+             marks: ["compass"] }
+  if (!was("ask") && !advisorPicked)
+    return { id: "ask", title: "Ask it something",
+             body: "Press ask in its panel: a model you choose (a local one works) answers your questions, "
+                   + "advises its moves and learns from them.", marks: ["ask"] }
+  return null
+}
+
+// ---------- The tournament (cos20 #475), in the terminal's words ----------
+
+// Python's rounding (half to even): the terminal formats with f"{x:.0f}", which shows 12500 as
+// "12k"; Math.round would show "13k", and bar and terminal would disagree.
+function roundHalfEven(x) {
+  return Math.abs(x % 1) === 0.5 ? 2 * Math.round(x / 2) : Math.round(x)
+}
+
+// A score short enough for one line, exactly like the terminal's _kurz (dashboard.py):
+// 1,200 · 63k · 1.2M.
+function shortNumber(value) {
+  var v = Number(value) || 0
+  if (v >= 999500) return (roundHalfEven(v / 100000) / 10).toFixed(1) + "M"
+  if (v >= 10000) return roundHalfEven(v / 1000) + "k"
+  return grouped(roundHalfEven(v))
+}
+
+function tournamentRunning(brief) {
+  return !!brief && typeof brief === "object" && brief.status === "running"
+}
+
+// What a tournament scores; "arena energy" is the arena field's energy, not the balance.
+var CATEGORIES = [["arena energy", "energy"], ["fields", "territory"], ["vitality", "vitality"]]
+
+// Each category: your value against the best in the arena (the server sends no rank).
+function tournamentRows(brief) {
+  var mine = (brief && brief.my_score) || {}
+  var best = (brief && brief.leader) || {}
+  return CATEGORIES.map(function(category) {
+    var m = Number(mine[category[1]]) || 0
+    var b = Number(best[category[1]]) || 0
+    return { label: category[0], ratio: b > 0 ? Math.min(1, m / b) : 0,
+             text: shortNumber(m) + "/" + shortNumber(b) }
+  })
+}
+
+var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+function pad2(n) { return (n < 10 ? "0" : "") + n }
+
+// "Sun 06:30" in local time — weekday from a fixed list, so it does not depend on the
+// system language (the terminal uses strftime("%a")).
+function endsText(iso) {
+  var when = new Date(iso)
+  if (isNaN(when.getTime())) return "?"
+  return DAYS[when.getDay()] + " " + pad2(when.getHours()) + ":" + pad2(when.getMinutes())
+}
+
+function marauderText(body) {
+  if (body.dead) return "dead"
+  return (body.on_mission ? "on a mission" : "between missions") + " · HP " + Math.round(Number(body.hp) || 0)
+}
+
+// The Marauders, grouped, each line readable on its own (no heading needed — the panel is
+// short of height): "3 Marauders on a mission · HP 100", "1 Marauder between missions · HP 100".
+function marauderLines(bodies) {
+  var counts = []
+  var list = (bodies || []).filter(function(b) { return b && typeof b === "object" })
+  for (var i = 0; i < list.length; i++) {
+    var text = marauderText(list[i])
+    var known = counts.filter(function(c) { return c.text === text })[0]
+    if (known) known.count++
+    else counts.push({ text: text, count: 1 })
+  }
+  return counts.map(function(c) {
+    return c.count + (c.count === 1 ? " Marauder " : " Marauders ") + c.text
+  })
+}
+
+// The brain's mood -> the eye shape of the pet's robo eyes.
+function eyeMood(mood) {
+  if (mood === "thriving") return "happy"
+  if (mood === "struggling") return "tired"
+  if (mood === "asleep") return "asleep"
+  return "default"
+}
+
+// Eye size from the bar's inner height. 0.64 is 20 % smaller than the first 0.8
+// (founder 10.10.2026: "die augen sind zu groß - 20% kleiner").
+function eyeSize(innerHeight) {
+  return Math.max(8, Math.round(innerHeight * 0.64))
+}
+
+// ---------- What is going on, and the one thing to do next (cos20 #451) ----------
+// Every state of the panel has a sentence that says what is going on and a next step.
+
+// The server's own sentence while something is still missing, in the terminal's form.
+// The brain passes `next_step` on as the server sent it; without one there is no sentence.
+// The server writes its advice for agents (an action name, an API path). Where a human
+// does it, the bar adds: tournament steps happen in the terminal, under T (founder 10.10.,
+// E-T1: no button for them here). Seen on the device 14.10.: "claim it" with nowhere to go.
+function serverSentence(step) {
+  if (!step || !step.next) return ""
+  var here = step.you_are_here ? step.you_are_here + " — " : ""
+  if (stageIs(step, "tournament_compass", /set_tournament_compass/))
+    return here + "choose its tournament compass: open terminal, press T"
+  if (stageIs(step, "tournament_offer", /^you qualify for a free tournament slot/))
+    return here + step.next + " — open terminal, press T"
+  return here + step.next
+}
+
+// Shown once, before the first wake: what it is, what the click does, where the data goes.
+var WAKE_LINES = [
+  "A creature of its own that plays a game by itself, among other AI agents.",
+  "Wake sets up its brain (about 40 MB in a folder of its own) and creates an anonymous "
+    + "player on cosmergon.com. No account, no payment.",
+  "What is sent and kept: cosmergon.com/datenschutz.html"
+]
+
+// The panel's state from the facts:
+//   facts.agent   a Shikigon lives here (its key file exists)
+//   facts.setup   "" | "brain" | "waking" | "failed", while a click on wake is at work
+//   facts.said    what the brain said when waking failed (the server's sentence, if it had one)
+//   facts.status  status.json as the brain wrote it
+// Returns `name`, the `sentence`, `lines` that explain it, the `actions` (the first one is
+// the next step) and `full`: whether the numbers and the compass are shown.
+function panelState(facts) {
+  var status = facts.status || {}
+  var asleep = status.mood === "asleep" ? status.reason || "" : ""
+  function is(name, sentence, lines, actions, full) {
+    return { name: name, sentence: sentence, lines: lines, actions: actions, full: !!full }
+  }
+  if (facts.setup === "brain") return is("setup", "setting up its brain…", [], [])
+  if (facts.setup === "waking") return is("setup", "waking…", [], [])
+  if (facts.setup === "failed") return is("failed", facts.said || "It did not wake.", [], ["try again"])
+  if (!facts.agent) return is("unborn", "asleep · no Shikigon lives here yet", WAKE_LINES, ["wake"])
+  if (asleep === "key_ended")  // a new one that did not wake says why, right here
+    return is("key_ended", "It was away too long. The world took it over.",
+              facts.said ? [facts.said] : [], ["wake a new one"])
+  if (asleep === "config") {
+    var why = (status.last && status.last.why) || "its configuration cannot be followed"
+    return is("config", why, ["Change it in ~/.config/shikigon/shikigon.toml."], [])
+  }
+  // "ask" turns the panel to the talk with its advisor (the question line and the answers).
+  // No "move now": the brain moves by itself right after every tick, and the world takes
+  // one move per tick, so the button was refused almost every time it was pressed.
+  var actions = ["open terminal", "ask"]
+  if (asleep === "world_silent")
+    return is("world_silent", "The world did not answer. It tries again by itself.", [], actions, true)
+  return is("awake", serverSentence(status.next_step), [], actions, true)
+}
+
+// `facts.setup` from what the wake script wrote to setup.json. A stage is believed only while
+// the script runs (a file left behind must not say "setting up" forever); a failure stays
+// until a Shikigon lives here.
+function setupStage(file, running, agent) {
+  var stage = (file && file.stage) || ""
+  if (running) return stage === "brain" || stage === "waking" ? stage : ""
+  return stage === "failed" && !agent ? "failed" : ""
+}
+
+// `facts.said`: the sentence of a wake that failed; "" when the last one did not.
+function setupSaid(file) {
+  return file && file.stage === "failed" ? String(file.said || "") : ""
+}
+
+// What its advisor did on the last move, as one line; "" when no advisor was asked.
+function adviceLine(last) {
+  var advice = last && last.advice
+  if (!advice) return ""
+  if (advice.fallback) return "advisor: " + advice.fallback + " — the rules played"
+  return (advice.model || "advisor") + ": " + (advice.why || "picked move " + advice.choice)
+}
+
+// What it learned last (lessons.json, newest last), for the panel's LEARNED block (cos20 #451,
+// panel 14.10. I): the two short parts and what it rests on. The long paragraph is for the
+// model, not for the panel. null before the first lesson.
+function lessonView(lessons, now) {
+  var last = lessons && lessons.length ? lessons[lessons.length - 1] : null
+  if (!last || !last.double_down || !last.avoid) return null
+  var age = Math.max(0, Math.floor((now - Number(last.at || now)) / 60))
+  var ago = age < 1 ? "just now" : age < 60 ? age + " min ago" : age < 2880 ? Math.floor(age / 60) + " h ago"
+                                                     : Math.floor(age / 1440) + " days ago"
+  return { more: String(last.double_down), less: String(last.avoid),
+           basis: "from " + (last.from_moves || "?") + " moves, " + ago }
+}
+
+// The talk with the advisor: the last exchanges, oldest first, as lines of who said what.
+// A question without an answer says why (no model set, the model was away).
+function chatLines(turns, limit) {
+  var shown = (turns || []).slice(-(limit === undefined ? 3 : limit))
+  var lines = []
+  for (var i = 0; i < shown.length; i++) {
+    var turn = shown[i]
+    lines.push({ who: "you", text: turn.q || "", ok: true })
+    if (turn.ok) lines.push({ who: turn.model || "advisor", text: turn.a || "", ok: true })
+    else lines.push({ who: "advisor", text: turn.why || "no answer", ok: false })
+  }
+  return lines
+}
+
+// True once the brain has written down the question that is on its way: a turn with the
+// same words, not older than the asking (`pending` is { q, at }, `at` in seconds).
+function answered(turns, pending) {
+  if (!pending || !pending.q) return true
+  return (turns || []).some(function(turn) {
+    return turn.q === pending.q && Number(turn.at) >= Number(pending.at) - 1
+  })
+}
+
+// The talk as the panel shows it: the last exchanges, and a question still on its way at
+// once, with "…" where its answer will stand.
+function talkLines(turns, pending, limit) {
+  var lines = chatLines(turns, limit)
+  if (answered(turns, pending)) return lines
+  return lines.concat([{ who: "you", text: pending.q, ok: true },
+                       { who: "advisor", text: "…", ok: true }])
+}
+
+// ---------- Who answers (cos20 #451, concept 10.5d) ----------
+// One list: what the brain found (an agent the player already uses, a model server on this
+// machine, the config's own address), then the two ways to get one.
+
+var WHO_SETUP = { id: "setup", text: "set up an agent in Omarchy…" }
+var WHO_ADDRESS = { id: "address", text: "an address of its own…" }
+var WHO_DATA = "Your question and its situation go to whoever you pick. Never its key."
+
+function whoRows(found) {
+  return (found || []).concat([WHO_SETUP, WHO_ADDRESS])
+}
+
+// What Enter on a row leads to: an agent or a server asks which model, a ready row is tried.
+function whoNext(row) {
+  if (!row) return "who"
+  if (row.id === "setup") return "setup"
+  if (row.id === "address") return "address"
+  if (row.model) return "trying"
+  return "models"
+}
+
+// At most `limit` models fit the panel; the rest is named as a count.
+function modelRows(models, limit) {
+  var all = models || []
+  var max = limit === undefined ? 8 : limit
+  return { shown: all.slice(0, max), more: Math.max(0, all.length - max) }
+}
+
+function tryingText(name) {
+  return "asking " + (name || "it") + " once…"
+}
+
+// "advise on moves": off, then every 15th move, then every move. Through an agent there is
+// no "every move": a call starts a whole program on the player's allowance.
+function adviseSteps(via) { return via === "agent" ? [0, 15] : [0, 15, 1] }
+
+function adviseNext(now) {
+  var steps = adviseSteps(now && now.via)
+  var at = steps.indexOf(Number(now && now.advise) || 0)
+  return steps[(at + 1) % steps.length]
+}
+
+function adviseText(now) {
+  var n = Number(now && now.advise) || 0
+  return "advise on moves: " + (n === 0 ? "off" : (n === 1 ? "every move" : "every " + n + "th move"))
+}
+
+// How much of the day's allowance is used: a line of its own (in the button the text ran
+// out of it, seen on the device).
+function callsText(now) {
+  if (!now) return ""
+  return "calls today " + (now.calls || 0) + (now.limit ? " / " + now.limit : "")
+}
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    whoRows: whoRows,
+    whoNext: whoNext,
+    modelRows: modelRows,
+    tryingText: tryingText,
+    adviseSteps: adviseSteps,
+    adviseNext: adviseNext,
+    adviseText: adviseText,
+    callsText: callsText,
+    answered: answered,
+    talkLines: talkLines,
+    serverSentence: serverSentence,
+    panelState: panelState,
+    setupStage: setupStage,
+    setupSaid: setupSaid,
+    adviceLine: adviceLine,
+    chatLines: chatLines,
+    isCurrentPreset: isCurrentPreset,
+    moveCursor: moveCursor,
+    grouped: grouped,
+    journalLines: journalLines,
+    moveWords: moveWords,
+    nextTip: nextTip,
+    eyeMood: eyeMood,
+    eyeSize: eyeSize,
+    roundHalfEven: roundHalfEven,
+    shortNumber: shortNumber,
+    tournamentRunning: tournamentRunning,
+    tournamentRows: tournamentRows,
+    endsText: endsText,
+    marauderLines: marauderLines
+  }
+}

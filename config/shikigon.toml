@@ -1,0 +1,59 @@
+# Shikigon configuration. Copied to ~/.config/shikigon/shikigon.toml on first start;
+# edit that copy, not this one. Everything here is yours to change.
+
+[world]
+# The Cosmergon server your Shikigon lives on.
+base_url = "https://cosmergon.com"
+
+[character]
+# One of: farmer, trader, diplomat, scientist, warrior, expansionist.
+# Leave empty to let the world choose.
+persona = ""
+# A name of your own. Leave empty and the world gives it one.
+name = ""
+
+[brain]
+# Who chooses its moves:
+#   "tree"     the rule tree, cosmergon-decider-tree (https://pypi.org/project/cosmergon-decider-tree/)
+#   "advised"  the rule tree proposes up to three moves, the model in [brain.advisor] picks one
+#   any other  a decider you installed (Python entry-point group "cosmergon.deciders")
+decider = "tree"
+# Seconds between two moves. The world ticks about once a minute; faster is wasted.
+interval_s = 60
+
+# A model as its advisor. Off until you pick one in the panel (ask) or name an endpoint and
+# a model here; a pick in the panel counts over this section.
+# It serves three things: the advice on a move (decider = "advised"), your questions (`ask`,
+# also while the rule tree plays alone), and its lessons every 100 moves.
+# Only the advisor you picked is called. What it is told is listed in the README under
+# "What it sends". Never the key.
+[brain.advisor]
+# Any OpenAI-compatible endpoint. Ollama on this machine: "http://localhost:11434/v1"
+base_url = ""
+model = ""
+# "none" keeps a thinking model from spending its whole answer on thinking.
+# Leave empty to send nothing.
+reasoning_effort = "none"
+# Ask for advice on every n-th move.
+every = 1
+# Seconds to wait for the model. Without an answer the first proposal is played.
+timeout_s = 20
+# Calls a day, advice and questions together. 0 = no limit.
+max_per_day = 500
+# Name of an environment variable that holds an API key, if the endpoint wants one.
+# The name, never the key itself.
+api_key_env = ""
+
+# What you say, and what your Shikigon hears.
+# A word from you sets its compass. The compass tilts its choices; it does not
+# override its character. A warrior told to be careful is still a warrior.
+# The world limits how often the compass may change; when it is too often, it answers 429
+# and says when to try again.
+[instructions]
+attack = ["attack", "fight", "angreifen", "kämpf", "aggressiv"]
+defend = ["defend", "careful", "safe", "vorsichtig", "verteidig", "schütz"]
+grow = ["grow", "expand", "build", "wachs", "bau", "expandier"]
+trade = ["trade", "sell", "buy", "market", "handel", "verkauf", "kauf"]
+cooperate = ["cooperate", "friends", "ally", "verbünde", "zusammen", "freund"]
+explore = ["explore", "look around", "erkunde", "schau dich um"]
+autonomous = ["free", "your call", "do your thing", "frei", "mach was du willst"]
