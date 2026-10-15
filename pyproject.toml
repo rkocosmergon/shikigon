@@ -5,11 +5,12 @@ description = "Shikigon's brain: a Cosmergon agent that wants to play."
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
-    # >=0.27.0: the terminal client asks the brain under [M] (COSMERGON_ADVISOR_CMD, cos20 #468);
+    # >=0.27.10: the terminal client hands the brain the [M] question on stdin, never as an
+    #   argument (marketplace review); >=0.27.0 brought [M] itself (COSMERGON_ADVISOR_CMD);
     # 0.26.0 brought mission_word / mission_outcome_text (cos20 #475).
     # [dashboard]: "open terminal" starts cosmergon-dashboard, which needs textual; without
     # the extra the client only prints how to install it (seen in a fresh container, 11.10.2026).
-    "cosmergon-agent[dashboard]>=0.27.0",
+    "cosmergon-agent[dashboard]>=0.27.10",
     "cosmergon-decider-tree>=2.3.3",
 ]
 

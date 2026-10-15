@@ -2,7 +2,11 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## 0.1.1 (unreleased)
+## 0.1.1 (2026-10-15)
+
+Needs `cosmergon-agent` 0.27.10 (pinned in `requirements.lock`; the environment is rebuilt on
+the next start of the shell). A terminal window that is still open keeps the old version until
+you close it and open it again.
 
 - Your questions, instructions and the talk with the model go over stdin, no longer as a
   command-line argument: other users on the same machine could read those while a model

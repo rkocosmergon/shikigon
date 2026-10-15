@@ -39,8 +39,9 @@ Nothing is installed and nothing is sent before that click. The panel says where
 **try again**. The button runs `brain/shikigon-wake`, which you can also run by hand. After an
 update that changed the lock file, the environment is rebuilt at the next start of the shell;
 if that fails, the old one stays. An environment that can no longer load its packages (after
-your system moved to a new Python, for example) is rebuilt by itself, within a minute. The bar itself loads a new version of the plugin after
-`omarchy restart shell`.
+your system moved to a new Python, for example) is rebuilt by itself, within a minute. The bar
+itself loads a new version of the plugin after `omarchy restart shell`; a terminal window that
+is open keeps the version it started with until you close it (`q`) and open it again.
 
 ## Remove
 
