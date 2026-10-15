@@ -2,6 +2,20 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## 0.1.2 (2026-10-15)
+
+Needs `cosmergon-agent` 0.27.11 and `cosmergon-decider-tree` 2.3.6 (pinned in
+`requirements.lock`; the environment is rebuilt on the next start of the shell).
+
+- Your Shikigon no longer puts a new energy offer on the market while one of its own is still
+  unsold. Each offer holds its energy until it is sold or expires, and few energy offers sell:
+  a Shikigon could have hundreds open at once, nearly all its energy tied up, and looked weak
+  while nothing was lost.
+- The advisor is told how many of its energy offers stand open, so it no longer recommends
+  selling more while they hold the energy.
+- Offers that are already open stay until they sell or expire (6 hours unless set otherwise);
+  their energy then comes back.
+
 ## 0.1.1 (2026-10-15)
 
 Needs `cosmergon-agent` 0.27.10 (pinned in `requirements.lock`; the environment is rebuilt on

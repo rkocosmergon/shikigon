@@ -227,6 +227,14 @@ def test_the_keys_end_is_told_as_a_span_not_as_a_timestamp() -> None:
     assert "T" + soon.isoformat().split("T")[1] not in told
 
 
+def test_the_model_is_told_how_many_energy_offers_stand_unsold() -> None:
+    """cos20 #491: a model advised selling more while 214 offers held almost all the energy."""
+    told = advisor.facts(_state(available_actions={"market_list": {"open_energy_listings": 3}}))
+    assert "Open energy offers on the market: 3 (each holds its energy" in told
+    for quiet in ({}, {"market_list": {"open_energy_listings": 0}}, {"market_list": True}):
+        assert "Open energy offers" not in advisor.facts(_state(available_actions=quiet))
+
+
 def test_thinking_is_switched_off_only_when_the_setting_says_so() -> None:
     assert advisor.request_body(CONF, [], 10)["reasoning_effort"] == "none"
     assert "reasoning_effort" not in advisor.request_body({**CONF, "reasoning_effort": ""}, [], 10)

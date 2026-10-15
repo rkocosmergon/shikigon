@@ -140,11 +140,33 @@ def facts(state: Any) -> str:
     step = getattr(state, "next_step", None)
     if step:
         lines.append(f"The server's advice: {step.get('next', '')}")
+    offers = open_energy_offers(state)
+    if offers:
+        lines.append(
+            f"Open energy offers on the market: {offers} "
+            "(each holds its energy until it is sold or expires)"
+        )
     expiry = getattr(state, "key_expiry", None)
     if expiry:
         renews = "; every move it makes extends that" if expiry.get("renews_on_use") else ""
         lines.append(f"Its key is valid {time_left(str(expiry.get('at', '')))}{renews}")
     return "\n".join(lines)
+
+
+def open_energy_offers(state: Any) -> int:
+    """How many of its own energy offers stand unsold; 0 when the server does not say.
+
+    Without this line a model advised selling more energy while 214 offers already held
+    almost all of it, and gave as reason that a move extends the key.
+    """
+    actions = getattr(state, "available_actions", None) or {}
+    offered = actions.get("market_list") if isinstance(actions, dict) else None
+    if not isinstance(offered, dict):
+        return 0
+    try:
+        return max(int(offered.get("open_energy_listings") or 0), 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def time_left(until: str) -> str:
