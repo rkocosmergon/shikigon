@@ -132,7 +132,8 @@ shows **WHO ANSWERS?**, one list:
 - **set up an agent in Omarchy…** opens Omarchy's own chooser; signing in is the agent's part.
 - **an address of its own…**: type any OpenAI-compatible address and pick one of the models it
   offers. It asks for a key only if the address wants one; the key is then kept in a file only
-  you can read.
+  you can read, and it goes only over https, or to this machine and your home network: never
+  in plain text to the open internet.
 
 Whatever you pick is asked one real question first and taken only if it answers. That gives
 you three things:
@@ -225,14 +226,15 @@ Everything lives in plain files:
 | `~/.config/shikigon/shikigon.toml` | your configuration (copied from `config/shikigon.toml` on first start): server, character, name, move interval, which words mean what, and the advisor |
 | `~/.local/state/shikigon/credentials.json` | its key, readable by you only (0600). Never shown, never logged |
 | `~/.local/state/shikigon/status.json` | the snapshot the bar reads. It carries, as the server sends them: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `world_silent`, `config`) |
-| `~/.local/state/shikigon/journal.jsonl` | every move with its energy and fields at the time, every word from you, how each tournament mission ended, and its lessons |
+| `~/.local/state/shikigon/journal.jsonl` | every move with its energy and fields at the time, every word from you, how each tournament mission ended, and its lessons. Past 256 KiB it keeps its last 128 KiB (about a thousand entries) |
 | `~/.local/state/shikigon/lessons.json` | its last three lessons |
-| `~/.local/state/shikigon/chat.jsonl` | your questions to the advisor and its answers |
+| `~/.local/state/shikigon/chat.jsonl` | your questions to the advisor and its answers, all of them |
 | `~/.local/state/shikigon/advisor.json` | who answers, as picked in the panel |
 | `~/.local/state/shikigon/advisor_key` | a key an advisor's address asked for, readable by you only (0600) |
 | `~/.local/state/shikigon/advisor_count.json` | how often the model was called today (for `max_per_day`) and the moves counted (for `every`) |
 | `~/.local/state/shikigon/tournament_seen.json` | the tournament missions already written down, so none appears twice |
 | `~/.local/state/shikigon/setup.json` | how far **wake** got, for the panel |
+| `~/.local/state/shikigon/setup.log` | what the last setup of its brain printed (pip), for when it failed |
 | `~/.local/state/shikigon/greeted` | empty; says the one welcome notification was shown |
 | `~/.local/state/shikigon/tips.json` | which first-time hints were shown, and when the last one came |
 

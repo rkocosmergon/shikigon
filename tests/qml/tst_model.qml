@@ -91,6 +91,12 @@ TestCase {
   }
 
   // A mission by its kind, not by the action's name (#451, 14.10.)
+  function test_a_hints_body_is_never_read_as_markup() {
+    compare(Model.notifyBody("Slot <b>open</b> & free"), "Slot &lt;b&gt;open&lt;/b&gt; &amp; free")
+    compare(Model.notifyBody("&lt;"), "&amp;lt;", "what looks escaped already is shown as written")
+    compare(Model.notifyBody(undefined), "")
+  }
+
   function test_journal_names_the_mission() {
     compare(Model.journalLine({ action: "start_mission", kind: "gather_spores", ok: true }).text,
             "mission: gather spores")

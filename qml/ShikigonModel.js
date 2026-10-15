@@ -31,7 +31,8 @@ function grouped(number) {
 // writes it in a player's words, cos20 #475), a lesson from its last moves (#451), or a
 // move. `ok` is false only for a failure.
 function journalLine(entry) {
-  if (entry.instruction) return { text: "you: " + entry.instruction + " → " + entry.preset, ok: true }
+  if (entry.instruction)
+    return { text: "you: " + entry.instruction + " → " + entry.preset, ok: true }
   var failed = entry.ok === false
   if (entry.learned !== undefined)
     return failed ? { text: "could not learn: " + (entry.why || ""), ok: false }
@@ -55,7 +56,8 @@ function journalLines(entries, limit) {
   var lines = []
   for (var i = 0; i < entries.length; i++) {
     var line = journalLine(entries[i])
-    if (lines.length > 0 && lines[lines.length - 1].text === line.text) lines[lines.length - 1].count++
+    var previous = lines.length > 0 ? lines[lines.length - 1] : null
+    if (previous && previous.text === line.text) previous.count++
     else lines.push({ text: line.text, ok: line.ok, count: 1 })
   }
   return lines.slice(0, limit === undefined ? 4 : limit)
@@ -77,7 +79,14 @@ function stageIs(step, stage, sentence) {
 }
 
 function tournamentOffer(status) {
-  return stageIs(status && status.next_step, "tournament_offer", /^you qualify for a free tournament slot/)
+  return stageIs(status && status.next_step, "tournament_offer",
+                 /^you qualify for a free tournament slot/)
+}
+
+// A notification's body may carry markup (Desktop Notifications spec; mako reads it), and a
+// hint can hold the server's words: `<`, `>` and `&` are shown as written, never read as tags.
+function notifyBody(text) {
+  return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
 function nextTip(status, seen, lastAt, now, advisorPicked) {
@@ -93,7 +102,8 @@ function nextTip(status, seen, lastAt, now, advisorPicked) {
   if (!was("awake")) {
     var offer = tournamentOffer(status)
     var body = status.first_field
-      ? "All cubes are full and busy right now, so it has to win its first field. That takes a few hours. "
+      ? "All cubes are full and busy right now, so it has to win its first field. "
+        + "That takes a few hours. "
       : ""
     body += offer
       ? "Your first move could be: take a free tournament slot. Open terminal, press T."
@@ -106,16 +116,18 @@ function nextTip(status, seen, lastAt, now, advisorPicked) {
   if (!was("tournament") && tournamentOffer(status)) {
     var what = String(status.next_step.next || "").replace(/^claim it — /, "")
     return { id: "tournament", title: "A free tournament slot is open",
-             body: (what ? what + ". " : "") + "Open terminal, press T to take it.", marks: ["tournament"] }
+             body: (what ? what + ". " : "") + "Open terminal, press T to take it.",
+             marks: ["tournament"] }
   }
   if (!was("compass"))
     return { id: "compass", title: "Tell " + name + " what matters",
-             body: "The compass buttons in its panel tilt its choices: grow, defend, trade … It stays itself.",
+             body: "The compass buttons in its panel tilt its choices: grow, defend, trade … "
+                   + "It stays itself.",
              marks: ["compass"] }
   if (!was("ask") && !advisorPicked)
     return { id: "ask", title: "Ask it something",
-             body: "Press ask in its panel: a model you choose (a local one works) answers your questions, "
-                   + "advises its moves and learns from them.", marks: ["ask"] }
+             body: "Press ask in its panel: a model you choose (a local one works) answers "
+                   + "your questions, advises its moves and learns from them.", marks: ["ask"] }
   return null
 }
 
@@ -169,7 +181,8 @@ function endsText(iso) {
 
 function marauderText(body) {
   if (body.dead) return "dead"
-  return (body.on_mission ? "on a mission" : "between missions") + " · HP " + Math.round(Number(body.hp) || 0)
+  return (body.on_mission ? "on a mission" : "between missions")
+    + " · HP " + Math.round(Number(body.hp) || 0)
 }
 
 // The Marauders, grouped, each line readable on its own (no heading needed — the panel is
@@ -243,8 +256,10 @@ function panelState(facts) {
   }
   if (facts.setup === "brain") return is("setup", "setting up its brain…", [], [])
   if (facts.setup === "waking") return is("setup", "waking…", [], [])
-  if (facts.setup === "failed") return is("failed", facts.said || "It did not wake.", [], ["try again"])
-  if (!facts.agent) return is("unborn", "asleep · no Shikigon lives here yet", WAKE_LINES, ["wake"])
+  if (facts.setup === "failed")
+    return is("failed", facts.said || "It did not wake.", [], ["try again"])
+  if (!facts.agent)
+    return is("unborn", "asleep · no Shikigon lives here yet", WAKE_LINES, ["wake"])
   if (asleep === "key_ended")  // a new one that did not wake says why, right here
     return is("key_ended", "It was away too long. The world took it over.",
               facts.said ? [facts.said] : [], ["wake a new one"])
@@ -257,7 +272,8 @@ function panelState(facts) {
   // one move per tick, so the button was refused almost every time it was pressed.
   var actions = ["open terminal", "ask"]
   if (asleep === "world_silent")
-    return is("world_silent", "The world did not answer. It tries again by itself.", [], actions, true)
+    return is("world_silent", "The world did not answer. It tries again by itself.", [],
+              actions, true)
   return is("awake", serverSentence(status.next_step), [], actions, true)
 }
 
@@ -290,8 +306,10 @@ function lessonView(lessons, now) {
   var last = lessons && lessons.length ? lessons[lessons.length - 1] : null
   if (!last || !last.double_down || !last.avoid) return null
   var age = Math.max(0, Math.floor((now - Number(last.at || now)) / 60))
-  var ago = age < 1 ? "just now" : age < 60 ? age + " min ago" : age < 2880 ? Math.floor(age / 60) + " h ago"
-                                                     : Math.floor(age / 1440) + " days ago"
+  var ago = age < 1 ? "just now"
+    : age < 60 ? age + " min ago"
+    : age < 2880 ? Math.floor(age / 60) + " h ago"
+    : Math.floor(age / 1440) + " days ago"
   return { more: String(last.double_down), less: String(last.avoid),
            basis: "from " + (last.from_moves || "?") + " moves, " + ago }
 }
@@ -372,7 +390,8 @@ function adviseNext(now) {
 
 function adviseText(now) {
   var n = Number(now && now.advise) || 0
-  return "advise on moves: " + (n === 0 ? "off" : (n === 1 ? "every move" : "every " + n + "th move"))
+  var how = n === 0 ? "off" : (n === 1 ? "every move" : "every " + n + "th move")
+  return "advise on moves: " + how
 }
 
 // How much of the day's allowance is used: a line of its own (in the button the text ran
@@ -406,6 +425,7 @@ if (typeof module !== "undefined") {
     journalLines: journalLines,
     moveWords: moveWords,
     nextTip: nextTip,
+    notifyBody: notifyBody,
     eyeMood: eyeMood,
     eyeSize: eyeSize,
     roundHalfEven: roundHalfEven,

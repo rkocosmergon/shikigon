@@ -1,3 +1,7 @@
+// Inline components and delegates below read this file's ids (root, presetGrid, actionRow):
+// bound to the context they are made in, as Qt recommends for that (qmllint: unqualified).
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls as Controls
 import Quickshell
@@ -50,7 +54,8 @@ BarWidget {
   // panel has a sentence and a next step, also "its key ended" and a wake that failed.
   readonly property var view: Model.panelState({
     agent: awake,
-    setup: Model.setupStage(service ? service.setup : null, service ? service.settingUp : false, awake),
+    setup: Model.setupStage(service ? service.setup : null,
+                            service ? service.settingUp : false, awake),
     said: Model.setupSaid(service ? service.setup : null),
     status: status
   })
@@ -76,7 +81,9 @@ BarWidget {
 
   // ---------- Panel: what the keys and the mouse can reach ----------
   // One grid for the cursor: the compass presets, then the actions.
-  readonly property var presets: ["grow", "defend", "attack", "trade", "cooperate", "explore", "free"]
+  readonly property var presets: [
+    "grow", "defend", "attack", "trade", "cooperate", "explore", "free"
+  ]
   readonly property var actions: view.actions
   readonly property int presetCount: view.full ? presets.length : 0
   readonly property int presetColumns: 4
@@ -119,11 +126,13 @@ BarWidget {
   property string failure: ""
   readonly property var advisorNow: service && service.advisors ? service.advisors.now : null
   readonly property bool advisorPicked: !!(advisorNow && advisorNow.picked)
-  readonly property var whoList: Model.whoRows(service && service.advisors ? service.advisors.found : [])
+  readonly property var whoList: Model.whoRows(
+    service && service.advisors ? service.advisors.found : [])
   readonly property var modelList: Model.modelRows(
     step === "models" && pickedRow && pickedRow.models ? pickedRow.models
       : (service && service.models ? service.models.models : []))
-  readonly property bool typing: askField.activeFocus || addressField.activeFocus || keyField.activeFocus
+  readonly property bool typing:
+    askField.activeFocus || addressField.activeFocus || keyField.activeFocus
 
   function startTalking() {
     talking = true
@@ -167,7 +176,10 @@ BarWidget {
     if (step === "who") takeRow(whoList[pick])
     else if (step === "models") tryPicked(modelList.shown[pick])
     else if (step === "failed") {
-      if (pick === 1 && pickedRow && pickedRow.sign_in) { service.openSignIn(pickedRow.sign_in); close() }
+      if (pick === 1 && pickedRow && pickedRow.sign_in) {
+        service.openSignIn(pickedRow.sign_in)
+        close()
+      }
       else toStep("who")
     } else if (step === "talk") {
       if (pick === 0) toStep("who")
@@ -239,7 +251,9 @@ BarWidget {
     interval: 5000
     running: true
     repeat: true
-    onTriggered: { statusFile.reload(); journalFile.reload(); chatFile.reload(); lessonsFile.reload() }
+    onTriggered: {
+      statusFile.reload(); journalFile.reload(); chatFile.reload(); lessonsFile.reload()
+    }
   }
 
   // While a question is on its way, look for its answer every second; a question nobody
@@ -370,7 +384,8 @@ BarWidget {
     repeat: true
     onTriggered: {
       interval = 3000 + Math.floor(Math.random() * 2000)
-      var looks = [[0, 0], [0, 0], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]]
+      var looks = [[0, 0], [0, 0], [0, -1], [1, -1], [1, 0],
+                   [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]]
       var look = looks[Math.floor(Math.random() * looks.length)]
       root.targetX = look[0]
       root.targetY = look[1]
@@ -386,7 +401,10 @@ BarWidget {
   onStatusChanged: {
     var last = status ? status.last : null
     var at = status && status.updated_at ? status.updated_at : 0
-    if (last && last.ok === false && at > lastFailureAt) { lastFailureAt = at; shake("confused", 0.6) }
+    if (last && last.ok === false && at > lastFailureAt) {
+      lastFailureAt = at
+      shake("confused", 0.6)
+    }
   }
   onEyeInkChanged: eyes.requestPaint()
 
@@ -560,9 +578,15 @@ BarWidget {
           width: parent.width
           readonly property real cell: width / 3
           Stat { width: stats.cell; label: "fields"; value: String(root.status.fields) }
-          Stat { width: stats.cell; label: "rank"; value: root.status.rank ? "#" + root.status.rank : "–" }
+          Stat {
+            width: stats.cell; label: "rank"
+            value: root.status.rank ? "#" + root.status.rank : "–"
+          }
           // The brain says "autonomous" when no compass is set; the button for it says "free".
-          Stat { width: stats.cell; label: "compass"; value: root.compass === "autonomous" ? "free" : (root.compass || "–") }
+          Stat {
+            width: stats.cell; label: "compass"
+            value: root.compass === "autonomous" ? "free" : (root.compass || "–")
+          }
         }
 
         // The talk with its advisor (the model named in [brain.advisor]): who answers here,
@@ -659,7 +683,8 @@ BarWidget {
                 visible: !!(root.pickedRow && root.pickedRow.sign_in)
                 at: 1
                 width: (parent.width - parent.spacing) / 2
-                text: "open " + (root.pickedRow ? (root.pickedRow.name || "it") : "it") + " to sign in"
+                text: "open " + (root.pickedRow ? (root.pickedRow.name || "it") : "it")
+                      + " to sign in"
               }
             }
           }
@@ -756,7 +781,8 @@ BarWidget {
             }
             Line {
               visible: !!root.status.last
-              color: root.status.last && root.status.last.ok === false ? Commons.Color.urgent : root.dim
+              color: root.status.last && root.status.last.ok === false
+                ? Commons.Color.urgent : root.dim
               text: root.status.last ? "last move: " + Model.moveWords(root.status.last)
                 + (root.status.last.ok ? "" : " ✗ " + (root.status.last.why || "")) : ""
             }
@@ -778,8 +804,10 @@ BarWidget {
 
             PanelSeparator { foreground: root.ink }
             // What it rests on rides in the header: one line less, and it stays in view.
-            PanelSectionHeader { text: "LEARNED" + (parent.lesson ? " · " + parent.lesson.basis : "")
-                                 foreground: root.ink; fontFamily: root.font }
+            PanelSectionHeader {
+              text: "LEARNED" + (parent.lesson ? " · " + parent.lesson.basis : "")
+              foreground: root.ink; fontFamily: root.font
+            }
             // Two lines each: in a tournament the panel is full, and the whole block has to stay
             // in view (device 14.10.: a 200-character part took five lines and hid "less").
             Line { maximumLineCount: 2; elide: Text.ElideRight

@@ -170,7 +170,7 @@ Item {
     root.tips = { seen: (root.tips.seen || []).concat(tip.marks),
                   at: tip.id === "first_field" ? root.tips.at : now }
     tipper.title = tip.title
-    tipper.body = tip.body
+    tipper.body = Model.notifyBody(tip.body)
     tipper.saved = JSON.stringify(root.tips)
     tipper.running = true
   }
@@ -219,7 +219,8 @@ Item {
     property string body: ""
     property string saved: ""
     command: ["sh", "-c",
-      'mkdir -p "$4" && printf %s "$3" > "$4/tips.json.tmp" && mv "$4/tips.json.tmp" "$4/tips.json" && '
+      'mkdir -p "$4" && printf %s "$3" > "$4/tips.json.tmp" '
+      + '&& mv "$4/tips.json.tmp" "$4/tips.json" && '
       + 'notify-send -a Shikigon "$1" "$2"',
       "sh", title, body, saved, root.stateDir]
   }
@@ -271,7 +272,9 @@ Item {
     runner.running = false
   }
   // Omarchy's own chooser: it installs the agent and starts it; signing in is the agent's.
-  function openAgentSetup() { Quickshell.execDetached(["omarchy-menu", "summon", "setup.default.agent"]) }
+  function openAgentSetup() {
+    Quickshell.execDetached(["omarchy-menu", "summon", "setup.default.agent"])
+  }
   function openSignIn(argv) {
     Quickshell.execDetached(["omarchy-launch-tui", "--app-id=org.omarchy.agent"].concat(argv))
   }

@@ -28,7 +28,7 @@ OPENCODE_SAMPLE = """\
 {"type":"reasoning","timestamp":1791708798028,"sessionID":"ses_x","part":{"id":"prt_2","type":"reasoning","text":"The user is asking me to reply with a simple acknowledgment."}}
 {"type":"text","timestamp":1791708798140,"sessionID":"ses_x","part":{"id":"prt_3","messageID":"msg_1","sessionID":"ses_x","type":"text","text":"OK"}}
 {"type":"step_finish","timestamp":1791708798140,"sessionID":"ses_x","part":{"id":"prt_4","reason":"stop","type":"step-finish","tokens":{"total":7669,"input":7643,"output":26}}}
-"""  # the lines as the program printed them
+"""  # noqa: E501 — the lines as the program printed them
 
 # `pi --list-models` on the device (pi 1.2.0, 14.10.2026): its first two lines as printed,
 # without their trailing blanks; the third is a provider's model in the same columns, as pi
@@ -130,7 +130,8 @@ def test_the_list_names_agents_first_then_what_runs_here_then_the_configs_own() 
 
 
 def test_an_agents_models_name_the_players_own_first() -> None:
-    listing = "opencode/big-pickle\nopencode/exo-free\nollama/qwen3.5:9b\nollama/big:latest\n\nnot a model\n"
+    listing = ("opencode/big-pickle\nopencode/exo-free\nollama/qwen3.5:9b\nollama/big:latest\n"
+               "\nnot a model\n")
     commands = Commands(stdout=listing)
     assert connections.agent_models("opencode", run=commands) == [
         "ollama/qwen3.5:9b", "ollama/big:latest", "opencode/big-pickle", "opencode/exo-free"]
@@ -168,6 +169,30 @@ def test_an_address_says_its_models_or_that_it_wants_a_key_or_that_it_is_away() 
     connections.models_at("http://x/v1", lambda url, **kw: sent.update(kw) or _answer(200, {}),
                           key="sk-secret")
     assert sent["headers"] == {"Authorization": "Bearer sk-secret"}
+
+
+@pytest.mark.parametrize(("url", "may"), [
+    ("https://openrouter.ai/api/v1", True),
+    ("http://localhost:11434/v1", True),
+    ("http://127.0.0.1:1234/v1", True),
+    ("http://[::1]:1234/v1", True),
+    ("http://macmini.local:11434/v1", True),
+    ("http://macmini:11434/v1", True),
+    ("http://10.20.30.40:11434/v1", True),
+    ("http://10.0.0.5/v1", True),
+    ("http://api.example.com/v1", False),
+    ("http://8.8.8.8/v1", False),
+    ("ftp://localhost.evil.com/v1", False),
+])
+def test_a_key_goes_only_encrypted_or_within_home(url: str, may: bool) -> None:
+    assert connections.key_may_go_to(url) is may
+
+
+def test_listing_models_with_a_key_over_plain_http_asks_nothing() -> None:
+    asked: list[str] = []
+    found = connections.models_at("http://api.example.com/v1",
+                                  lambda url, **kw: asked.append(url), key="sk-paid")
+    assert asked == [] and found["ok"] is False and "https" in found["why"]
 
 
 # --- Asking an agent: narrow, in an empty folder, its own words on failure ----------------------
@@ -209,10 +234,11 @@ def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to
         {"role": "assistant", "content": "first"},
         {"role": "user", "content": "two?"},
     ])
-    assert text.index("You advise.") < text.index("Do not run commands, do not read or write files.")
+    rule = "Do not run commands, do not read or write files."
+    assert text.index("You advise.") < text.index(rule)
     assert text.index("do not read or write files.") < text.index("(Asked before: one?)")
     assert text.index("one?") < text.index("(You answered before: first)") < text.index("two?")
-    assert text.endswith("two?"), "the question stays last: its line on language must be the final word"
+    assert text.endswith("two?"), "the question stays last: its language line is the final word"
     assert connections.run_agent({"agent": "opencode"}, text, 30.0, run=commands) == "OK"
     argv, kwargs = commands.calls[0]
     assert kwargs["input"] == text and kwargs["timeout"] == 30.0
@@ -261,7 +287,8 @@ def test_an_agent_that_fails_says_so_in_its_own_last_line() -> None:
 
 
 def test_through_an_agent_there_is_no_advice_on_every_move() -> None:
-    assert advisor.every({"via": "agent", "agent": "codex", "every": 1}) == connections.AGENT_MIN_EVERY
+    codex = {"via": "agent", "agent": "codex", "every": 1}
+    assert advisor.every(codex) == connections.AGENT_MIN_EVERY
     assert advisor.every({"via": "agent", "agent": "codex", "every": 40}) == 40
     assert advisor.every({"base_url": "http://x/v1", "model": "m", "every": 1}) == 1
 
@@ -278,7 +305,8 @@ async def test_a_move_waits_the_configs_seconds_a_question_may_take_longer(
     monkeypatch.setattr(connections, "run_agent", run_agent)
     conf = {"via": "agent", "agent": "codex", "timeout_s": 20}
     await advisor.sender(conf)([{"role": "user", "content": "x"}], 10)
-    await advisor.sender(conf, patience=advisor.ANSWER_PATIENCE)([{"role": "user", "content": "x"}], 10)
+    send = advisor.sender(conf, patience=advisor.ANSWER_PATIENCE)
+    await send([{"role": "user", "content": "x"}], 10)
     assert waited == [20.0, connections.AGENT_ANSWER_S]
 
 

@@ -22,6 +22,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+import files
+
 Send = Callable[[list[dict[str, str]], int], Awaitable[str]]
 
 LEARN_EVERY = 100  # moves between two lessons; at one move a tick about two hours
@@ -58,26 +60,7 @@ LESSON_SYSTEM = (
 
 def journal_tail(home: Path, count: int = TAIL) -> list[dict[str, Any]]:
     """The last ``count`` entries of the journal, oldest first, read from its end."""
-    path = home / JOURNAL_FILE
-    if not path.exists():
-        return []
-    with path.open("rb") as handle:
-        handle.seek(0, 2)
-        end = handle.tell()
-        block = min(end, 300 * count)  # a journal line is well under 300 bytes
-        handle.seek(end - block)
-        lines = handle.read().decode("utf-8", "replace").splitlines()
-    if block < end:
-        lines = lines[1:]  # the first line may be cut
-    entries = []
-    for line in lines[-count:]:
-        try:
-            entry = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(entry, dict):
-            entries.append(entry)
-    return entries
+    return files.tail(home / JOURNAL_FILE, count)
 
 
 def moves_since_lesson(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -131,7 +114,8 @@ def summary(moves: list[dict[str, Any]]) -> str:
     for action, rows in sorted(per_action.items(), key=lambda item: -len(item[1])):
         changes = [change for move, change in rows if move.get("ok") is not False]
         mean = _signed(sum(changes) / len(changes)) if changes else "-"
-        lines.append(f"- {action}: {len(changes)} played, {len(rows) - len(changes)} refused, {mean}")
+        refused = len(rows) - len(changes)
+        lines.append(f"- {action}: {len(changes)} played, {refused} refused, {mean}")
     ordered = sorted(played, key=lambda row: row[1])
     shown = min(SHOWN, len(ordered) // 2)  # best and worst never share a move
     for title, rows in (("Best", ordered[::-1][:shown]), ("Worst", ordered[:shown])):
@@ -237,7 +221,7 @@ def kept(home: Path) -> list[dict[str, Any]]:
 
 def keep(home: Path, lesson: dict[str, Any]) -> None:
     home.mkdir(parents=True, exist_ok=True)
-    (home / LESSONS_FILE).write_text(json.dumps((kept(home) + [lesson])[-KEPT:]), encoding="utf-8")
+    files.write_json(home / LESSONS_FILE, (kept(home) + [lesson])[-KEPT:])
 
 
 def latest_text(home: Path) -> str:

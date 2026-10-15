@@ -298,7 +298,8 @@ async def test_a_mission_goes_into_the_journal_by_its_kind() -> None:
     line = json.loads((brain.state_dir() / "journal.jsonl").read_text().splitlines()[-1])
     assert line["kind"] == "gather_spores" and line["action"] == "start_mission"
     assert brain.mission_kind("market_list", {}) == ""
-    assert brain.mission_kind("start_mission", {"mission_type": "scout_terminal"}) == "scout_terminal"
+    scout = {"mission_type": "scout_terminal"}
+    assert brain.mission_kind("start_mission", scout) == "scout_terminal"
 
 
 def test_situation_names_an_unknown_marauder_state_and_stays_quiet_without_facts() -> None:
@@ -524,6 +525,13 @@ def test_forget_wants_a_clear_yes(capsys: pytest.CaptureFixture[str]) -> None:
     assert brain.load_credentials() is not None
 
 
+def test_every_command_has_its_handler() -> None:
+    """The parser and the table of handlers name the same commands, none more, none less."""
+    parser = brain._parser()
+    sub = next(a for a in parser._actions if a.dest == "command")
+    assert set(sub.choices) == set(brain.COMMANDS)
+
+
 def test_the_words_come_in_on_stdin_not_as_an_argument(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -694,7 +702,8 @@ async def test_the_loop_waits_for_a_late_tick_instead_of_moving_twice(
 
 def test_the_coachs_task_names_the_skill_the_paths_and_the_snapshot_never_the_key() -> None:
     _living()
-    brain.write_public(brain.state_dir() / "status.json", {"mood": "content", "name": "Root-storm"})
+    status = {"mood": "content", "name": "Root-storm"}
+    brain.files.write_json(brain.state_dir() / "status.json", status)
     task = brain.coach_prompt(CFG, "  why does it wait?  ")
     assert brain.SKILL.exists() and str(brain.SKILL) in task
     assert f"State folder: {brain.state_dir()}" in task

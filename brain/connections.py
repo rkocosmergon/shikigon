@@ -22,15 +22,19 @@ Three rules this file keeps (cos20 #451, concept 10.5d):
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import os
 import shutil
 import subprocess
 import tempfile
 import time
+import urllib.parse
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
+
+import files
 
 Send = Callable[[list[dict[str, str]], int], Awaitable[str]]
 
@@ -173,7 +177,7 @@ def installed(agent: str, run: Callable[..., Any] = subprocess.run) -> bool:
         done = run(["mise", "where", agent], capture_output=True, timeout=10, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
-    return done.returncode == 0
+    return int(done.returncode) == 0
 
 
 # ---------- the choice ----------------------------------------------------------------------
@@ -192,8 +196,7 @@ def chosen(home: Path) -> dict[str, Any]:
 
 
 def choose(home: Path, choice: dict[str, Any]) -> None:
-    home.mkdir(parents=True, exist_ok=True)
-    (home / CHOICE_FILE).write_text(json.dumps(choice), encoding="utf-8")
+    files.write_json(home / CHOICE_FILE, choice)
 
 
 def keep_key(home: Path, key: str) -> None:
@@ -226,13 +229,41 @@ def usable(conf: dict[str, Any]) -> bool:
 # ---------- finding ---------------------------------------------------------------------------
 
 
+KEY_ONLY_SAFE = "a key goes only over https, or to this machine and your home network"
+
+
+def key_may_go_to(base_url: str) -> bool:
+    """A key travels encrypted (https), or stays on this machine or in the home network.
+
+    Over plain http to the open internet, anyone on the way reads it. A model server at
+    home (localhost, a ``.local`` name, a name without a dot such as ``macmini``, which only
+    the home network resolves, a private address) usually wants no key at all.
+    """
+    parts = urllib.parse.urlsplit(base_url)
+    if parts.scheme == "https":
+        return True
+    host = (parts.hostname or "").lower()
+    if parts.scheme != "http" or not host:
+        return False
+    if host == "localhost" or host.endswith(".local") or "." not in host and ":" not in host:
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private or address.is_link_local
+
+
 def models_at(base_url: str, get: Callable[..., Any], key: str = "") -> dict[str, Any]:
     """The models an OpenAI-compatible address offers. ``needs_key`` if it wants one."""
+    if key and not key_may_go_to(base_url):
+        return {"ok": False, "models": [], "why": KEY_ONLY_SAFE}
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     try:
         resp = get(base_url.rstrip("/") + "/models", headers=headers, timeout=4)
     except Exception as exc:  # noqa: BLE001 — any failure is the same answer: not reachable
-        return {"ok": False, "models": [], "why": f"no answer from {base_url} ({type(exc).__name__})"}
+        why = f"no answer from {base_url} ({type(exc).__name__})"
+        return {"ok": False, "models": [], "why": why}
     if resp.status_code in (401, 403):
         return {"ok": False, "models": [], "needs_key": True, "why": "it asks for a key"}
     try:
@@ -367,8 +398,12 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
         except subprocess.TimeoutExpired:
             raise AgentError(f"{spec['name']} did not answer within {int(timeout)} s") from None
         except OSError as exc:
-            raise AgentError(f"{spec['name']} could not be started ({type(exc).__name__})") from None
-    answer = opencode_text(done.stdout) if spec["answer"] == "opencode-json" else done.stdout.strip()
+            why = f"{spec['name']} could not be started ({type(exc).__name__})"
+            raise AgentError(why) from None
+    if spec["answer"] == "opencode-json":
+        answer = opencode_text(done.stdout)
+    else:
+        answer = done.stdout.strip()
     if done.returncode != 0 or not answer:
         said = last_line(done.stderr) or last_line(done.stdout) or f"exit {done.returncode}"
         if any(mark in said.lower() for mark in NOT_SIGNED_IN):

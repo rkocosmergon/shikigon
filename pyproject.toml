@@ -22,3 +22,19 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# E501 is not among ruff's defaults; without it the line length above was never checked.
+extend-select = ["E501"]
+
+[tool.mypy]
+# The brain is a folder of plain modules, not a package: run `mypy` from the repo root.
+files = ["brain"]
+python_version = "3.12"
+disallow_untyped_defs = true
+warn_return_any = true
+
+[[tool.mypy.overrides]]
+# The rule tree ships no type information (cosmergon-agent does: py.typed).
+module = ["cosmergon_decider_tree", "cosmergon_decider_tree.*"]
+ignore_missing_imports = true

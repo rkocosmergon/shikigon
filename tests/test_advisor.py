@@ -249,12 +249,32 @@ async def test_the_real_call_goes_to_the_endpoint_you_entered(
         )
 
     monkeypatch.setenv("MY_MODEL_KEY", "token-from-the-environment")
-    conf = {**CONF, "base_url": "http://model.test/v1/", "api_key_env": "MY_MODEL_KEY"}
+    conf = {**CONF, "base_url": "https://model.test/v1/", "api_key_env": "MY_MODEL_KEY"}
     send = advisor.http_send(conf, transport=httpx.MockTransport(endpoint))
     assert await send([{"role": "user", "content": "hi"}], 40) == '{"choice": 2, "why": "ok"}'
-    assert seen["url"] == "http://model.test/v1/chat/completions"
+    assert seen["url"] == "https://model.test/v1/chat/completions"
     assert seen["auth"] == "Bearer token-from-the-environment"
     assert seen["body"]["model"] == "test-model" and seen["body"]["max_tokens"] == 40
+
+
+async def test_a_key_never_goes_over_plain_http_to_the_open_internet() -> None:
+    import connections
+    import httpx
+
+    asked: list[str] = []
+    answer = {"choices": [{"message": {"content": "ok"}}]}
+    transport = httpx.MockTransport(
+        lambda request: asked.append(str(request.url)) or httpx.Response(200, json=answer))
+    plain = advisor.http_send({**CONF, "base_url": "http://model.test/v1"}, transport=transport,
+                              key="sk-paid")
+    with pytest.raises(connections.AgentError, match="only over https"):
+        await plain([{"role": "user", "content": "hi"}], 10)
+    assert asked == [], "nothing left the machine"
+    home = advisor.http_send({**CONF, "base_url": "http://10.20.30.40:11434/v1"},
+                             transport=transport, key="sk-paid")
+    assert await home([{"role": "user", "content": "hi"}], 10) == "ok"
+    without = advisor.http_send({**CONF, "base_url": "http://model.test/v1"}, transport=transport)
+    assert await without([{"role": "user", "content": "hi"}], 10) == "ok"  # no key, no rule
 
 
 async def test_an_endpoint_that_fails_is_a_fallback_not_a_crash() -> None:

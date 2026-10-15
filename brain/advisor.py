@@ -24,6 +24,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+import files
+
 DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config" / "shikigon.toml"
 PROPOSALS = 3  # how many moves the rules put before the model
 WHY_WORDS = 12  # the model's reason, at most
@@ -225,13 +227,16 @@ def http_send(
     """
 
     async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
+        import connections
         import httpx
 
         headers = {}
         secret = os.environ.get(str(conf.get("api_key_env") or ""), "") or key
-        if secret:
-            headers["Authorization"] = f"Bearer {secret}"
         url = str(conf["base_url"]).rstrip("/") + "/chat/completions"
+        if secret:
+            if not connections.key_may_go_to(url):
+                raise connections.AgentError(connections.KEY_ONLY_SAFE)
+            headers["Authorization"] = f"Bearer {secret}"
         timeout = float(conf.get("timeout_s", 20)) * patience
         async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
             resp = await client.post(
@@ -267,8 +272,7 @@ def _counts(home: Path) -> dict[str, Any]:
 
 
 def _keep(home: Path, counts: dict[str, Any]) -> None:
-    home.mkdir(parents=True, exist_ok=True)
-    (home / "advisor_count.json").write_text(json.dumps(counts), encoding="utf-8")
+    files.write_json(home / "advisor_count.json", counts)
 
 
 def calls_today(home: Path) -> int:

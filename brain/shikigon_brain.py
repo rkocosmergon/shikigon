@@ -41,6 +41,9 @@ from typing import Any
 # panel (seen on the device, 11.10.2026). Its own files live in the state folder.
 sys.dont_write_bytecode = True
 
+# The brain's own modules only after the switch above: imported before it, they are cached.
+import files
+
 SOURCE = "shikigon"  # registration source the server counts (api/v1/auth.py:_QUELLEN)
 REPO_DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config" / "shikigon.toml"
 
@@ -85,14 +88,6 @@ def write_private(path: Path, data: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def write_public(path: Path, data: dict[str, Any]) -> None:
-    """Write the bar's snapshot atomically, so the bar never reads half a file."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data), encoding="utf-8")
-    os.replace(tmp, path)
-
-
 def credentials_path() -> Path:
     return state_dir() / "credentials.json"
 
@@ -101,7 +96,8 @@ def load_credentials() -> dict[str, str] | None:
     path = credentials_path()
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else None
 
 
 def registration_body(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -253,7 +249,9 @@ def mission_kind(action: str, params: dict[str, Any]) -> str:
     empty for any other move. The rule tree sends it as ``params.params.mission_type``."""
     if action != "start_mission":
         return ""
-    inner = params.get("params") if isinstance(params.get("params"), dict) else params
+    inner = params.get("params")
+    if not isinstance(inner, dict):
+        inner = params
     return str(inner.get("mission_type") or "")
 
 
@@ -285,11 +283,14 @@ def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# The journal is cut to its last 128 KiB once it passes 256 KiB: about a thousand lines, more
+# than the lessons read (lessons.TAIL) and far more than the bar shows. It grew by ~80 KiB a
+# day on the device, and the bar reads it whole every few seconds.
+JOURNAL_KEEP_BYTES = 128 * 1024
+
+
 def journal(entry: dict[str, Any]) -> None:
-    path = state_dir() / "journal.jsonl"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry) + "\n")
+    files.append(state_dir() / "journal.jsonl", entry, JOURNAL_KEEP_BYTES)
 
 
 # Tournament missions are run by the server (its assigner), not by this brain; their ends go
@@ -359,7 +360,7 @@ async def tournament_journal(agent: Any, state: Any) -> int:
         for mission in new:
             journal(mission_entry(mission, getattr(state, "tick", 0)))
     ids = (seen or []) + [str(m.get("mission_id")) for m in new]
-    write_public(seen_path(), {"ids": ids[-SEEN_KEEP:]})
+    files.write_json(seen_path(), {"ids": ids[-SEEN_KEEP:]})
     return 0 if seen is None else len(new)
 
 
@@ -371,7 +372,7 @@ KEY_ENDED, WORLD_SILENT, CONFIG = "key_ended", "world_silent", "config"
 def fall_asleep(reason: str, why: str) -> dict[str, Any]:
     """Write the sleeping snapshot and return what is said about it."""
     last = {"action": "none", "ok": False, "why": why}
-    write_public(state_dir() / "status.json", {"mood": ASLEEP, "reason": reason, "last": last})
+    files.write_json(state_dir() / "status.json", {"mood": ASLEEP, "reason": reason, "last": last})
     return last
 
 
@@ -448,7 +449,7 @@ async def tick(agent: Any, decider: Any, done_in: int | None = None) -> dict[str
              "fields": len(getattr(state, "fields", []) or []), **last}
     journal(entry)
     await tournament_journal(agent, state)
-    write_public(state_dir() / "status.json", snapshot(state, last))
+    files.write_json(state_dir() / "status.json", snapshot(state, last))
     return last
 
 
@@ -509,10 +510,8 @@ def chat_path() -> Path:
 
 def chat_tail(count: int) -> list[dict[str, Any]]:
     """The last answered exchanges of the talk with the advisor."""
-    path = chat_path()
-    if not path.exists():
-        return []
-    turns = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    # An exchange is under 1 KiB on the device; read generously, the talk is short.
+    turns = files.tail(chat_path(), 4 * count, line_bytes=2048)
     return [turn for turn in turns if turn.get("ok")][-count:]
 
 
@@ -542,15 +541,14 @@ def world_rules(cfg: dict[str, Any], get: Callable[..., Any]) -> str:
 
 def recent_moves(count: int) -> list[str]:
     """Its last moves from the journal, in words."""
-    path = state_dir() / "journal.jsonl"
-    if not path.exists():
-        return []
-    lines = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    lines = files.tail(state_dir() / "journal.jsonl", 10 * count)  # words, missions between
     moves = [line for line in lines if "action" in line][-count:]
     from words import move_words
 
     return [
-        move_words(move) if move.get("ok") else f"{move_words(move)} (refused: {move.get('why', '')})"
+        move_words(move)
+        if move.get("ok")
+        else f"{move_words(move)} (refused: {move.get('why', '')})"
         for move in moves
     ]
 
@@ -593,9 +591,7 @@ async def ask(
     turn = await advisor.answer(
         conf, state_dir(), question, context, chat_tail(CHAT_KEPT), send
     )
-    chat_path().parent.mkdir(parents=True, exist_ok=True)
-    with chat_path().open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(turn) + "\n")
+    files.append(chat_path(), turn)  # kept whole: the talk is the player's (cos20 #468)
     return turn
 
 
@@ -690,7 +686,7 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
         if result["ok"]:
             # a new connection replaces the old one whole; how often it advises stays
             before = connections.chosen(home)
-            kept = {key: before[key] for key in ("advise", "every") if key in before}
+            kept: dict[str, Any] = {k: before[k] for k in ("advise", "every") if k in before}
             connections.choose(home, {**kept, **choice})
             result["label"] = advisor.who(tried)
         return result
@@ -704,7 +700,8 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
         for name in (connections.CHOICE_FILE, connections.KEY_FILE):
             (home / name).unlink(missing_ok=True)
         return {"ok": True, "now": advisor_now(cfg)}
-    return {"ok": False, "why": "advisor list | models WHERE | key | try ID [MODEL] | advise off|N | forget"}
+    usage = "advisor list | models WHERE | key | try ID [MODEL] | advise off|N | forget"
+    return {"ok": False, "why": usage}
 
 
 def pick(connection: str, model: str) -> dict[str, Any] | None:
@@ -820,16 +817,13 @@ async def with_agent(cfg: dict[str, Any], work: Callable[[Any], Awaitable[Any]])
         return fall_asleep(KEY_ENDED, "key expired: register a new Shikigon")
 
 
-def main(argv: list[str] | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="shikigon_brain")
     sub = parser.add_subparsers(dest="command", required=True)
     reg = sub.add_parser("register")
     reg.add_argument("--new", action="store_true", help="replace the Shikigon that lives here")
-    sub.add_parser("tick")
-    sub.add_parser("run")
-    sub.add_parser("status")
-    sub.add_parser("advise")
-    sub.add_parser("learn")
+    for name in ("tick", "run", "status", "advise", "learn"):
+        sub.add_parser(name)
     gone = sub.add_parser("forget")
     gone.add_argument("--yes", action="store_true", help="yes, delete it on the server and here")
     for name in ("instruct", "ask"):
@@ -840,9 +834,11 @@ def main(argv: list[str] | None = None) -> int:
     who = sub.add_parser("advisor", help="who answers: list, try and take a connection")
     who.add_argument("what", nargs="?", default="list")
     who.add_argument("rest", nargs="*")
-    args = parser.parse_args(argv)
-    cfg = load_config()
+    return parser
 
+
+def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
+    """What needs no Shikigon of its own: the coach's task, the advisor, the snapshot."""
     if args.command == "coach":
         print(coach_prompt(cfg, " ".join(args.text)))
         return 0
@@ -850,7 +846,13 @@ def main(argv: list[str] | None = None) -> int:
         result = advisor_command(cfg, args.what, args.rest)
         print(json.dumps(result))
         return 0 if result.get("ok", True) else 1
+    path = state_dir() / "status.json"
+    print(path.read_text(encoding="utf-8") if path.exists() else json.dumps({"mood": ASLEEP}))
+    return 0
 
+
+def _account(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
+    """Its life on the server: register, a lesson now, forget."""
     if args.command == "register":
         import httpx
 
@@ -859,38 +861,39 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "learn":
         print(json.dumps(asyncio.run(with_agent(cfg, lambda a: learn_now(cfg, a)))))
         return 0
-    if args.command == "status":
-        path = state_dir() / "status.json"
-        print(path.read_text(encoding="utf-8") if path.exists() else json.dumps({"mood": ASLEEP}))
-        return 0
-    if args.command == "forget":
-        if not args.yes:
-            why = "this deletes your Shikigon on the server and its files here: add --yes"
-            print(json.dumps({"ok": False, "why": why}))
-            return 1
-        import httpx
+    if not args.yes:
+        why = "this deletes your Shikigon on the server and its files here: add --yes"
+        print(json.dumps({"ok": False, "why": why}))
+        return 1
+    import httpx
 
-        result = forget(cfg, httpx.delete)
-        print(json.dumps(result))
-        return 0 if result["ok"] else 1
+    result = forget(cfg, httpx.delete)
+    print(json.dumps(result))
+    return 0 if result["ok"] else 1
 
-    if args.command in ("tick", "run", "advise"):
-        try:
-            decider = make_decider(cfg, advised=args.command == "advise")
-        except UnknownDecider as exc:
-            # A config it cannot follow is not a crash: it sleeps and says which names it knows.
-            print(json.dumps(fall_asleep(CONFIG, str(exc))))
-            return 1
-        if args.command == "tick":
-            print(json.dumps(asyncio.run(with_agent(cfg, lambda a: tick(a, decider)))))
-        elif args.command == "advise":
-            print(json.dumps(asyncio.run(with_agent(cfg, lambda a: advise(a, decider)))))
-        else:
-            asyncio.run(with_agent(cfg, lambda a: run(cfg, a, decider)))
+
+def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
+    """A move (tick), the loop (run), or a dry run with the advisor (advise)."""
+    try:
+        decider = make_decider(cfg, advised=args.command == "advise")
+    except UnknownDecider as exc:
+        # A config it cannot follow is not a crash: it sleeps and says which names it knows.
+        print(json.dumps(fall_asleep(CONFIG, str(exc))))
+        return 1
+    if args.command == "run":
+        asyncio.run(with_agent(cfg, lambda a: run(cfg, a, decider)))
         return 0
+    act = tick if args.command == "tick" else advise
+    print(json.dumps(asyncio.run(with_agent(cfg, lambda a: act(a, decider)))))
+    return 0
+
+
+def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
+    """A word from the player: a question for the advisor (ask) or for the compass (instruct)."""
     text = " ".join(args.text) or said_on_stdin()
     if not text:
-        print(json.dumps({"ok": False, "why": f"nothing to {args.command}: give the words as an argument or on stdin"}))
+        why = f"nothing to {args.command}: give the words as an argument or on stdin"
+        print(json.dumps({"ok": False, "why": why}))
         return 1
     if args.command == "ask":
         import httpx
@@ -902,6 +905,18 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(asyncio.run(with_agent(cfg, lambda a: instruct(a, text, table)))))
     return 0
 
+
+COMMANDS: dict[str, Callable[[argparse.Namespace, dict[str, Any]], int]] = {
+    **dict.fromkeys(("coach", "advisor", "status"), _local),
+    **dict.fromkeys(("register", "learn", "forget"), _account),
+    **dict.fromkeys(("tick", "run", "advise"), _moves),
+    **dict.fromkeys(("ask", "instruct"), _words),
+}
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    return COMMANDS[args.command](args, load_config())
 
 if __name__ == "__main__":
     sys.exit(main())
