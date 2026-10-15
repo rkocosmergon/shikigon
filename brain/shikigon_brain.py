@@ -58,6 +58,13 @@ def state_dir() -> Path:
     return base / "shikigon"
 
 
+def said_on_stdin() -> str:
+    """One line from stdin (the bar and the terminal send their words this way); none on a tty."""
+    if sys.stdin is None or sys.stdin.isatty():
+        return ""
+    return sys.stdin.readline().strip()
+
+
 def load_config() -> dict[str, Any]:
     """Read the user's config; on first start copy the default next to them."""
     path = config_path()
@@ -826,7 +833,9 @@ def main(argv: list[str] | None = None) -> int:
     gone = sub.add_parser("forget")
     gone.add_argument("--yes", action="store_true", help="yes, delete it on the server and here")
     for name in ("instruct", "ask"):
-        sub.add_parser(name).add_argument("text", nargs="+")
+        # Without text the words come in on stdin: arguments stand in /proc/<pid>/cmdline for
+        # every local user (#11550). The argument form stays for cosmergon-dashboard <= 0.27.9.
+        sub.add_parser(name).add_argument("text", nargs="*")
     sub.add_parser("coach").add_argument("text", nargs="*")
     who = sub.add_parser("advisor", help="who answers: list, try and take a connection")
     who.add_argument("what", nargs="?", default="list")
@@ -879,7 +888,10 @@ def main(argv: list[str] | None = None) -> int:
         else:
             asyncio.run(with_agent(cfg, lambda a: run(cfg, a, decider)))
         return 0
-    text = " ".join(args.text)
+    text = " ".join(args.text) or said_on_stdin()
+    if not text:
+        print(json.dumps({"ok": False, "why": f"nothing to {args.command}: give the words as an argument or on stdin"}))
+        return 1
     if args.command == "ask":
         import httpx
 

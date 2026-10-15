@@ -13,8 +13,9 @@ fi
 COSMERGON_API_KEY=$("$venv/bin/python" -c 'import json,sys; print(json.load(open(sys.argv[1]))["api_key"])' "$state/credentials.json")
 export COSMERGON_API_KEY
 # [M] in the terminal asks the same advisor as "ask" in the bar: the dashboard runs this
-# command with the question as its last argument and shows what it prints. The dashboard
-# does not hand the key above to the command; the brain reads its own key file.
+# command, gives it the question on stdin (cosmergon-agent >= 0.27.10; never as an argument,
+# which every local user could read) and shows what it prints. The dashboard does not hand
+# the key above to the command; the brain reads its own key file.
 brain="$(cd "$(dirname "$0")" && pwd)/shikigon_brain.py"
 COSMERGON_ADVISOR_CMD="$(printf '%q %q ask' "$venv/bin/python" "$brain")"
 export COSMERGON_ADVISOR_CMD

@@ -78,7 +78,11 @@ OPENCODE_ADVISOR = {
 }
 
 # The agents Shikigon can ask without a terminal. ``argv`` is the agent's own documented
-# one-shot command in its narrowest setting; ``{prompt}`` and ``{model}`` are filled in.
+# one-shot command in its narrowest setting; ``{model}`` is filled in. The prompt goes in on
+# stdin, never as an argument: arguments stand in /proc/<pid>/cmdline, which every local user
+# can read (marketplace review, omacom/omarchy-plugin-marketplace#11550). All three read the
+# prompt from stdin when none is given as an argument; pi 1.2.0 and opencode 1.19.0 tried on
+# the device (15.10.2026), codex from its documentation only.
 # ``proven`` says the file probe ran on a device (a task that wants to create a file creates
 # none); an agent without it is not offered.
 #   codex exec: read-only sandbox by default, the final message alone on stdout
@@ -101,7 +105,7 @@ AGENTS: dict[str, dict[str, Any]] = {
         "name": "Codex",
         "whose": "your own login",
         "argv": ["codex", "exec", "--skip-git-repo-check", "--sandbox", "read-only",
-                 "--ephemeral", "{prompt}"],
+                 "--ephemeral"],
         "model_flag": ["-m", "{model}"],
         "answer": "stdout",
         "sign_in": ["codex", "login"],
@@ -111,7 +115,7 @@ AGENTS: dict[str, dict[str, Any]] = {
         "name": "OpenCode",
         "whose": "your own keys",
         "argv": ["opencode", "run", "--pure", "--thinking", "--agent", "shikigon-advisor",
-                 "--format", "json", "{prompt}"],
+                 "--format", "json"],
         "env": {"OPENCODE_CONFIG_CONTENT": json.dumps(OPENCODE_ADVISOR)},
         "model_flag": ["-m", "{model}"],
         "answer": "opencode-json",
@@ -124,7 +128,7 @@ AGENTS: dict[str, dict[str, Any]] = {
         "whose": "your own keys",
         "argv": ["pi", "-p", "--no-tools", "--no-session", "--no-extensions", "--no-mcp",
                  "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve",
-                 "--offline", "--thinking", "off", "--system-prompt", PI_SYSTEM, "{prompt}"],
+                 "--offline", "--thinking", "off", "--system-prompt", PI_SYSTEM],
         "model_flag": ["--model", "{model}"],
         "answer": "stdout",
         "sign_in": ["pi"],  # its sign-in is "/login" inside pi
@@ -303,7 +307,7 @@ def table_models(listing: str) -> list[str]:
 
 
 def prompt_text(messages: list[dict[str, str]]) -> str:
-    """One text for a command line: what the model is told, then the talk, then the question.
+    """One text for the agent's stdin: what the model is told, then the talk, then the question.
 
     The question stays last, with its own line on language and length. With a closing
     sentence after it, a question in English was answered in German (seen on the device:
@@ -322,13 +326,13 @@ def prompt_text(messages: list[dict[str, str]]) -> str:
     return "\n\n".join(parts)
 
 
-def agent_argv(conf: dict[str, Any], prompt: str) -> list[str]:
+def agent_argv(conf: dict[str, Any]) -> list[str]:
+    """The agent's command; the prompt is not in it (it goes in on stdin)."""
     spec = AGENTS[str(conf["agent"])]
-    argv = [prompt if part == "{prompt}" else part for part in spec["argv"]]
+    argv = list(spec["argv"])
     model = str(conf.get("agent_model") or "")
     if model:
-        flag = [model if part == "{model}" else part for part in spec["model_flag"]]
-        argv[-1:-1] = flag  # before the prompt, which stays last
+        argv += [model if part == "{model}" else part for part in spec["model_flag"]]
     return argv
 
 
@@ -358,8 +362,8 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
     env = {**os.environ, **spec.get("env", {})}
     with tempfile.TemporaryDirectory(prefix="shikigon-ask-") as empty:
         try:
-            done = run(agent_argv(conf, prompt), cwd=empty, env=env, capture_output=True,
-                       text=True, timeout=timeout, check=False, stdin=subprocess.DEVNULL)
+            done = run(agent_argv(conf), cwd=empty, env=env, capture_output=True,
+                       text=True, timeout=timeout, check=False, input=prompt)
         except subprocess.TimeoutExpired:
             raise AgentError(f"{spec['name']} did not answer within {int(timeout)} s") from None
         except OSError as exc:

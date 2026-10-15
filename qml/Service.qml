@@ -64,11 +64,17 @@ Item {
     return "ok"
   }
 
+  // The player's words go over stdin, never as an argument: arguments stand in
+  // /proc/<pid>/cmdline for every local user (marketplace review #11550). One line each.
+  function oneLine(text) { return String(text || "").replace(/\s+/g, " ").trim() }
+
   function instruct(text) {
     if (!awake) return "asleep"
-    var said = String(text || "").trim()
+    var said = oneLine(text)
     if (said === "") return "empty"
-    Quickshell.execDetached(brainCommand(["instruct", said]))
+    if (instructor.running) return "busy"
+    instructor.said = said
+    instructor.running = true
     return "ok"
   }
 
@@ -82,9 +88,11 @@ Item {
   // A question for its advisor; the brain writes question and answer to chat.jsonl.
   function ask(text) {
     if (!awake) return "asleep"
-    var asked = String(text || "").trim()
+    var asked = oneLine(text)
     if (asked === "") return "empty"
-    Quickshell.execDetached(brainCommand(["ask", asked]))
+    if (asker.running) return "busy"  // the bar waits for one question at a time anyway
+    asker.said = asked
+    asker.running = true
     return "ok"
   }
 
@@ -304,6 +312,27 @@ Item {
         root.tried = root.parsed(text, { ok: false, why: "no answer" })
         root.refreshAdvisors()
       }
+    }
+  }
+  // A question and an instruction: over stdin like the key below (see oneLine).
+  Process {
+    id: asker
+    property string said: ""
+    command: root.brainCommand(["ask"])
+    stdinEnabled: true
+    onStarted: {
+      write(said + "\n")
+      said = ""
+    }
+  }
+  Process {
+    id: instructor
+    property string said: ""
+    command: root.brainCommand(["instruct"])
+    stdinEnabled: true
+    onStarted: {
+      write(said + "\n")
+      said = ""
     }
   }
   // A key an address asked for goes over stdin, never as an argument.

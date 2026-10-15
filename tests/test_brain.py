@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import stat
@@ -521,6 +522,33 @@ def test_forget_wants_a_clear_yes(capsys: pytest.CaptureFixture[str]) -> None:
     assert brain.main(["forget"]) == 1
     assert "--yes" in json.loads(capsys.readouterr().out)["why"]
     assert brain.load_credentials() is not None
+
+
+def test_the_words_come_in_on_stdin_not_as_an_argument(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Arguments stand in /proc/<pid>/cmdline for every local user (#11550): the bar sends
+    a question or an instruction on stdin, one line."""
+    heard: list[str] = []
+
+    async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[str, Any]:
+        heard.append(text)
+        return {"ok": True}
+
+    async def with_agent(cfg: dict[str, Any], work: Any) -> Any:
+        return await work(None)
+
+    monkeypatch.setattr(brain, "instruct", instruct)
+    monkeypatch.setattr(brain, "with_agent", with_agent)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("be careful\n"))
+    assert brain.main(["instruct"]) == 0
+    assert heard == ["be careful"]
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
+    capsys.readouterr()
+    assert brain.main(["instruct"]) == 1
+    assert "stdin" in json.loads(capsys.readouterr().out)["why"]
+    # The argument form stays for cosmergon-dashboard <= 0.27.9, which sends the question so.
+    assert brain.main(["instruct", "be", "bold"]) == 0 and heard[-1] == "be bold"
 
 
 # --- One move per tick (found on the dev server, 11.10.2026) -----------------------------------

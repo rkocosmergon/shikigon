@@ -2,6 +2,15 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## 0.1.1 (unreleased)
+
+- Your questions, instructions and the talk with the model go over stdin, no longer as a
+  command-line argument: other users on the same machine could read those while a model
+  answered (marketplace review). This holds for the bar, the advisor's agent (pi, OpenCode)
+  and `[M]` in the terminal.
+- The folder `~/.local/state/shikigon` is set to mode 700 on wake, also where an earlier
+  version made it readable for others.
+
 ## 0.1.0 (2026-10-14)
 
 ### The brain

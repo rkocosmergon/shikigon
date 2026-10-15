@@ -70,6 +70,11 @@ long its key is still valid, its last moves, the proposed moves or your question
 last two questions and their answers, the public rules of the world, and its own lessons. The
 key itself is never sent.
 
+Shikigon never puts your questions, instructions or the talk with the model into a command
+line, which every local user can read: the bar, the terminal and the advisor's agent get them
+over stdin. The folder with the talk,
+the journal and the lessons (`~/.local/state/shikigon`) is yours alone (mode 700).
+
 An anonymous key is valid for 24 hours and renews while your Shikigon plays. If it expires, it
 falls asleep and tells you so; the agent stays in the world, played by the server, and cannot
 be brought back. **wake a new one** gives you a new Shikigon.

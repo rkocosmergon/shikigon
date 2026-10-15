@@ -173,14 +173,13 @@ def test_an_address_says_its_models_or_that_it_wants_a_key_or_that_it_is_away() 
 # --- Asking an agent: narrow, in an empty folder, its own words on failure ----------------------
 
 
-def test_each_agent_is_called_in_its_narrowest_setting_with_the_prompt_last() -> None:
-    codex = connections.agent_argv({"agent": "codex"}, "the task")
-    assert codex[:2] == ["codex", "exec"] and codex[-1] == "the task"
+def test_each_agent_is_called_in_its_narrowest_setting() -> None:
+    codex = connections.agent_argv({"agent": "codex"})
+    assert codex[:2] == ["codex", "exec"]
     assert codex[codex.index("--sandbox") + 1] == "read-only"
     assert "--approve-for-me" not in codex and "--full-auto" not in codex
-    opencode = connections.agent_argv(
-        {"agent": "opencode", "agent_model": "ollama/qwen3.5:9b"}, "the task")
-    assert opencode[:2] == ["opencode", "run"] and opencode[-1] == "the task"
+    opencode = connections.agent_argv({"agent": "opencode", "agent_model": "ollama/qwen3.5:9b"})
+    assert opencode[:2] == ["opencode", "run"]
     assert "--auto" not in opencode, "auto-approval would let it run commands unasked"
     assert opencode[opencode.index("-m") + 1] == "ollama/qwen3.5:9b"
     # OpenCode allows every operation by default: its call brings an agent that may do nothing
@@ -191,9 +190,8 @@ def test_each_agent_is_called_in_its_narrowest_setting_with_the_prompt_last() ->
     # the model thought at length, and OpenCode asked a second time for a session title.
     assert inline["agent"]["shikigon-advisor"]["reasoningEffort"] == "none"
     assert inline["agent"]["title"] == {"disable": True}
-    pi = connections.agent_argv(
-        {"agent": "pi", "agent_model": "ollama-macmini/qwen3.5:9b-64k"}, "the task")
-    assert pi[:2] == ["pi", "-p"] and pi[-1] == "the task"
+    pi = connections.agent_argv({"agent": "pi", "agent_model": "ollama-macmini/qwen3.5:9b-64k"})
+    assert pi[:2] == ["pi", "-p"]
     # pi's tools, session, extensions, MCP, skills, templates and context files: all off
     for switch in ("--no-tools", "--no-session", "--no-extensions", "--no-mcp", "--no-skills",
                    "--no-prompt-templates", "--no-context-files", "--no-approve", "--offline"):
@@ -217,11 +215,24 @@ def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to
     assert text.endswith("two?"), "the question stays last: its line on language must be the final word"
     assert connections.run_agent({"agent": "opencode"}, text, 30.0, run=commands) == "OK"
     argv, kwargs = commands.calls[0]
-    assert argv[-1] == text
-    assert kwargs["stdin"] == subprocess.DEVNULL and kwargs["timeout"] == 30.0
+    assert kwargs["input"] == text and kwargs["timeout"] == 30.0
+    assert text not in argv
     assert "shikigon-advisor" in kwargs["env"]["OPENCODE_CONFIG_CONTENT"]
     assert "PATH" in kwargs["env"], "the user's own environment stays"
     assert "shikigon-ask-" in kwargs["cwd"] and not Path(kwargs["cwd"]).exists()  # gone again
+
+
+@pytest.mark.parametrize("agent", sorted(connections.AGENTS))
+def test_the_players_words_never_stand_in_the_agents_arguments(agent: str) -> None:
+    """Arguments stand in /proc/<pid>/cmdline for every local user (#11550): stdin only."""
+    commands = Commands(stdout=OPENCODE_SAMPLE if agent == "opencode" else "OK")
+    secret = "my-private-question-7f3a"
+    prompt = connections.prompt_text([{"role": "system", "content": "You advise."},
+                                      {"role": "user", "content": secret}])
+    connections.run_agent({"agent": agent, "agent_model": "m/x"}, prompt, 5.0, run=commands)
+    argv, kwargs = commands.calls[0]
+    assert not any(secret in part for part in argv), argv
+    assert secret in kwargs["input"]
 
 
 def test_what_opencode_answered_is_its_text_not_its_thinking() -> None:
