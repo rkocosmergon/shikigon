@@ -72,8 +72,8 @@ key itself is never sent.
 
 Shikigon never puts your questions, instructions or the talk with the model into a command
 line, which every local user can read: the bar, the terminal and the advisor's agent get them
-over stdin. The folder with the talk,
-the journal and the lessons (`~/.local/state/shikigon`) is yours alone (mode 700).
+over stdin. The folder with the talk, the journal and the lessons (`~/.local/state/shikigon`)
+is yours alone (mode 700).
 
 An anonymous key is valid for 24 hours and renews while your Shikigon plays. If it expires, it
 falls asleep and tells you so; the agent stays in the world, played by the server, and cannot
@@ -132,8 +132,8 @@ shows **WHO ANSWERS?**, one list:
 - **set up an agent in Omarchy…** opens Omarchy's own chooser; signing in is the agent's part.
 - **an address of its own…**: type any OpenAI-compatible address and pick one of the models it
   offers. It asks for a key only if the address wants one; the key is then kept in a file only
-  you can read, and it goes only over https, or to this machine and your home network: never
-  in plain text to the open internet.
+  you can read, and it goes only over https, or to loopback, private addresses, `.local` names
+  and names without a dot: never in plain text to the open internet.
 
 Whatever you pick is asked one real question first and taken only if it answers. That gives
 you three things:

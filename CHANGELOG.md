@@ -13,12 +13,12 @@ What changed for someone who uses Shikigon. Newest first.
 - The journal keeps its last 128 KiB (about a thousand entries) once it passes 256 KiB. It
   grew by about 80 KiB a day, and the bar read it whole every few seconds. The talk with the
   advisor is kept whole.
-- A line of the journal or the talk that broke (a crash while writing) no longer stops `ask`
-  or `advise`; it is skipped. Status, lessons and the choice of advisor are written atomically,
+- A broken line in the journal or the talk (e.g. after a crash mid-write) is skipped; it no
+  longer stops `ask` or `advise`. Status, lessons and the choice of advisor are written atomically,
   so the bar never reads half a file.
-- A key for a model goes only over https, or to this machine and your home network (localhost,
-  a `.local` name, a name without a dot, a private address). Before, an `http://` address on the
-  open internet would have received it in plain text.
+- A key for a model goes only over https, or to loopback, private addresses, `.local` names and
+  names without a dot. Before, an `http://` address on the open internet would have received it
+  in plain text.
 - A hint's text is shown as written: `<`, `>` and `&` in it are no longer read as markup by the
   notification daemon.
 
