@@ -2,7 +2,7 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## 0.1.3 (unreleased)
+## 0.1.3 (2026-10-16)
 
 Needs `cosmergon-agent` 0.27.12 and `cosmergon-decider-tree` 2.3.7 (pinned in
 `requirements.lock`; the environment is rebuilt on the next start of the shell).
