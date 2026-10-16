@@ -2,6 +2,13 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## Unreleased
+
+- The bar's input lines (address, key, question) no longer read the clipboard while they are
+  not on screen. Qt fetches whatever another application offers into every editable line on
+  each clipboard change; a large or stalled transfer could hold up the whole shell. A line is
+  now read-only unless the open panel shows it (marketplace review).
+
 ## 0.1.2 (2026-10-15)
 
 Needs `cosmergon-agent` 0.27.11 and `cosmergon-decider-tree` 2.3.6 (pinned in

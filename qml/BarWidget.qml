@@ -619,9 +619,13 @@ BarWidget {
           }
 
           // --- an address of its own: type it, pick a model; a key only if it asks ---
+          // Each line is read-only unless it is on screen: Qt fetches the clipboard's text
+          // into every editable line on each clipboard change, hidden or not, and the panel
+          // keeps its lines alive while closed (marketplace review #11665).
           TextField {
             id: addressField
             visible: root.step === "address"
+            readOnly: !(root.popupOpen && root.talking && root.step === "address")
             width: parent.width
             foreground: root.ink
             font.family: root.font
@@ -632,6 +636,7 @@ BarWidget {
           TextField {
             id: keyField
             visible: root.step === "key"
+            readOnly: !(root.popupOpen && root.talking && root.step === "key")
             width: parent.width
             foreground: root.ink
             font.family: root.font
@@ -924,6 +929,7 @@ BarWidget {
           spacing: Style.space(8)
           TextField {
             id: askField
+            readOnly: !(root.popupOpen && root.talking && root.step === "talk")
             width: parent.width
             foreground: root.ink
             font.family: root.font
