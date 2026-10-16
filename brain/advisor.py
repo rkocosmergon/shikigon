@@ -104,16 +104,21 @@ def every(conf: dict[str, Any]) -> int:
     return max(n, connections.AGENT_MIN_EVERY) if conf.get("via") == "agent" else n
 
 
-async def proposals(tree: Any, state: Any, limit: int = PROPOSALS) -> list[tuple[str, dict]]:
+async def proposals(
+    tree: Any, state: Any, limit: int = PROPOSALS, paused: frozenset[str] = frozenset()
+) -> list[tuple[str, dict]]:
     """Up to ``limit`` different moves, in the rule tree's own order.
 
     The tree is asked again with its earlier answers blocked; each answer is its best of
-    what is left. A wait, or an answer it repeats (a pending contract comes before the
-    block list), ends the list: there is nothing else it would stand behind.
+    what is left. A wait, or an answer it repeats (a tree before 2.3.7 gave a pending contract
+    before the block list), ends the list: there is nothing else it would stand behind.
+    ``paused`` are the moves the world kept refusing (cos20 #491): never proposed.
     """
     found: list[tuple[str, dict]] = []
     for _ in range(limit):
-        action, params = await tree.decide(state, blocked=frozenset(a for a, _ in found))
+        action, params = await tree.decide(
+            state, blocked=paused | frozenset(a for a, _ in found)
+        )
         if any(action == seen for seen, _ in found) or (action == "wait" and found):
             break
         found.append((action, params))
@@ -352,9 +357,11 @@ class AdvisedDecider:
             return "daily limit reached"
         return None
 
-    async def decide(self, state: Any) -> tuple[str, dict[str, Any]]:
+    async def decide(
+        self, state: Any, blocked: frozenset[str] = frozenset()
+    ) -> tuple[str, dict[str, Any]]:
         self.last = None
-        options = await proposals(self.tree, state)
+        options = await proposals(self.tree, state, paused=blocked)
         if len(options) < 2 or (not self.dry and count_move(self.home) % every(self.conf)):
             return options[0]
         note: dict[str, Any] = {

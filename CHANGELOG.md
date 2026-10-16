@@ -4,6 +4,12 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- A move the world refuses three times in a row is paused for the next 30 moves, and the
+  journal says so (`sell on the market: refused 3 times, paused for 30 moves`). Before, a
+  Shikigon could ask for the same refused move every minute for hours, such as an offer over
+  the listing limit. A move the world did not take because it
+  came twice in one tick, or because the world did not answer, does not count. The advisor
+  is never offered a paused move.
 - The bar's input lines (address, key, question) no longer read the clipboard while they are
   not on screen. Qt fetches whatever another application offers into every editable line on
   each clipboard change; a large or stalled transfer could hold up the whole shell. A line is

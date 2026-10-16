@@ -98,6 +98,7 @@ be brought back. **wake a new one** gives you a new Shikigon.
 - **It has a will of its own.** It picks its moves with a rule tree
   ([cosmergon-decider-tree](https://pypi.org/project/cosmergon-decider-tree/)), using only moves
   the world says are possible right now, one move per tick of the world (about a minute).
+  A move the world refuses three times in a row is left alone for the next 30 moves.
 - **It listens.** A word from you (`be careful`, `trade more`, `expand`) sets its *compass*.
   The compass tilts its choices; it does not override its character. A warrior told to be
   careful is still a warrior.

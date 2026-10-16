@@ -219,7 +219,7 @@ async def test_a_refused_move_says_why() -> None:
     agent = FakeAgent(_state(), success=False)
     last = await brain.tick(agent, FakeDecider(("evolve", {})))
     assert last == {"action": "evolve", "ok": False, "why": "Not enough energy",
-                    "words": "evolve a field"}
+                    "refused": True, "words": "evolve a field"}  # refused: cos20 #491
 
 
 async def test_no_state_means_asleep() -> None:
@@ -773,3 +773,96 @@ def test_running_the_brain_writes_nothing_into_the_plugins_folder(tmp_path: Path
     )
     assert "No Shikigon yet" in done.stderr, done.stderr
     assert sorted(str(p.relative_to(plugin)) for p in plugin.rglob("*")) == before
+
+
+# --- A move the world keeps refusing is paused (cos20 #491) ---------------------------------------
+# Without a pause a Shikigon asked for the same refused offer (listing limit) every minute for
+# hours. Three refusals in a row pause the move for 30 moves, as in cosmergon-pet. The answers
+# are the SDK's own ActionResult of a real 409.
+
+LIMIT_TEXT = "Listing limit reached: 25 active listings per account"
+LIMIT_409 = {"error": {"code": 409, "message": LIMIT_TEXT, "type": "http_error"}}
+
+
+class WorldSaysNo(FakeAgent):
+    """Refuses ``market_list`` the way the server does; everything else goes through."""
+
+    async def act(self, action: str, **params: Any) -> Any:
+        from cosmergon_agent.action import ActionResult
+
+        self.acted.append((action, params))
+        if action == "market_list":
+            return ActionResult.from_response(action, 409, LIMIT_409)
+        return ActionResult.from_response(action, 200, {"result": {}})
+
+
+class BlockAwareDecider:
+    """Like the rule tree: takes ``blocked`` and picks the next best move."""
+
+    def __init__(self) -> None:
+        self.told: list[frozenset[str]] = []
+
+    async def decide(
+        self, state: Any, blocked: frozenset[str] = frozenset()
+    ) -> tuple[str, dict[str, Any]]:
+        self.told.append(blocked)
+        return ("place_cells", {}) if "market_list" in blocked else ("market_list", {})
+
+
+async def test_three_refusals_pause_the_move_for_thirty_moves() -> None:
+    agent, decider, refusals = WorldSaysNo(_state()), BlockAwareDecider(), brain.Refusals()
+    said = [await brain.tick(agent, decider, refusals=refusals) for _ in range(3)]
+    assert [m["action"] for m in said] == ["market_list"] * 3 and said[0]["refused"] is True
+    assert "paused" not in said[1]["why"]
+    assert said[2]["why"] == ("Listing limit reached: 25 active listings per account"
+                              " — refused 3 times, paused for 30 moves")  # fmt: skip
+    line = json.loads((brain.state_dir() / "journal.jsonl").read_text().splitlines()[-1])
+    assert "paused for 30 moves" in line["why"] and line["words"] == "sell on the market"
+    fourth = await brain.tick(agent, decider, refusals=refusals)
+    assert decider.told[-1] == frozenset({"market_list"}) and fourth["action"] == "place_cells"
+    for _ in range(brain.PAUSED_MOVES - 2):
+        await brain.tick(agent, decider, refusals=refusals)
+    assert refusals.paused() == frozenset({"market_list"})
+    await brain.tick(agent, decider, refusals=refusals)  # the 30th move after the pause
+    assert refusals.paused() == frozenset()
+    assert (await brain.tick(agent, decider, refusals=refusals))["action"] == "market_list"
+
+
+async def test_a_429_or_no_answer_never_pauses_a_move() -> None:
+    from cosmergon_agent.exceptions import ConnectionError as CsgConnectionError
+    from cosmergon_agent.exceptions import RateLimitError
+
+    refusals = brain.Refusals()
+    for failure in (RateLimitError(retry_after=30), CsgConnectionError("down")) * 3:
+        agent = RefusingAgent(_state(), failure)
+        last = await brain.tick(agent, FakeDecider(("market_list", {})), refusals=refusals)
+        assert last["ok"] is False and "refused" not in last
+    assert refusals.paused() == frozenset()
+
+
+async def test_a_move_that_goes_through_starts_the_count_again() -> None:
+    refusals = brain.Refusals()
+    no, yes = {"action": "evolve", "ok": False, "refused": True}, {"action": "evolve", "ok": True}
+    for last in (no, no, yes, no, no):
+        assert refusals.note(dict(last)) is False
+    assert refusals.paused() == frozenset()
+    assert refusals.note(dict(no)) is True and refusals.paused() == frozenset({"evolve"})
+
+
+async def test_a_decider_that_knows_no_block_list_still_plays_no_paused_move() -> None:
+    """A decider of the SDK's protocol has only ``decide(state)``: its paused pick waits."""
+    agent, refusals = WorldSaysNo(_state()), brain.Refusals()
+    for _ in range(3):
+        await brain.tick(agent, FakeDecider(("market_list", {})), refusals=refusals)
+    held = await brain.tick(agent, FakeDecider(("market_list", {})), refusals=refusals)
+    assert len(agent.acted) == 3 and held["action"] == "wait" and held["ok"] is True
+    assert held["why"] == "held back: sell on the market is paused, the world kept refusing it"
+
+
+async def test_the_advisor_never_proposes_a_paused_move() -> None:
+    import advisor
+
+    decider = BlockAwareDecider()
+    options = await advisor.proposals(decider, _state(), paused=frozenset({"market_list"}))
+    assert options[0][0] == "place_cells"
+    assert all("market_list" in told for told in decider.told)

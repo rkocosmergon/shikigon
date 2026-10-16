@@ -471,3 +471,14 @@ def test_the_rules_come_from_the_server_and_an_unreachable_one_is_no_crash() -> 
         "economy": {"e": 1},
     }
     assert brain.world_rules(CFG, down) == ""
+
+
+async def test_a_paused_move_is_never_among_the_advisors_proposals() -> None:
+    """cos20 #491: a move the world kept refusing reaches neither the model nor the board."""
+    state = _state()
+    first = (await advisor.proposals(_tree(), state))[0][0]
+    decider = _advised(Model('{"choice": 1, "why": "x"}'))
+    action, _ = await decider.decide(state, blocked=frozenset({first}))
+    assert action != first
+    options = await advisor.proposals(_tree(), state, paused=frozenset({first}))
+    assert first not in [a for a, _ in options]

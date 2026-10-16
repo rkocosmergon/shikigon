@@ -40,10 +40,14 @@ ACTION_WORDS = {
 }
 
 
+def action_words(action: str) -> str:
+    """A move by its name in words: ``market_list`` → ``sell on the market``."""
+    return ACTION_WORDS.get(action, action.replace("_", " "))
+
+
 def move_words(entry: dict[str, Any]) -> str:
     """A move of its journal in words: ``mission: gather spores``, ``sell on the market``."""
     kind = str(entry.get("kind") or "")
     if kind:
         return "mission: " + kind.replace("_", " ")
-    action = str(entry.get("action") or "")
-    return ACTION_WORDS.get(action, action.replace("_", " "))
+    return action_words(str(entry.get("action") or ""))

@@ -393,7 +393,9 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
     except CsgConnectionError:
         return {"action": action, "ok": False, "why": "the world did not answer"}
     why = "" if result.success else (result.error_message or "")
-    done = {"action": action, "ok": bool(result.success), "why": why[:200]}
+    done: dict[str, Any] = {"action": action, "ok": bool(result.success), "why": why[:200]}
+    if not result.success:
+        done["refused"] = True  # the world answered and said no; a 429 or no answer is not that
     kind = mission_kind(action, params)
     if kind:
         done["kind"] = kind  # the journal says "mission: gather spores", not "start_mission"
@@ -419,26 +421,87 @@ def pause(interval: float, state: Any, now: float | None = None) -> float:
 
 LATE_TICK_S = 5.0  # the tick the server announced has not come yet: look again this soon
 
+# A move the world refused this many times in a row is paused for this many moves
+# (cos20 #491). A third identical refusal tells nothing new, it only costs the move; without
+# this a Shikigon could ask for the same refused offer every minute for hours. The same
+# numbers as cosmergon-pet (since August).
+REFUSALS_BEFORE_PAUSE = 3
+PAUSED_MOVES = 30
 
-async def tick(agent: Any, decider: Any, done_in: int | None = None) -> dict[str, Any]:
+
+class Refusals:
+    """Which moves the world keeps refusing, and which are paused. Kept only while it runs."""
+
+    def __init__(self) -> None:
+        self.moves = 0
+        self._in_a_row: dict[str, int] = {}
+        self._paused_until: dict[str, int] = {}
+
+    def paused(self) -> frozenset[str]:
+        return frozenset(a for a, until in self._paused_until.items() if until > self.moves)
+
+    def note(self, last: dict[str, Any]) -> bool:
+        """Count one move; ``True`` when this refusal pauses it."""
+        self.moves += 1
+        action = str(last.get("action") or "")
+        if last.get("ok"):
+            self._in_a_row.pop(action, None)
+            return False
+        if not last.get("refused"):
+            return False  # a 429 or no answer: a question of time, not of the move
+        self._in_a_row[action] = self._in_a_row.get(action, 0) + 1
+        if self._in_a_row[action] < REFUSALS_BEFORE_PAUSE:
+            return False
+        self._in_a_row.pop(action)
+        self._paused_until[action] = self.moves + PAUSED_MOVES
+        return True
+
+
+async def choose(decider: Any, state: Any, paused: frozenset[str]) -> tuple[str, dict[str, Any]]:
+    """The decider's move, told which moves are paused when it can take that (tree, advisor).
+
+    A decider of the SDK's protocol knows only ``decide(state)``; what it picks is checked
+    by the caller all the same.
+    """
+    import inspect
+
+    choice: tuple[str, dict[str, Any]]
+    if paused and "blocked" in inspect.signature(decider.decide).parameters:
+        choice = await decider.decide(state, blocked=paused)
+    else:
+        choice = await decider.decide(state)
+    return choice
+
+
+async def tick(
+    agent: Any, decider: Any, done_in: int | None = None, refusals: Refusals | None = None
+) -> dict[str, Any]:
     """One move: look, choose, act, write it down.
 
     ``done_in`` is the tick the running brain already chose in. The world takes one move per
     tick, and when "next tick at" comes late the state still shows that tick: then nothing
-    is chosen, no advisor is asked, nothing is written (``skipped``).
+    is chosen, no advisor is asked, nothing is written (``skipped``). ``refusals`` keeps the
+    moves the world refused in a row; a paused move is not played (cos20 #491).
     """
     state = await agent.refresh_state()
     if state is None:
         return fall_asleep(WORLD_SILENT, "no state from the world")
     if done_in and getattr(state, "tick", 0) == done_in:
         return {"action": "", "ok": True, "why": "", "skipped": "same tick"}
-    action, params = await decider.decide(state)
-    if action == "wait":
+    from words import action_words, move_words
+
+    paused = refusals.paused() if refusals else frozenset()
+    action, params = await choose(decider, state, paused)
+    if action in paused:
+        why = f"held back: {action_words(action)} is paused, the world kept refusing it"
+        last: dict[str, Any] = {"action": "wait", "ok": True, "why": why}
+    elif action == "wait":
         last = {"action": "wait", "ok": True, "why": "chose to wait"}
     else:
         last = await play(agent, action, params)
-    from words import move_words
-
+    if refusals is not None and refusals.note(last):
+        said = f"refused {REFUSALS_BEFORE_PAUSE} times, paused for {PAUSED_MOVES} moves"
+        last["why"] = f"{last['why']} — {said}" if last.get("why") else said
     last["words"] = move_words(last)  # what the panel and its advisor show (words.py)
     advice = getattr(decider, "last", None)  # what an advisor did on this move, if one was asked
     if advice:
@@ -790,8 +853,9 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
     interval = max(30.0, float(cfg.get("brain", {}).get("interval_s", 60)))
     done_in: int | None = None
     learning: Any = None
+    refusals = Refusals()
     while True:
-        last = await tick(agent, decider, done_in)
+        last = await tick(agent, decider, done_in, refusals)
         if last.get("skipped"):  # the world's tick is late: one choice per tick, so wait for it
             await asyncio.sleep(LATE_TICK_S)
             continue
