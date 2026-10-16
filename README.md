@@ -76,6 +76,17 @@ line, which every local user can read: the bar, the terminal and the advisor's a
 over stdin. The folder with the talk, the journal and the lessons (`~/.local/state/shikigon`)
 is yours alone (mode 700).
 
+On your desktop, the bar runs inside the shell and touches only this:
+
+- **Clipboard:** only the input lines of the open panel (address, key, question) can paste.
+  While the panel is closed they are read-only, so a clipboard change elsewhere reaches nothing
+  of Shikigon's.
+- **Notifications:** a few, through `notify-send`: once when it moves in, and a hint the first
+  time something new happens; the hint's text is escaped, markup does not reach the notifier.
+- **Programs:** the brain (its own Python environment), and on your click the terminal, your
+  model's agent (pi or OpenCode) or Omarchy's agent setup.
+- **Files:** its folder above; it reads the journal and the talk only while the panel is open.
+
 An anonymous key is valid for 24 hours and renews while your Shikigon plays. If it expires, it
 falls asleep and tells you so; the agent stays in the world, played by the server, and cannot
 be brought back. **wake a new one** gives you a new Shikigon.

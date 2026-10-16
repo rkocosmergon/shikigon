@@ -73,6 +73,7 @@ BarWidget {
   readonly property bool opened: popupOpen
   function open() {
     popupOpen = true
+    readPanelFiles()
     scroll.contentY = 0
     if (service) { service.recheck(); service.refreshAdvisors() }
   }
@@ -246,15 +247,19 @@ BarWidget {
   implicitHeight: barSize
 
   // watchChanges cannot watch a file that does not exist yet (the brain writes it
-  // only after waking), so both files are also re-read every few seconds.
+  // only after waking), so the files are also re-read every few seconds — only while it is
+  // awake. Journal, talk and lessons are shown only in the open panel, so they are read only
+  // then: this runs in the shared shell, and the journal is up to 256 KiB (cos20 #492, H7).
   Timer {
     interval: 5000
-    running: true
+    running: root.awake
     repeat: true
     onTriggered: {
-      statusFile.reload(); journalFile.reload(); chatFile.reload(); lessonsFile.reload()
+      statusFile.reload()
+      if (root.popupOpen) root.readPanelFiles()
     }
   }
+  function readPanelFiles() { journalFile.reload(); chatFile.reload(); lessonsFile.reload() }
 
   // While a question is on its way, look for its answer every second; a question nobody
   // answered within a minute and a half is dropped (the brain waits three timeouts).
@@ -274,7 +279,7 @@ BarWidget {
     path: root.stateDir + "/chat.jsonl"
     watchChanges: true
     printErrors: false
-    onFileChanged: reload()
+    onFileChanged: if (root.popupOpen || root.pending !== null) reload()
     onLoaded: {
       var lines = text().trim().split("\n").slice(-3)
       var parsed = []
@@ -303,7 +308,7 @@ BarWidget {
     path: root.stateDir + "/lessons.json"
     watchChanges: true
     printErrors: false
-    onFileChanged: reload()
+    onFileChanged: if (root.popupOpen) reload()
     onLoaded: {
       try { root.lessons = JSON.parse(text()) } catch (e) { root.lessons = [] }
     }
@@ -315,7 +320,7 @@ BarWidget {
     path: root.stateDir + "/journal.jsonl"
     watchChanges: true
     printErrors: false
-    onFileChanged: reload()
+    onFileChanged: if (root.popupOpen) reload()
     onLoaded: {
       var lines = text().trim().split("\n").slice(-12).reverse()
       var parsed = []
