@@ -5,44 +5,22 @@ that reads like a log; handed to the model that writes its lessons, it came back
 (device 14.10.2026: "start_mission too often", although the model was asked for plain words:
 it had been given the function names). Missions already had their own words (cos20 #451,
 panel H); this does the same for every move.
+
+The words themselves come from the SDK (``cosmergon_agent.action.action_word``, since 0.27.12,
+cos20 #486), the same the terminal's log uses, so the bar and the terminal never say a move
+two ways. A move the SDK does not know is said with its name, underscores as spaces.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-# The moves the world offers (``GET /api/v1/game/info`` ``actions``, 14.10.2026). A move that is
-# not here is said with its name, underscores as spaces.
-ACTION_WORDS = {
-    "abandon_field": "give up a field",
-    "accept_contract": "accept a contract",
-    "apply_to_contract": "apply for a contract",
-    "buy_shield": "buy a shield",
-    "burn_plague": "burn a plague",
-    "cancel_mission": "call off a mission",
-    "claim_field": "claim a field",
-    "create_field": "create a field",
-    "evolve": "evolve a field",
-    "heal_holes": "heal holes in a field",
-    "market_buy": "buy on the market",
-    "market_cancel": "take back an offer",
-    "market_list": "sell on the market",
-    "pickup_drop": "pick up loot",
-    "place_cells": "place cells",
-    "propose_contract": "offer a contract",
-    "propose_from_template": "offer a contract",
-    "reject_contract": "turn down a contract",
-    "set_compass": "set its compass",
-    "shoot_spore": "shoot a spore",
-    "start_mission": "start a mission",
-    "transfer_energy": "send energy",
-    "wait": "wait",
-}
+from cosmergon_agent.action import action_word
 
 
 def action_words(action: str) -> str:
     """A move by its name in words: ``market_list`` → ``sell on the market``."""
-    return ACTION_WORDS.get(action, action.replace("_", " "))
+    return action_word(action)
 
 
 def move_words(entry: dict[str, Any]) -> str:

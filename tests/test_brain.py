@@ -866,3 +866,17 @@ async def test_the_advisor_never_proposes_a_paused_move() -> None:
     options = await advisor.proposals(decider, _state(), paused=frozenset({"market_list"}))
     assert options[0][0] == "place_cells"
     assert all("market_list" in told for told in decider.told)
+
+
+def test_moves_are_said_in_the_sdks_words() -> None:
+    """cos20 #486: the bar and the terminal say a move the same way (SDK action_word).
+
+    ``say`` and ``propose_counter`` were missing from Shikigon's own table: the journal showed
+    the raw names. Unknown moves still read with spaces.
+    """
+    from words import action_words, move_words
+
+    assert action_words("say") == "say something"
+    assert move_words({"action": "propose_counter"}) == "make a counter-offer"
+    assert move_words({"action": "market_list"}) == "sell on the market"
+    assert action_words("some_new_move") == "some new move"
