@@ -85,7 +85,8 @@ On your desktop, the bar runs inside the shell and touches only this:
   time something new happens; the hint's text is escaped, markup does not reach the notifier.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your
   model's agent (pi or OpenCode) or Omarchy's agent setup.
-- **Files:** its folder above; it reads the journal and the talk only while the panel is open.
+- **Files:** its folder above; it reads the journal, the talk and its lessons only while the
+  panel is open (the talk also while an answer to your question is on its way).
 
 An anonymous key is valid for 24 hours and renews while your Shikigon plays. If it expires, it
 falls asleep and tells you so; the agent stays in the world, played by the server, and cannot

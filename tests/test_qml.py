@@ -74,6 +74,26 @@ def endless_timers(source: str) -> list[str]:
     return bad
 
 
+# Shown only in the open panel; the README says so ("On your desktop").
+PANEL_FILES = ("journal.jsonl", "chat.jsonl", "lessons.json")
+
+
+def panel_files_read_while_closed(source: str) -> list[str]:
+    """H7: a panel file with a path while the panel is closed.
+
+    A FileView loads its file as soon as it has a path (`preload` is on by default,
+    Quickshell `fileview.hpp`), so only a path that is empty while closed keeps it unread.
+    """
+    bad = []
+    for block in _blocks(source, "FileView"):
+        path = re.search(r"^\s*path:\s*(.+)$", block, re.MULTILINE)
+        if not path or not any(f in path.group(1) for f in PANEL_FILES):
+            continue
+        if "root.popupOpen" not in path.group(1) or ': ""' not in path.group(1):
+            bad.append(block)
+    return bad
+
+
 def test_input_lines_are_read_only_unless_the_open_panel_shows_them() -> None:
     for name, source in _sources():
         assert not editable_lines(source), f"{name}: {editable_lines(source)}"
@@ -94,6 +114,13 @@ def test_no_timer_runs_without_end() -> None:
         assert not endless_timers(source), f"{name}: {endless_timers(source)}"
 
 
+def test_panel_files_are_read_only_while_the_panel_is_open() -> None:
+    for name, source in _sources():
+        assert not panel_files_read_while_closed(source), (
+            f"{name}: {panel_files_read_while_closed(source)}"
+        )
+
+
 def test_the_guards_see_what_they_guard() -> None:
     """Counter-tests: each guard reports a violation it is fed, and finds the real elements."""
     assert editable_lines("TextField {\n  id: a\n}")
@@ -102,7 +129,12 @@ def test_the_guards_see_what_they_guard() -> None:
     assert blocking_calls("xhr.open('GET', url, false)")
     assert endless_timers("Timer {\n  interval: 5000\n  running: true\n  repeat: true\n}")
     assert not endless_timers("Timer {\n  id: t\n  repeat: true\n}\nfunction f() { t.stop() }")
+    fixed = 'FileView {\n  path: root.stateDir + "/%s"\n}'
+    assert panel_files_read_while_closed(fixed % "journal.jsonl")
+    assert not panel_files_read_while_closed(fixed % "status.json")
     bar = (QML / "BarWidget.qml").read_text(encoding="utf-8")
     assert len(_blocks(bar, "TextField")) == 3
     assert len(_blocks(bar, "Text")) >= 6  # four Text blocks and the Caption and Line components
     assert len(_blocks(bar, "Timer")) >= 5
+    shown = [b for b in _blocks(bar, "FileView") if any(f in b for f in PANEL_FILES)]
+    assert len(shown) == 3

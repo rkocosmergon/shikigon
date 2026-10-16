@@ -250,6 +250,8 @@ BarWidget {
   // only after waking), so the files are also re-read every few seconds — only while it is
   // awake. Journal, talk and lessons are shown only in the open panel, so they are read only
   // then: this runs in the shared shell, and the journal is up to 256 KiB (cos20 #492, H7).
+  // Their path is set only while the panel is open: a FileView loads its file as soon as it
+  // has a path (`preload` is on by default), and an empty path lets go of it.
   Timer {
     interval: 5000
     running: root.awake
@@ -276,10 +278,10 @@ BarWidget {
 
   FileView {
     id: chatFile
-    path: root.stateDir + "/chat.jsonl"
+    path: root.popupOpen || root.pending !== null ? root.stateDir + "/chat.jsonl" : ""
     watchChanges: true
     printErrors: false
-    onFileChanged: if (root.popupOpen || root.pending !== null) reload()
+    onFileChanged: reload()
     onLoaded: {
       var lines = text().trim().split("\n").slice(-3)
       var parsed = []
@@ -305,10 +307,10 @@ BarWidget {
   // What it learned (cos20 #451): the brain keeps the last three lessons, newest last.
   FileView {
     id: lessonsFile
-    path: root.stateDir + "/lessons.json"
+    path: root.popupOpen ? root.stateDir + "/lessons.json" : ""
     watchChanges: true
     printErrors: false
-    onFileChanged: if (root.popupOpen) reload()
+    onFileChanged: reload()
     onLoaded: {
       try { root.lessons = JSON.parse(text()) } catch (e) { root.lessons = [] }
     }
@@ -317,10 +319,10 @@ BarWidget {
 
   FileView {
     id: journalFile
-    path: root.stateDir + "/journal.jsonl"
+    path: root.popupOpen ? root.stateDir + "/journal.jsonl" : ""
     watchChanges: true
     printErrors: false
-    onFileChanged: if (root.popupOpen) reload()
+    onFileChanged: reload()
     onLoaded: {
       var lines = text().trim().split("\n").slice(-12).reverse()
       var parsed = []

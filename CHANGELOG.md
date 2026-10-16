@@ -27,7 +27,8 @@ Needs `cosmergon-agent` 0.27.12 and `cosmergon-decider-tree` 2.3.7 (pinned in
   now read-only unless the open panel shows it (marketplace review).
 - The bar no longer re-reads its journal, talk and lessons every five seconds while you are not
   looking: it reads them while the panel is open, and the status only while Shikigon is awake.
-  It all runs inside the shell, and the journal can be a quarter of a megabyte.
+  It also no longer reads them once when the shell starts, and lets go of them when the panel
+  closes. It all runs inside the shell, and the journal can be a quarter of a megabyte.
 
 ## 0.1.2 (2026-10-15)
 
