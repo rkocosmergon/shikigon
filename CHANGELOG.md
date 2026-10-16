@@ -8,6 +8,9 @@ What changed for someone who uses Shikigon. Newest first.
   not on screen. Qt fetches whatever another application offers into every editable line on
   each clipboard change; a large or stalled transfer could hold up the whole shell. A line is
   now read-only unless the open panel shows it (marketplace review).
+- The bar no longer re-reads its journal, talk and lessons every five seconds while you are not
+  looking: it reads them while the panel is open, and the status only while Shikigon is awake.
+  It all runs inside the shell, and the journal can be a quarter of a megabyte.
 
 ## 0.1.2 (2026-10-15)
 
