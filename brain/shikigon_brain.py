@@ -313,14 +313,18 @@ def bounded(block: Any) -> Any:
 
 def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
     """What the bar shows. Facts only, never the key."""
-    ranking = getattr(state, "ranking", None)
+    import advisor
+
+    rank, rank_of = advisor.place(getattr(state, "ranking", None))
     return {
         "name": getattr(state, "agent_name", ""),
         "persona": getattr(state, "persona_type", ""),
         "mood": mood(state),
         "energy": round(float(getattr(state, "energy", 0.0)), 1),
         "fields": len(getattr(state, "fields", []) or []),
-        "rank": getattr(ranking, "champion_rang", 0) if ranking else 0,
+        # The one ranking (cos20 #504): ``rang`` of ``rang_von``; older SDKs only champion_rang.
+        "rank": rank,
+        "rank_of": rank_of,
         "compass": getattr(state, "compass_preset", None) or "autonomous",
         "tick": getattr(state, "tick", 0),
         "situation": situation(state),

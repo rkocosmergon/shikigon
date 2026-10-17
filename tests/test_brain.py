@@ -204,6 +204,7 @@ async def test_a_move_is_acted_written_down_and_shown_without_the_key() -> None:
     assert agent.acted == [("place_cells", {"preset": "blinker"})]
     status = json.loads((brain.state_dir() / "status.json").read_text())
     assert status["mood"] == "thriving" and status["rank"] == 7 and status["fields"] == 1
+    assert status["rank_of"] == 0, "an older SDK knows no pool size (cos20 #504)"
     assert "api_key" not in json.dumps(status)
     line = (brain.state_dir() / "journal.jsonl").read_text().strip().splitlines()[-1]
     assert json.loads(line)["action"] == "place_cells"

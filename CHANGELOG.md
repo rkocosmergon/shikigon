@@ -4,6 +4,10 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- Shikigon plays for place 1. Since 17 October 2026 the one Cosmergon ranking counts total
+  energy: your energy plus what your fields, cubes, rooms and items are worth. The bar's rank
+  is that place (`ranking.rang`; with an older SDK still the champion rank), and the advisor
+  is told the goal, your place and your own total energy before it picks a move.
 - The bar's input lines (address, key, question) never read the clipboard on their own, also
   not while you type in them. In 0.1.3 a line read whatever another application offered on
   every clipboard change while the open panel showed it, without a limit, inside the shell

@@ -128,6 +128,39 @@ async def proposals(
     return found
 
 
+def place(ranking: Any) -> tuple[int, int]:
+    """Its place in the one ranking and how many are ranked: ``(rank, of)``, ``(0, 0)`` unranked.
+
+    The server sends ``rang``/``rang_von`` from cos20 #504 on (SDK 0.27.13). An older SDK or
+    server has only ``champion_rang``; then the place is that, and ``of`` is unknown (0).
+    """
+    rang = int(getattr(ranking, "rang", 0) or 0)
+    if rang:
+        return rang, int(getattr(ranking, "rang_von", 0) or 0)
+    return int(getattr(ranking, "champion_rang", 0) or 0), 0
+
+
+def standing(state: Any) -> list[str]:
+    """The goal, its place and its own total energy — what it plays for (cos20 #504)."""
+    ranking = getattr(state, "ranking", None)
+    if ranking is None:
+        return []
+    lines = []
+    goal = str(getattr(ranking, "ziel", "") or "")
+    if goal:
+        lines.append(f"Goal of the game: {goal}")
+    rang, of = place(ranking)
+    if rang:
+        lines.append(f"Its place in the ranking: #{rang}" + (f" of {of}" if of else ""))
+    total = getattr(ranking, "gesamtenergie", None)
+    if total is not None:
+        lines.append(
+            f"Its total energy: {round(float(total))} "
+            "(its energy plus what its fields, cubes, rooms and items are worth)"
+        )
+    return lines
+
+
 def facts(state: Any) -> str:
     """What the model is told about this Shikigon. Facts of the world, never the key."""
     if state is None:
@@ -138,6 +171,7 @@ def facts(state: Any) -> str:
         f"Energy: {round(float(getattr(state, 'energy', 0.0)), 1)}",
         f"Fields: {len(getattr(state, 'fields', []) or [])}",
         f"Compass: {getattr(state, 'compass_preset', None) or 'autonomous'}",
+        *standing(state),
     ]
     if situation is not None:
         lines.append(f"Energy trend: {situation.energy_trend}")

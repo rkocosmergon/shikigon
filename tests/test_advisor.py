@@ -52,6 +52,34 @@ def _tree() -> Any:
     return TreeDecider()
 
 
+def test_the_model_is_told_the_goal_its_place_and_its_total_energy() -> None:
+    """cos20 #504: the advisor plays for place 1 by total energy, so it is told so."""
+    from types import SimpleNamespace
+
+    ranking = SimpleNamespace(
+        ziel="Be #1 in Cosmergon: the agent with the greatest total energy.",
+        rang=12,
+        rang_von=380,
+        champion_rang=40,
+        gesamtenergie=4_812_345.6,
+    )
+    told = advisor.facts(SimpleNamespace(agent_name="Root-storm", persona_type="scientist",
+                                         energy=1.0, fields=[], ranking=ranking))
+    assert "Goal of the game: Be #1 in Cosmergon" in told
+    assert "Its place in the ranking: #12 of 380" in told
+    assert "Its total energy: 4812346" in told
+
+
+def test_an_older_sdk_gives_the_champion_place_and_no_total() -> None:
+    from types import SimpleNamespace
+
+    assert advisor.place(SimpleNamespace(champion_rang=7)) == (7, 0)
+    assert advisor.place(None) == (0, 0)
+    told = advisor.facts(SimpleNamespace(agent_name="a", persona_type="b", energy=1.0, fields=[],
+                                         ranking=SimpleNamespace(champion_rang=7)))
+    assert "#7" in told and "total energy" not in told
+
+
 class Model:
     """Stands in for the endpoint: answers ``reply`` or raises it, and counts the calls."""
 
