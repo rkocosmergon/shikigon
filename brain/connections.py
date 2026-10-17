@@ -258,15 +258,19 @@ def usable(conf: dict[str, Any]) -> bool:
 # ---------- finding ---------------------------------------------------------------------------
 
 
-KEY_ONLY_SAFE = "a key goes only over https, or to this machine and your home network"
+KEY_ONLY_SAFE = "a key goes only over https, or to this machine (localhost)"
 
 
 def key_may_go_to(base_url: str) -> bool:
-    """A key travels encrypted (https), or stays on this machine or in the home network.
+    """A key travels encrypted (https), or stays on this machine (loopback).
 
-    Over plain http to the open internet, anyone on the way reads it. A model server at
-    home (localhost, a ``.local`` name, a name without a dot such as ``macmini``, which only
-    the home network resolves, a private address) usually wants no key at all.
+    Over plain http anyone on the way reads it — also on a network that only looks like home:
+    in a café ``192.168.1.50`` is someone else's machine, anyone on the link answers for a
+    ``.local`` name, and the network's DNS for a name without a dot (cos20 #492; the class of
+    marketplace review #11798). A model server at home (Ollama, LM Studio) usually wants no
+    key; one that does is reached over https.
+    ~~„… or in the home network: .local, names without a dot, private addresses“~~ ÜBERHOLT
+    17.10.2026 (0.1.4).
     """
     parts = urllib.parse.urlsplit(base_url)
     if parts.scheme == "https":
@@ -274,13 +278,12 @@ def key_may_go_to(base_url: str) -> bool:
     host = (parts.hostname or "").lower()
     if parts.scheme != "http" or not host:
         return False
-    if host == "localhost" or host.endswith(".local") or "." not in host and ":" not in host:
+    if host == "localhost":
         return True
     try:
-        address = ipaddress.ip_address(host)
+        return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
-    return address.is_loopback or address.is_private or address.is_link_local
 
 
 # What a model list may bring into the shell (cos20 #492 F1): the list goes through the

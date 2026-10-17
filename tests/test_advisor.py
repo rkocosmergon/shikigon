@@ -306,9 +306,15 @@ async def test_a_key_never_goes_over_plain_http_to_the_open_internet() -> None:
     with pytest.raises(connections.AgentError, match="only over https"):
         await plain([{"role": "user", "content": "hi"}], 10)
     assert asked == [], "nothing left the machine"
-    home = advisor.http_send({**CONF, "base_url": "http://10.20.30.40:11434/v1"},
+    # 0.1.4: a network that only looks like home gets no key in plain text (cos20 #492, #11798)
+    lan = advisor.http_send({**CONF, "base_url": "http://10.20.30.40:11434/v1"},
+                            transport=transport, key="sk-paid")
+    with pytest.raises(connections.AgentError, match="only over https"):
+        await lan([{"role": "user", "content": "hi"}], 10)
+    assert asked == []
+    here = advisor.http_send({**CONF, "base_url": "http://127.0.0.1:11434/v1"},
                              transport=transport, key="sk-paid")
-    assert await home([{"role": "user", "content": "hi"}], 10) == "ok"
+    assert await here([{"role": "user", "content": "hi"}], 10) == "ok"
     without = advisor.http_send({**CONF, "base_url": "http://model.test/v1"}, transport=transport)
     assert await without([{"role": "user", "content": "hi"}], 10) == "ok"  # no key, no rule
 

@@ -6,6 +6,12 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.4 (2026-10-17)
 
+- A key goes only over https or to this machine (localhost). Before, plain http to a private
+  address, a `.local` name or a name without a dot was allowed as "home" — on a café or hotel
+  network those can be someone else's machine, and the key would travel readable. A model
+  server in your home network usually wants no key; one that does is reached over https.
+- Every text the server sends for the bar is cut to a fixed length (name, persona, compass,
+  the sentences of the situation), so `status.json` stays small whatever arrives.
 - The shortcut target takes no free text any more: `omarchy-shell shikigon instruct` takes one
   compass word (`grow`, `defend`, `attack`, `trade`, `cooperate`, `explore`, `free`), and there
   is no `ask` there. A command's arguments are readable by every local user; your words and

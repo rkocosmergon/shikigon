@@ -167,9 +167,14 @@ def test_an_address_says_its_models_or_that_it_wants_a_key_or_that_it_is_away() 
 
     assert "no answer from x " in connections.models_at("http://x/v1", away)["why"]
     sent: dict[str, Any] = {}
-    connections.models_at("http://x/v1", lambda url, **kw: sent.update(kw) or _answer(200, {}),
+    connections.models_at("https://x/v1", lambda url, **kw: sent.update(kw) or _answer(200, {}),
                           key="sk-secret")
     assert sent["headers"] == {"Authorization": "Bearer sk-secret"}
+    # 0.1.4: a name without a dot over plain http gets no key (cos20 #492, #11798)
+    asked: list[str] = []
+    connections.models_at("http://x/v1", lambda url, **kw: asked.append(url) or _answer(200, {}),
+                          key="sk-secret")
+    assert asked == [], "the key does not leave the machine in plain text"
 
 
 @pytest.mark.parametrize(("url", "may"), [
@@ -177,15 +182,18 @@ def test_an_address_says_its_models_or_that_it_wants_a_key_or_that_it_is_away() 
     ("http://localhost:11434/v1", True),
     ("http://127.0.0.1:1234/v1", True),
     ("http://[::1]:1234/v1", True),
-    ("http://macmini.local:11434/v1", True),
-    ("http://macmini:11434/v1", True),
-    ("http://10.20.30.40:11434/v1", True),
-    ("http://10.0.0.5/v1", True),
+    # 0.1.4: no key in plain text to a network that only looks like home (cos20 #492, #11798)
+    ("http://macmini.local:11434/v1", False),
+    ("http://macmini:11434/v1", False),
+    ("http://10.20.30.40:11434/v1", False),
+    ("http://192.168.178.21/v1", False),
+    ("http://169.254.1.1/v1", False),
+    ("http://localhost.evil.com/v1", False),
     ("http://api.example.com/v1", False),
     ("http://8.8.8.8/v1", False),
     ("ftp://localhost.evil.com/v1", False),
 ])
-def test_a_key_goes_only_encrypted_or_within_home(url: str, may: bool) -> None:
+def test_a_key_goes_only_encrypted_or_to_this_machine(url: str, may: bool) -> None:
     assert connections.key_may_go_to(url) is may
 
 

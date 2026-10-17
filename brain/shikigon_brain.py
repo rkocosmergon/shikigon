@@ -148,7 +148,7 @@ def server_says(resp: Any) -> str:
     return str(error or "")
 
 
-WORLD_KEY_SAFE = ("the world's address must be https (or this machine or your home network): "
+WORLD_KEY_SAFE = ("the world's address must be https (or this machine, localhost): "
                   "its key would travel readable for anyone on the way")
 
 

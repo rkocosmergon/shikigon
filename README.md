@@ -157,10 +157,11 @@ shows **WHO ANSWERS?**, one list:
 - **set up an agent in Omarchy…** opens Omarchy's own chooser; signing in is the agent's part.
 - **an address of its own…**: type any OpenAI-compatible address and pick one of the models it
   offers. It asks for a key only if the address wants one; the key is then kept in a file only
-  you can read, and it goes only to the address you typed it for, and only over https, or to
-  loopback, private addresses, `.local` names and names without a dot: never in plain text to
-  the open internet. The same holds for the world: its key goes only to an `https` address
-  (or this machine and your home network).
+  you can read, and it goes only to the address you typed it for, and only over https or to
+  this machine (localhost): never in plain text over a network, also not one that looks like
+  home — in a café `192.168.1.50` or `macmini.local` can be someone else. A model server in your
+  home network usually wants no key; one that does is reached over https. The same holds for
+  the world: its key goes only to an `https` address (or this machine).
 
 Whatever you pick is asked one real question first and taken only if it answers. That gives
 you three things:
