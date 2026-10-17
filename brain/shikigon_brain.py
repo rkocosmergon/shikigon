@@ -61,11 +61,36 @@ def state_dir() -> Path:
     return base / "shikigon"
 
 
-def said_on_stdin() -> str:
-    """One line from stdin (the bar and the terminal send their words this way); none on a tty."""
-    if sys.stdin is None or sys.stdin.isatty():
+def private_state() -> Path:
+    """The state folder, the player's alone (0700), also when a command by hand comes before
+    the first wake (cos20 #492 F8: it was made with the default mode then)."""
+    home = state_dir()
+    home.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(home, 0o700)
+    return home
+
+
+def said_on_stdin(asked: str = "") -> str:
+    """One line from stdin: the bar and the terminal send their words this way. At a terminal
+    it is asked for (``asked``), so the words never stand in the command line, which every
+    local user can read (#11550, cos20 #492 F7)."""
+    if sys.stdin is None:
         return ""
+    if sys.stdin.isatty():
+        if not asked:
+            return ""
+        # on stderr: inside "$(shikigon coach)" stdout is what the agent gets
+        print(f"{asked}: ", end="", file=sys.stderr, flush=True)
     return sys.stdin.readline().strip()
+
+
+def json_on_stdin() -> dict[str, Any]:
+    """One JSON object on stdin: how the bar sends an address or a model (never as arguments)."""
+    try:
+        data = json.loads(said_on_stdin())
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def load_config() -> dict[str, Any]:
@@ -123,6 +148,18 @@ def server_says(resp: Any) -> str:
     return str(error or "")
 
 
+WORLD_KEY_SAFE = ("the world's address must be https (or this machine or your home network): "
+                  "its key would travel readable for anyone on the way")
+
+
+def world_is_safe(cfg: dict[str, Any]) -> bool:
+    """The agent's key goes only where an advisor's key may go (H3, cos20 #492 F6)."""
+    import connections
+
+    world = cfg.get("world", {}).get("base_url") or "https://cosmergon.com"
+    return connections.key_may_go_to(str(world))
+
+
 def register(
     cfg: dict[str, Any], post: Callable[..., Any], replace: bool = False
 ) -> dict[str, str]:
@@ -136,6 +173,8 @@ def register(
 
     if load_credentials() is not None and not replace:
         raise SystemExit("A Shikigon already lives here. Use `register --new` to replace it.")
+    if not world_is_safe(cfg):
+        raise SystemExit(WORLD_KEY_SAFE)
     url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/auth/register/anonymous-agent"
     try:
         resp = post(url, json=registration_body(cfg), timeout=30)
@@ -169,6 +208,8 @@ def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
     creds = load_credentials()
     if creds is None:
         raise SystemExit("No Shikigon lives here.")
+    if not world_is_safe(cfg):
+        return {"ok": False, "why": WORLD_KEY_SAFE}
     url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/players/me"
     try:
         resp = delete(url, headers={"Authorization": f"api-key {creds['api_key']}"}, timeout=30)
@@ -255,6 +296,21 @@ def mission_kind(action: str, params: dict[str, Any]) -> str:
     return str(inner.get("mission_type") or "")
 
 
+# A block the server sends is passed on as it came, if it is small enough for the bar: the
+# bar runs inside the shared shell (cos20 #492 F5). Measured 17.10.2026 on the device: the
+# tournament block 198 bytes, the server's next step 226.
+SERVER_BLOCK_BYTES = 8 * 1024
+
+
+def bounded(block: Any) -> Any:
+    """``block`` as the server sent it, or ``None`` when it is past ``SERVER_BLOCK_BYTES``."""
+    try:
+        size = len(json.dumps(block))
+    except (TypeError, ValueError):
+        return None
+    return block if size <= SERVER_BLOCK_BYTES else None
+
+
 def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
     """What the bar shows. Facts only, never the key."""
     ranking = getattr(state, "ranking", None)
@@ -272,12 +328,12 @@ def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
         "first_field": FIRST_FIELD in situation(state),
         # The tournament it plays in, as the server sends it (cos20 #475): passed on, not
         # picked from, so a new field of the server reaches the bar without a change here.
-        "tournament": getattr(state, "tournament", None),
+        "tournament": bounded(getattr(state, "tournament", None)),
         # The server's own sentence while something is still missing (where you are, what
         # comes next), and when its key ends. Passed on the same way; ``None`` when the
         # server has nothing to say.
-        "next_step": getattr(state, "next_step", None),
-        "key_expiry": getattr(state, "key_expiry", None),
+        "next_step": bounded(getattr(state, "next_step", None)),
+        "key_expiry": bounded(getattr(state, "key_expiry", None)),
         "last": last,
         "updated_at": int(time.time()),
     }
@@ -289,8 +345,38 @@ def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
 JOURNAL_KEEP_BYTES = 128 * 1024
 
 
+# What the bar reads of the journal and the talk: small files the brain writes for it, so the
+# shell never reads a file that grows (cos20 #492 F5). journal.jsonl and chat.jsonl stay whole
+# for the lessons and the terminal; the talk is the player's (cos20 #468).
+BAR_JOURNAL = "journal_recent.json"
+BAR_TALK = "talk.json"
+BAR_LINES = 12  # journal lines the panel shows
+BAR_TURNS = 3  # exchanges the panel shows
+QUESTION_CHARS, ANSWER_CHARS = 500, 2000  # longest seen on the device (17.10.2026): 333, 516
+
+
 def journal(entry: dict[str, Any]) -> None:
     files.append(state_dir() / "journal.jsonl", entry, JOURNAL_KEEP_BYTES)
+    show_journal()
+
+
+def show_journal() -> None:
+    """The journal's last lines for the bar."""
+    lines = files.tail(state_dir() / "journal.jsonl", BAR_LINES, line_bytes=1024)
+    files.write_json(state_dir() / BAR_JOURNAL, lines)
+
+
+def show_talk() -> None:
+    """The talk's last exchanges for the bar, each cut to what the panel can show."""
+    turns = files.tail(chat_path(), BAR_TURNS, line_bytes=16 * 1024)
+    shown = []
+    for turn in turns:
+        cut = {**turn, "q": str(turn.get("q", ""))[:QUESTION_CHARS],
+               "a": str(turn.get("a", ""))[:ANSWER_CHARS]}
+        if "why" in cut:
+            cut["why"] = str(cut["why"])[:220]
+        shown.append(cut)
+    files.write_json(state_dir() / BAR_TALK, shown)
 
 
 # Tournament missions are run by the server (its assigner), not by this brain; their ends go
@@ -655,6 +741,7 @@ async def ask(
         conf, state_dir(), question, context, chat_tail(CHAT_KEPT), send
     )
     files.append(chat_path(), turn)  # kept whole: the talk is the player's (cos20 #468)
+    show_talk()
     return turn
 
 
@@ -726,23 +813,32 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
     """What the panel's "WHO ANSWERS?" needs: look, try, take, switch, drop."""
     import advisor
     import connections
-    import httpx
 
     home = state_dir()
     conf = advisor.settings(cfg, home)
+    # The bar sends an address, a model and a key on stdin as one JSON line: an address can
+    # carry a name and a password, and arguments stand in every local user's process list
+    # (cos20 #492 F3). Arguments still work at a terminal, for what is not private.
+    given = json_on_stdin() if what in ("models", "try", "key") and not rest else {}
     if what == "list":
-        return {"now": advisor_now(cfg), "found": connections.found(conf, httpx.get)}
-    if what == "models" and rest:
-        if rest[0].startswith("agent:"):
-            return {"ok": True, "models": connections.agent_models(rest[0][6:])}
-        return connections.models_at(rest[0], httpx.get, connections.kept_key(home))
-    if what == "key":  # from stdin, so it never stands in a process list
-        connections.keep_key(home, sys.stdin.readline())
+        return {"now": advisor_now(cfg), "found": connections.found(conf, connections.bounded_get)}
+    where = str(given.get("where") or (rest[0] if rest else ""))
+    if what == "models" and where:
+        if where.startswith("agent:"):
+            return {"ok": True, "models": connections.agent_models(where[6:])}
+        key = connections.kept_key(home, where)
+        return connections.models_at(where, connections.bounded_get, key)
+    if what == "key":  # never as an argument, so it never stands in a process list
+        if not given.get("key") or not given.get("where"):
+            return {"ok": False, "why": "a key comes on stdin with the address it is for"}
+        connections.keep_key(home, str(given["key"]), str(given["where"]))
         return {"ok": True}
-    if what == "try" and rest:
-        choice = pick(rest[0], rest[1] if len(rest) > 1 else "")
+    connection = str(given.get("connection") or (rest[0] if rest else ""))
+    if what == "try" and connection:
+        model = str(given.get("model") or (rest[1] if len(rest) > 1 else ""))
+        choice = pick(connection, model)
         if choice is None:
-            return {"ok": False, "why": f"unknown connection '{rest[0]}'"}
+            return {"ok": False, "why": "unknown connection, or no model named"}
         tried = {**conf, **choice}
         patient = advisor.sender(tried, home, patience=advisor.ANSWER_PATIENCE)
         result = asyncio.run(connections.probe(patient))
@@ -851,6 +947,8 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
     A lesson runs beside the moves, never in their way: through an agent it can take minutes.
     """
     interval = max(30.0, float(cfg.get("brain", {}).get("interval_s", 60)))
+    show_journal()  # what the bar shows exists from the start, also after an update
+    show_talk()
     done_in: int | None = None
     learning: Any = None
     refusals = Refusals()
@@ -873,6 +971,8 @@ async def with_agent(cfg: dict[str, Any], work: Callable[[Any], Awaitable[Any]])
     """
     from cosmergon_agent.exceptions import AuthenticationError
 
+    if not world_is_safe(cfg):
+        return fall_asleep(CONFIG, WORLD_KEY_SAFE)
     agent = make_agent(cfg)
     try:
         async with agent:
@@ -904,7 +1004,15 @@ def _parser() -> argparse.ArgumentParser:
 def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     """What needs no Shikigon of its own: the coach's task, the advisor, the snapshot."""
     if args.command == "coach":
-        print(coach_prompt(cfg, " ".join(args.text)))
+        # The task holds its snapshot (energy is the player's alone) and the question: it goes
+        # to a file for the owner only, and the agent's command line names the file alone
+        # (`omarchy agent prompt` takes its prompt as an argument; cos20 #492 F7).
+        asked = " ".join(args.text) or said_on_stdin("Your question (Enter: none)")
+        path = private_state() / "coach.md"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(coach_prompt(cfg, asked) + "\n")
+        print(f"Read the task in {path} and follow it.")
         return 0
     if args.command == "advisor":
         result = advisor_command(cfg, args.what, args.rest)
@@ -954,7 +1062,8 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
 
 def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     """A word from the player: a question for the advisor (ask) or for the compass (instruct)."""
-    text = " ".join(args.text) or said_on_stdin()
+    text = " ".join(args.text) or said_on_stdin(
+        "Your question" if args.command == "ask" else "Your words")
     if not text:
         why = f"nothing to {args.command}: give the words as an argument or on stdin"
         print(json.dumps({"ok": False, "why": why}))
@@ -980,6 +1089,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace, dict[str, Any]], int]] = {
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    private_state()
     return COMMANDS[args.command](args, load_config())
 
 if __name__ == "__main__":

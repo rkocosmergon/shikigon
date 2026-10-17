@@ -88,8 +88,12 @@ On your desktop, the bar runs inside the shell and touches only this:
   time something new happens; the hint's text is escaped, markup does not reach the notifier.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your
   model's agent (pi or OpenCode) or Omarchy's agent setup.
-- **Files:** its folder above; it reads the journal, the talk and its lessons only while the
-  panel is open (the talk also while an answer to your question is on its way).
+- **Files:** its folder above, and only small files the brain keeps small for it: the status,
+  the last twelve journal lines, the last three exchanges of the talk and its lessons. The
+  last three only while the panel is open (the talk also while an answer to your question is on
+  its way). A list of models is read with a limit (256 KiB, 8 seconds, 200 names).
+- **Command lines:** what you type (a question, an address, a key) never stands in one: other
+  people on the machine can read those. It goes to the brain on stdin.
 
 An anonymous key is valid for 24 hours and renews while your Shikigon plays. If it expires, it
 falls asleep and tells you so; the agent stays in the world, played by the server, and cannot
@@ -145,12 +149,16 @@ shows **WHO ANSWERS?**, one list:
   added a local model with a thinking mode to pi yourself, pi's `--thinking off` does not reach
   it: put `"samplingParams": {"reasoning_effort": "none"}` on that model in
   `~/.pi/agent/models.json`, or an answer can take minutes.
-- **A model server on this machine** (Ollama, LM Studio), found by itself.
+- **A model server on this machine** (Ollama, LM Studio), found by itself, and only one that
+  runs as you or as a system service: on a machine with several people, a server someone else
+  started on that port is not offered, so your question never goes to them.
 - **set up an agent in Omarchy…** opens Omarchy's own chooser; signing in is the agent's part.
 - **an address of its own…**: type any OpenAI-compatible address and pick one of the models it
   offers. It asks for a key only if the address wants one; the key is then kept in a file only
-  you can read, and it goes only over https, or to loopback, private addresses, `.local` names
-  and names without a dot: never in plain text to the open internet.
+  you can read, and it goes only to the address you typed it for, and only over https, or to
+  loopback, private addresses, `.local` names and names without a dot: never in plain text to
+  the open internet. The same holds for the world: its key goes only to an `https` address
+  (or this machine and your home network).
 
 Whatever you pick is asked one real question first and taken only if it answers. That gives
 you three things:
@@ -189,8 +197,13 @@ are, and its snapshot right now. On Omarchy, hand it to your default agent (with
 alias from [In a terminal](#in-a-terminal)):
 
 ```bash
-omarchy agent prompt "$(shikigon coach why does it wait?)"
+omarchy agent prompt "$(shikigon coach)"
 ```
+
+`coach` asks for your question, writes the task to `~/.local/state/shikigon/coach.md`
+(readable by you only) and prints one line that names that file. The task holds its snapshot,
+energy included, and your question; a command line is readable by everyone on the machine, so
+neither goes there.
 
 The skill tells the agent how to look (status, journal, lessons, the rules of the world), what
 it may do for you (set the compass), and what it never does (touch the key, end
@@ -206,8 +219,9 @@ o.bind("SUPER + ALT + J", "Shikigon grow", "omarchy-shell shikigon instruct grow
 o.bind("SUPER + ALT + P", "Shikigon terminal", "omarchy-shell shikigon terminal")
 ```
 
-Free text works the same way: `omarchy-shell shikigon instruct "be careful"`, and so does a
-question: `omarchy-shell shikigon ask "what is a blinker?"`. Also: `wake`, `status`. There is
+Free text works the same way (`omarchy-shell shikigon instruct "be careful"`, also `ask`), but
+whatever stands in a command is readable by everyone on the machine while it runs: bind
+compass words, and ask your questions in the panel or at `shikigon ask`. Also: `wake`, `status`. There is
 no "move now": it moves by itself once per tick, and a move of yours would only take that one.
 There is no pause in the bar either: pausing your agent takes it out of the game for a while,
 so it is an explicit, confirmed step in the terminal client (`X`).
@@ -222,9 +236,9 @@ alias shikigon='~/.local/share/shikigon/venv/bin/python ~/.config/omarchy/plugin
 
 shikigon status              # what the bar shows (JSON)
 shikigon tick                # one move now, for testing (the running brain moves by itself)
-shikigon instruct be careful # a word from you
+shikigon instruct            # a word from you (it asks for it)
 shikigon advise              # dry run of the advisor: nothing is played
-shikigon ask what is a blinker?
+shikigon ask                 # a question to its advisor (it asks for it)
 shikigon learn               # a lesson from its last moves now (after 30 moves)
 shikigon advisor list        # who could answer; also: try ID [MODEL] | advise off|N | forget
 shikigon forget --yes        # delete it, on the server and here
@@ -242,12 +256,15 @@ Everything lives in plain files:
 |---|---|
 | `~/.config/shikigon/shikigon.toml` | your configuration (copied from `config/shikigon.toml` on first start): server, character, name, move interval, which words mean what, and the advisor |
 | `~/.local/state/shikigon/credentials.json` | its key, readable by you only (0600). Never shown, never logged |
-| `~/.local/state/shikigon/status.json` | the snapshot the bar reads. It carries, as the server sends them: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `world_silent`, `config`) |
+| `~/.local/state/shikigon/status.json` | the snapshot the bar reads. It carries, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `world_silent`, `config`) |
 | `~/.local/state/shikigon/journal.jsonl` | every move with its energy and fields at the time, every word from you, how each tournament mission ended, and its lessons. Past 256 KiB it keeps its last 128 KiB (about a thousand entries) |
+| `~/.local/state/shikigon/journal_recent.json` | the journal's last twelve lines, for the bar |
 | `~/.local/state/shikigon/lessons.json` | its last three lessons |
 | `~/.local/state/shikigon/chat.jsonl` | your questions to the advisor and its answers, all of them |
+| `~/.local/state/shikigon/talk.json` | the last three of them for the bar, each answer cut at 2,000 characters |
+| `~/.local/state/shikigon/coach.md` | the last task `coach` wrote for your coding agent, readable by you only (0600) |
 | `~/.local/state/shikigon/advisor.json` | who answers, as picked in the panel |
-| `~/.local/state/shikigon/advisor_key` | a key an advisor's address asked for, readable by you only (0600) |
+| `~/.local/state/shikigon/advisor_key` | a key an advisor's address asked for, with that address, readable by you only (0600) |
 | `~/.local/state/shikigon/advisor_count.json` | how often the model was called today (for `max_per_day`) and the moves counted (for `every`) |
 | `~/.local/state/shikigon/tournament_seen.json` | the tournament missions already written down, so none appears twice |
 | `~/.local/state/shikigon/setup.json` | how far **wake** got, for the panel |

@@ -36,8 +36,10 @@ fail() {
 
 install_brain() {
     python3 -m venv "$venv" > "$log" 2>&1 || return 1
-    "$venv/bin/pip" install --quiet --disable-pip-version-check --no-cache-dir --require-hashes -r "$lock" \
-        >> "$log" 2>&1
+    # Hashes for every package, and wheels only: a source package would run its own build
+    # code, with build tools pip fetches without a hash (pip, "Secure installs"; cos20 #492 F9).
+    "$venv/bin/pip" install --quiet --disable-pip-version-check --no-cache-dir --require-hashes \
+        --only-binary=:all: -r "$lock" >> "$log" 2>&1
 }
 
 [ -f "$lock" ] || fail "The plugin's requirements.lock is missing."
@@ -69,7 +71,8 @@ if [ ! -f "$state/credentials.json" ] || [ "${#new[@]}" -gt 0 ]; then
     say waking
     # The brain says a refusal in one sentence on stderr (the server's own, if it has one).
     if ! said="$("$venv/bin/python" "$here/shikigon_brain.py" register "${new[@]}" 2>&1 > /dev/null)"; then
-        fail "$(printf '%s' "${said:-It did not wake.}" | tail -n 1)"
+        # one line, cut: the bar shows it, inside the shared shell
+        fail "$(printf '%s' "${said:-It did not wake.}" | tail -n 1 | cut -c1-300)"
     fi
 fi
 say "done"

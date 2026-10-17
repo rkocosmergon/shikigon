@@ -11,6 +11,32 @@ What changed for someone who uses Shikigon. Newest first.
   clipboard is read only when you press Ctrl+V or Shift+Insert, by a separate `wl-paste`
   with 2 seconds and 4 KiB at most, and the first line is pasted. Input methods (compose,
   dead keys) no longer reach these lines.
+- The bar reads only small files the brain keeps small for it: the last twelve journal lines
+  (`journal_recent.json`) and the last three exchanges of the talk, each answer cut at 2,000
+  characters (`talk.json`). Before, it read the whole talk, which keeps every exchange, every
+  second while an answer was on its way, and the journal (up to 256 KiB) every five seconds.
+  The blocks the server sends for the bar are passed on up to 8 KiB each.
+- A list of models reaches the bar with a limit: 256 KiB and 8 seconds for the answer, at
+  most 200 names of at most 120 printable characters.
+- A model server "on this machine" is offered only if it runs as you or as a system service.
+  On a machine with several people, anyone can listen on Ollama's or LM Studio's port, and
+  your question would have gone to them.
+- The address you type and the model you pick go to the brain on stdin, like your questions:
+  an address can carry a name and a password, and a command line is readable by everyone on
+  the machine. A failure names the host alone.
+- A key you enter for an address goes only to that address (scheme, host and port). Before,
+  it went to every address you tried after it. A key kept by an earlier version belongs to
+  the address picked then.
+- The world's key goes only to an `https` address, or to this machine and your home network,
+  like an advisor's key. A plain `http` address in the configuration is refused in a sentence.
+- `shikigon ask` and `shikigon instruct` ask for their words at a terminal instead of taking
+  them as arguments, and `coach` writes its task (its snapshot, energy included, and your
+  question) to a file only you can read and prints only that file's name. The README no
+  longer shows questions in a command line.
+- The state folder is made readable by you only (0700) also when a command by hand comes
+  before the first wake.
+- Waking installs wheels only (`--only-binary=:all:`), with their hashes as before: no
+  package's own build code runs on your machine.
 
 ## 0.1.3 (2026-10-16)
 

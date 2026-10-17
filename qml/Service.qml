@@ -291,10 +291,14 @@ Item {
       onStreamFinished: root.advisors = root.parsed(text, root.advisors)
     }
   }
+  // An address and a model go over stdin too: an address can carry a name and a password
+  // (https://me:pw@…), and arguments stand in every local user's process list (cos20 #492 F3).
   Process {
     id: modelLister
     property string where: ""
-    command: root.brainCommand(["advisor", "models", where])
+    command: root.brainCommand(["advisor", "models"])
+    stdinEnabled: true
+    onStarted: write(JSON.stringify({ where: where }) + "\n")
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -308,7 +312,9 @@ Item {
     id: prober
     property string connection: ""
     property string model: ""
-    command: root.brainCommand(["advisor", "try", connection].concat(model !== "" ? [model] : []))
+    command: root.brainCommand(["advisor", "try"])
+    stdinEnabled: true
+    onStarted: write(JSON.stringify({ connection: connection, model: model }) + "\n")
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -338,14 +344,15 @@ Item {
       said = ""
     }
   }
-  // A key an address asked for goes over stdin, never as an argument.
+  // A key an address asked for goes over stdin, never as an argument, with the address it is
+  // for: the brain sends it there and nowhere else (cos20 #492 F4).
   Process {
     id: keyKeeper
     property string secret: ""
     command: root.brainCommand(["advisor", "key"])
     stdinEnabled: true
     onStarted: {
-      write(secret + "\n")
+      write(JSON.stringify({ key: secret, where: root.models.where }) + "\n")
       secret = ""
     }
     onExited: root.listModels(root.models.where)

@@ -118,7 +118,8 @@ def test_the_list_names_agents_first_then_what_runs_here_then_the_configs_own() 
         raise OSError("refused")
 
     conf = {"base_url": "http://model-box.test:11434/v1", "model": "qwen3.5:9b"}
-    rows = connections.found(conf, get, is_installed=lambda agent: True)  # Codex is there too
+    rows = connections.found(conf, get, is_installed=lambda agent: True,
+                             is_own=lambda url: True)  # Codex is there too
     assert [row["id"] for row in rows] == [
         "agent:opencode", "agent:pi",
         "http:http://localhost:11434/v1", "http:http://model-box.test:11434/v1"]
@@ -164,7 +165,7 @@ def test_an_address_says_its_models_or_that_it_wants_a_key_or_that_it_is_away() 
     def away(url: str, **_: Any) -> Any:
         raise OSError("refused")
 
-    assert "no answer from http://x/v1" in connections.models_at("http://x/v1", away)["why"]
+    assert "no answer from x " in connections.models_at("http://x/v1", away)["why"]
     sent: dict[str, Any] = {}
     connections.models_at("http://x/v1", lambda url, **kw: sent.update(kw) or _answer(200, {}),
                           key="sk-secret")
@@ -388,7 +389,7 @@ def test_advice_on_moves_is_a_switch_of_its_own_and_forget_drops_the_choice() ->
     assert type(brain.make_decider(cfg)).__name__ == "TreeDecider"
     assert connections.chosen(home) == {
         "via": "http", "base_url": "http://x/v1", "model": "m", "advise": "off"}, "no rhythm left"
-    connections.keep_key(home, "sk-secret\n")
+    connections.keep_key(home, "sk-secret\n", "http://x/v1")
     assert brain.advisor_command(cfg, "forget", [])["now"]["picked"] is False
     assert not (home / "advisor.json").exists() and not (home / "advisor_key").exists()
 
@@ -403,12 +404,13 @@ def test_the_panels_switch_leaves_a_decider_someone_installed_alone() -> None:
 def test_a_key_comes_in_on_stdin_and_is_kept_for_the_owner_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(sys, "stdin", io.StringIO("sk-secret\n"))
+    line = '{"key": "sk-secret\\n", "where": "http://x/v1"}\n'
+    monkeypatch.setattr(sys, "stdin", io.StringIO(line))
     assert brain.advisor_command(brain.load_config(), "key", []) == {"ok": True}
     path = brain.state_dir() / "advisor_key"
-    assert path.read_text() == "sk-secret"
+    assert json.loads(path.read_text()) == {"origin": "http://x:80", "key": "sk-secret"}
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    assert connections.kept_key(brain.state_dir()) == "sk-secret"
+    assert connections.kept_key(brain.state_dir(), "http://x/v1") == "sk-secret"
 
 
 def test_what_an_agent_is_sent_holds_no_text_another_player_wrote() -> None:

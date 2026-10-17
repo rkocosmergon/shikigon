@@ -91,7 +91,24 @@ def endless_timers(source: str) -> list[str]:
 
 
 # Shown only in the open panel; the README says so ("On your desktop").
-PANEL_FILES = ("journal.jsonl", "chat.jsonl", "lessons.json")
+PANEL_FILES = ("journal_recent.json", "talk.json", "lessons.json")
+
+# H5 (cos20 #492 F5): the only files the bar reads. Each is written by the brain, which bounds
+# its size (status: server blocks to 8 KiB; journal_recent: 12 lines; talk: 3 exchanges, cut;
+# lessons: 3, in the server's lengths; setup: one cut sentence; tips, advisor: its own small
+# facts). journal.jsonl and chat.jsonl grow and are never read here.
+BAR_FILES = PANEL_FILES + ("status.json", "setup.json", "tips.json", "advisor.json")
+
+
+def unbounded_reads(source: str) -> list[str]:
+    """H5: a FileView on a file that is not one the brain keeps small for the bar."""
+    bad = []
+    for block in _blocks(source, "FileView"):
+        path = re.search(r"^\s*path:\s*(.+)$", block, re.MULTILINE)
+        named = re.findall(r'"/([^"/]+)"', path.group(1)) if path else []
+        if not named or any(name not in BAR_FILES for name in named):
+            bad.append(block)
+    return bad
 
 
 def panel_files_read_while_closed(source: str) -> list[str]:
@@ -135,6 +152,11 @@ def test_no_timer_runs_without_end() -> None:
         assert not endless_timers(source), f"{name}: {endless_timers(source)}"
 
 
+def test_the_bar_reads_only_files_the_brain_keeps_small() -> None:
+    for name, source in _sources():
+        assert not unbounded_reads(source), f"{name}: {unbounded_reads(source)}"
+
+
 def test_panel_files_are_read_only_while_the_panel_is_open() -> None:
     for name, source in _sources():
         assert not panel_files_read_while_closed(source), (
@@ -160,7 +182,10 @@ def test_the_guards_see_what_they_guard() -> None:
     assert endless_timers("Timer {\n  interval: 5000\n  running: true\n  repeat: true\n}")
     assert not endless_timers("Timer {\n  id: t\n  repeat: true\n}\nfunction f() { t.stop() }")
     fixed = 'FileView {\n  path: root.stateDir + "/%s"\n}'
-    assert panel_files_read_while_closed(fixed % "journal.jsonl")
+    assert unbounded_reads(fixed % "chat.jsonl")
+    assert unbounded_reads(fixed % "journal.jsonl")
+    assert not unbounded_reads(fixed % "status.json")
+    assert panel_files_read_while_closed(fixed % "journal_recent.json")
     assert not panel_files_read_while_closed(fixed % "status.json")
     bar = (QML / "BarWidget.qml").read_text(encoding="utf-8")
     assert len(_blocks(bar, "TextField")) == 1  # the QuietLine component

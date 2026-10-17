@@ -84,7 +84,8 @@ def sender(conf: dict[str, Any], home: Path | None = None, patience: int = 1) ->
         on_a_move = patience == 1
         wait = float(conf.get("timeout_s", 20)) if on_a_move else connections.AGENT_ANSWER_S
         return connections.agent_send(conf, wait)
-    key = connections.kept_key(home) if home is not None else ""
+    where = str(conf.get("base_url") or "")
+    key = connections.kept_key(home, where) if home is not None else ""
     return http_send(conf, patience=patience, key=key)
 
 

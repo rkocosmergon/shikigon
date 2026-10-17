@@ -32,6 +32,7 @@ import time
 import urllib.parse
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import files
@@ -199,17 +200,45 @@ def choose(home: Path, choice: dict[str, Any]) -> None:
     files.write_json(home / CHOICE_FILE, choice)
 
 
-def keep_key(home: Path, key: str) -> None:
-    """A key the endpoint asked for: kept like the agent's own key, readable by the owner only."""
+def origin(url: str) -> str:
+    """``scheme://host:port`` of an address, the port always named: what a key is bound to."""
+    parts = urllib.parse.urlsplit(url.strip())
+    scheme = parts.scheme.lower()
+    try:
+        port = parts.port or {"http": 80, "https": 443}.get(scheme, 0)
+    except ValueError:
+        return ""
+    host = (parts.hostname or "").lower()
+    return f"{scheme}://{host}:{port}" if scheme and host else ""
+
+
+def keep_key(home: Path, key: str, where: str) -> None:
+    """A key the endpoint at ``where`` asked for: kept like the agent's own key, readable by the
+    owner only, and bound to that address's origin. It never goes to another address
+    (cos20 #492 F4: a key typed for one endpoint went to every address asked after it)."""
     home.mkdir(parents=True, exist_ok=True)
     fd = os.open(home / KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(key.strip())
+        json.dump({"origin": origin(where), "key": key.strip()}, handle)
 
 
-def kept_key(home: Path) -> str:
+def kept_key(home: Path, url: str) -> str:
+    """The kept key if it was given for ``url``'s origin; empty for any other address.
+
+    A key kept by 0.1.3 or earlier is a bare line without an origin: it belongs to the address
+    picked then (``advisor.json``), the only one it was ever sent to.
+    """
     path = home / KEY_FILE
-    return path.read_text(encoding="utf-8").strip() if path.exists() else ""
+    if not path.exists() or not origin(url):
+        return ""
+    text = path.read_text(encoding="utf-8").strip()
+    try:
+        kept = json.loads(text)
+    except ValueError:
+        kept = None
+    if not isinstance(kept, dict):
+        kept = {"origin": origin(str(chosen(home).get("base_url") or "")), "key": text}
+    return str(kept.get("key") or "") if kept.get("origin") == origin(url) else ""
 
 
 def label(conf: dict[str, Any]) -> str:
@@ -254,6 +283,52 @@ def key_may_go_to(base_url: str) -> bool:
     return address.is_loopback or address.is_private or address.is_link_local
 
 
+# What a model list may bring into the shell (cos20 #492 F1): the list goes through the
+# brain's stdout into the bar, inside the shared shell, and a server on this machine is found
+# by its port alone, where any local user can listen.
+ANSWER_BYTES = 256 * 1024  # read of a model server's list, at most
+ANSWER_SECONDS = 8.0  # for the whole list, however slowly it comes
+MODELS_KEPT = 200
+NAME_CHARS = 120
+
+
+class TooLong(Exception):
+    """An answer past ``ANSWER_BYTES`` or ``ANSWER_SECONDS``."""
+
+
+def bounded_get(url: str, headers: dict[str, str] | None = None, timeout: float = 4) -> Any:
+    """``httpx.get`` with a limit on the body and on the whole time, not only on each read."""
+    import httpx
+
+    started = time.monotonic()
+    body = bytearray()
+    with httpx.stream("GET", url, headers=headers or {}, timeout=timeout) as resp:
+        for chunk in resp.iter_bytes():
+            body += chunk
+            if len(body) > ANSWER_BYTES or time.monotonic() - started > ANSWER_SECONDS:
+                raise TooLong(url)
+    status = resp.status_code
+
+    def raise_for_status() -> None:
+        if status >= 400:
+            raise httpx.HTTPStatusError(f"HTTP {status}", request=resp.request, response=resp)
+
+    return SimpleNamespace(status_code=status, json=lambda: json.loads(bytes(body)),
+                           raise_for_status=raise_for_status)
+
+
+def clean_names(names: list[Any]) -> list[str]:
+    """Model names as the bar may show them: printable, short, and not too many."""
+    kept: list[str] = []
+    for name in names:
+        text = "".join(ch for ch in str(name) if ch.isprintable()).strip()
+        if text and len(text) <= NAME_CHARS:
+            kept.append(text)
+        if len(kept) == MODELS_KEPT:
+            break
+    return kept
+
+
 def models_at(base_url: str, get: Callable[..., Any], key: str = "") -> dict[str, Any]:
     """The models an OpenAI-compatible address offers. ``needs_key`` if it wants one."""
     if key and not key_may_go_to(base_url):
@@ -261,23 +336,81 @@ def models_at(base_url: str, get: Callable[..., Any], key: str = "") -> dict[str
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     try:
         resp = get(base_url.rstrip("/") + "/models", headers=headers, timeout=4)
+    except TooLong:
+        return {"ok": False, "models": [], "why": "its list of models is too long"}
     except Exception as exc:  # noqa: BLE001 — any failure is the same answer: not reachable
-        why = f"no answer from {base_url} ({type(exc).__name__})"
+        # the host alone: an address can carry a name and a password (https://me:pw@…)
+        why = f"no answer from {short_host(base_url)} ({type(exc).__name__})"
         return {"ok": False, "models": [], "why": why}
     if resp.status_code in (401, 403):
         return {"ok": False, "models": [], "needs_key": True, "why": "it asks for a key"}
     try:
         resp.raise_for_status()
-        names = [str(m["id"]) for m in resp.json().get("data", []) if m.get("id")]
+        listed = resp.json().get("data", [])[: MODELS_KEPT * 2]
+        names = clean_names([m["id"] for m in listed if m.get("id")])
     except Exception as exc:  # noqa: BLE001 — an odd answer is no list
         return {"ok": False, "models": [], "why": f"no list of models there ({type(exc).__name__})"}
     return {"ok": bool(names), "models": names, "why": "" if names else "it offers no models"}
+
+
+# ---------- a server "on this machine" is the player's own -------------------------------------
+
+LISTEN = "0A"  # TCP_LISTEN in /proc/net/tcp
+
+
+def listeners(port: int, tables: list[str]) -> list[int]:
+    """The owners (uid) of the sockets listening on ``port`` in ``/proc/net/tcp``-style tables."""
+    owners: list[int] = []
+    for table in tables:
+        for line in table.splitlines()[1:]:
+            cells = line.split()
+            if len(cells) < 8 or cells[3] != LISTEN:
+                continue
+            if int(cells[1].rsplit(":", 1)[1], 16) == port:
+                owners.append(int(cells[7]))
+    return owners
+
+
+def system_accounts_below() -> int:
+    """``UID_MIN`` from ``/etc/login.defs``: accounts below it are the system's, not people."""
+    try:
+        for line in Path("/etc/login.defs").read_text(encoding="utf-8").splitlines():
+            cells = line.split()
+            if len(cells) == 2 and cells[0] == "UID_MIN":
+                return int(cells[1])
+    except (OSError, ValueError):
+        pass
+    return 1000
+
+
+def own_server(base_url: str, tables: list[str] | None = None, me: int | None = None) -> bool:
+    """True if the server at a local port runs as the player or as a system service.
+
+    Any local user can listen on a free port; a server another person runs there is not
+    "on this machine" for the player, and their question would go to that person
+    (cos20 #492 F2). Ollama on Arch runs as the system user ``ollama``.
+    """
+    port = urllib.parse.urlsplit(base_url).port
+    if port is None:
+        return False
+    if tables is None:
+        tables = []
+        for name in ("/proc/net/tcp", "/proc/net/tcp6"):
+            try:
+                tables.append(Path(name).read_text(encoding="utf-8"))
+            except OSError:
+                continue
+    owners = listeners(port, tables)
+    me = os.getuid() if me is None else me
+    below = system_accounts_below()
+    return bool(owners) and all(uid == me or uid < below for uid in owners)
 
 
 def found(
     conf: dict[str, Any],
     get: Callable[..., Any],
     is_installed: Callable[[str], bool] = installed,
+    is_own: Callable[[str], bool] = own_server,
 ) -> list[dict[str, Any]]:
     """Everything that could answer, most likely first: agents, local servers, the config's own."""
     rows: list[dict[str, Any]] = []
@@ -287,6 +420,8 @@ def found(
                          "name": spec["name"], "sign_in": spec["sign_in"],
                          "text": f"{spec['name']} — {spec['whose']}"})
     for name, base_url in LOCAL_SERVERS:
+        if not is_own(base_url):
+            continue
         there = models_at(base_url, get)
         if there["ok"]:
             rows.append({"id": f"http:{base_url}", "via": "http", "base_url": base_url,
@@ -301,7 +436,8 @@ def found(
 
 
 def short_host(base_url: str) -> str:
-    return base_url.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+    """The host alone, never a name or password an address may carry (``https://me:pw@…``)."""
+    return urllib.parse.urlsplit(base_url).hostname or ""
 
 
 def agent_models(agent: str, run: Callable[..., Any] = subprocess.run) -> list[str]:
@@ -320,6 +456,7 @@ def agent_models(agent: str, run: Callable[..., Any] = subprocess.run) -> list[s
                  if "/" in line and " " not in line.strip()]
     # What the player set up themselves first; the agent's own catalogue after it. The panel
     # shows the first eight (on the device eleven catalogue models stood before the player's).
+    names = clean_names(names)
     return sorted(names, key=lambda name: (name.startswith(f"{agent}/"), names.index(name)))
 
 
