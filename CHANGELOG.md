@@ -4,6 +4,8 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+## 0.1.4 (2026-10-17)
+
 - Shikigon plays for place 1. Since 17 October 2026 the one Cosmergon ranking counts total
   energy: your energy plus what your fields, cubes, rooms and items are worth. The bar's rank
   is that place (`ranking.rang`; with an older SDK still the champion rank), and the advisor
