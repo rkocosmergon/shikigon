@@ -65,7 +65,8 @@ request, the server sees your IP address. Details:
 [cosmergon.com/datenschutz.html](https://cosmergon.com/datenschutz.html).
 
 Nothing goes to any model unless you pick one (below). Then that one, and only that one,
-receives: your Shikigon's name, persona, energy, number of fields, compass, what the world says
+receives: your Shikigon's name, persona, energy, number of fields, compass, the goal of the game,
+its place in the ranking and its own total energy, what the world says
 about its situation (energy trend, a catastrophe, the server's advice for the next step), how
 long its key is still valid, its last moves, the proposed moves or your question with your
 last two questions and their answers, the public rules of the world, and its own lessons. The
@@ -124,7 +125,8 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
 
 - **Left click** opens the panel. On top: its name, mood and energy, and one sentence on what
   is going on (while it is awake, the server's own word on what comes next). Below: fields,
-  rank, compass, the last move (with its advisor's reason, if a model advises it), what it
+  rank, compass, whether it is shown publicly (you change that in the terminal with S), the
+  last move (with its advisor's reason, if a model advises it), what it
   learned last, the journal, and buttons for the compass, **open terminal** and **ask**.
 - **ask** turns the panel to the talk with its advisor: type a question, Enter sends it, the
   answer appears under the model's name; the last two exchanges stay in view. Esc turns the
@@ -256,7 +258,7 @@ Everything lives in plain files:
 |---|---|
 | `~/.config/shikigon/shikigon.toml` | your configuration (copied from `config/shikigon.toml` on first start): server, character, name, move interval, which words mean what, and the advisor |
 | `~/.local/state/shikigon/credentials.json` | its key, readable by you only (0600). Never shown, never logged |
-| `~/.local/state/shikigon/status.json` | the snapshot the bar reads. It carries, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `world_silent`, `config`) |
+| `~/.local/state/shikigon/status.json` | the snapshot the bar reads: its own numbers (energy, fields, rank and how many are ranked, whether it is shown publicly as a yes or no) and, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `world_silent`, `config`) |
 | `~/.local/state/shikigon/journal.jsonl` | every move with its energy and fields at the time, every word from you, how each tournament mission ended, and its lessons. Past 256 KiB it keeps its last 128 KiB (about a thousand entries) |
 | `~/.local/state/shikigon/journal_recent.json` | the journal's last twelve lines, for the bar |
 | `~/.local/state/shikigon/lessons.json` | its last three lessons |
