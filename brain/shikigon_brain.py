@@ -325,6 +325,10 @@ def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
         # The one ranking (cos20 #504): ``rang`` of ``rang_von``; older SDKs only champion_rang.
         "rank": rank,
         "rank_of": rank_of,
+        # Whether it is shown publicly (cos20 #504): yes or no, never the server's text (the bar
+        # runs in the shared shell, threat model §1b). Read from the state only; the switch is
+        # the terminal's dialog [S], not the bar's.
+        "public": bool(getattr(getattr(state, "showcase", None), "consented_version", None)),
         "compass": getattr(state, "compass_preset", None) or "autonomous",
         "tick": getattr(state, "tick", 0),
         "situation": situation(state),

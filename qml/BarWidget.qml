@@ -575,7 +575,7 @@ BarWidget {
           visible: root.view.full && root.status.fields !== undefined && !root.inTournament
             && !root.talking
           width: parent.width
-          readonly property real cell: width / 3
+          readonly property real cell: width / 4
           Stat { width: stats.cell; label: "fields"; value: String(root.status.fields) }
           Stat {
             width: stats.cell; label: "rank"
@@ -585,6 +585,11 @@ BarWidget {
           Stat {
             width: stats.cell; label: "compass"
             value: root.compass === "autonomous" ? "free" : (root.compass || "–")
+          }
+          // Shown publicly (cos20 #504)? Read only; the consent is given in the terminal ([S]).
+          Stat {
+            width: stats.cell; label: "public"
+            value: root.status.public === undefined ? "–" : (root.status.public === true ? "yes" : "no")
           }
         }
 

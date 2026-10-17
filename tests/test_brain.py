@@ -205,9 +205,19 @@ async def test_a_move_is_acted_written_down_and_shown_without_the_key() -> None:
     status = json.loads((brain.state_dir() / "status.json").read_text())
     assert status["mood"] == "thriving" and status["rank"] == 7 and status["fields"] == 1
     assert status["rank_of"] == 0, "an older SDK knows no pool size (cos20 #504)"
+    assert status["public"] is False, "no showcase in the state: not shown publicly"
     assert "api_key" not in json.dumps(status)
     line = (brain.state_dir() / "journal.jsonl").read_text().strip().splitlines()[-1]
     assert json.loads(line)["action"] == "place_cells"
+
+
+def test_the_bar_knows_whether_it_is_shown_publicly() -> None:
+    """cos20 #504: the consent version from the state, read only (the switch is the terminal's)."""
+    state = _state()
+    state.showcase = SimpleNamespace(consented_version="v2", total_energy_public=True)
+    assert brain.snapshot(state, {})["public"] is True
+    state.showcase = SimpleNamespace(consented_version="x" * 100_000)
+    assert brain.snapshot(state, {})["public"] is True, "a yes, not the server's text"
 
 
 async def test_waiting_is_a_choice_not_an_action() -> None:

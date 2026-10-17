@@ -8,6 +8,9 @@ What changed for someone who uses Shikigon. Newest first.
   energy: your energy plus what your fields, cubes, rooms and items are worth. The bar's rank
   is that place (`ranking.rang`; with an older SDK still the champion rank), and the advisor
   is told the goal, your place and your own total energy before it picks a move.
+- The panel shows whether Shikigon is shown publicly (`public: yes/no`). You give or withdraw
+  the consent in the terminal (S): there the consent text scrolls and the switch also accepts
+  the Terms. The bar only reads a yes or no from the brain — no new way to write from the shell.
 - Needs cosmergon-agent 0.27.15 and the rule tree 2.3.8. With 0.27.15 the terminal fits a small
   or tiled window like htop: lines end in "…" at the frame, names are shortened but numbers
   never, below 54×27 it says so instead of drawing a cut picture, and dialogs scroll. The rule tree keeps its items unless
