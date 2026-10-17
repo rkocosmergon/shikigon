@@ -487,4 +487,14 @@ TestCase {
     compare(Model.pastedLine(""), "")
     compare(Model.pastedLine(undefined), "")
   }
+
+  // cos20 #492: the IPC target takes compass words only — free text would stand in argv.
+  function test_compass_word() {
+    compare(Model.compassWord("grow"), "grow")
+    compare(Model.compassWord("  Defend "), "defend")
+    compare(Model.compassWord("free"), "free")
+    compare(Model.compassWord("be careful"), "", "free text is refused")
+    compare(Model.compassWord("what is a blinker?"), "", "a question is refused")
+    compare(Model.compassWord(""), "")
+  }
 }

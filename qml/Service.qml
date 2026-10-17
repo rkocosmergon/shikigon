@@ -16,9 +16,11 @@ import "ShikigonModel.js" as Model
 //
 // Shortcuts (Hyprland keybinds, see README):
 //   omarchy-shell shikigon tick
-//   omarchy-shell shikigon instruct "be careful"
-//   omarchy-shell shikigon ask "what is a blinker?"
+//   omarchy-shell shikigon instruct grow      (a compass word only, see Model.compassWord)
 //   omarchy-shell shikigon terminal | wake | status
+// The IPC target takes no free text: whatever stands in a command is readable by every local
+// user (marketplace review #11550). Words and questions go through the panel or the terminal,
+// on stdin.
 //
 // No pause here: pausing an agent is an explicit, confirmed step in the terminal
 // client (cos20 #468), not a button in the bar.
@@ -396,9 +398,13 @@ Item {
     target: "shikigon"
 
     function tick(): string { return root.tickNow() }
-    function instruct(text: string): string { return root.instruct(text) }
+    // A compass word only (grow, defend …): free text would stand in the caller's argv.
+    function instruct(word: string): string {
+      var preset = Model.compassWord(word)
+      return preset === "" ? "words and questions go through the panel or the terminal"
+                           : root.instruct(preset)
+    }
     function terminal(): string { return root.openTerminal() }
-    function ask(text: string): string { return root.ask(text) }
     function wake(): string { return root.wake(false) }
     function status(): string {
       return JSON.stringify({ awake: root.awake, running: runner.running,

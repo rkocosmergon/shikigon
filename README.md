@@ -221,9 +221,11 @@ o.bind("SUPER + ALT + J", "Shikigon grow", "omarchy-shell shikigon instruct grow
 o.bind("SUPER + ALT + P", "Shikigon terminal", "omarchy-shell shikigon terminal")
 ```
 
-Free text works the same way (`omarchy-shell shikigon instruct "be careful"`, also `ask`), but
-whatever stands in a command is readable by everyone on the machine while it runs: bind
-compass words, and ask your questions in the panel or at `shikigon ask`. Also: `wake`, `status`. There is
+`instruct` takes one compass word: `grow`, `defend`, `attack`, `trade`, `cooperate`, `explore`
+or `free`. It takes no free text and there is no `ask` here: whatever stands in a command is
+readable by everyone on the machine while it runs, so your words and questions go through the
+panel or the terminal (`shikigon instruct`, `shikigon ask` below read them on stdin). Also:
+`tick`, `terminal`, `wake`, `status`. There is
 no "move now": it moves by itself once per tick, and a move of yours would only take that one.
 There is no pause in the bar either: pausing your agent takes it out of the game for a while,
 so it is an explicit, confirmed step in the terminal client (`X`).

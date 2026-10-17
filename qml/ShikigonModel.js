@@ -85,6 +85,15 @@ function tournamentOffer(status) {
 
 // A notification's body may carry markup (Desktop Notifications spec; mako reads it), and a
 // hint can hold the server's words: `<`, `>` and `&` are shown as written, never read as tags.
+// The words the IPC target takes (cos20 #492): the compass presets, nothing else. A command's
+// arguments are readable by every local user, so free words and questions never come this way.
+var COMPASS_WORDS = ["grow", "defend", "attack", "trade", "cooperate", "explore", "free"]
+
+function compassWord(text) {
+  var w = String(text || "").trim().toLowerCase()
+  return COMPASS_WORDS.indexOf(w) >= 0 ? w : ""
+}
+
 function notifyBody(text) {
   return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }

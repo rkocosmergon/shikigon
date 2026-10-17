@@ -127,6 +127,31 @@ def panel_files_read_while_closed(source: str) -> list[str]:
     return bad
 
 
+def ipc_free_text(source: str) -> list[str]:
+    """H1: the IPC target takes no free text (cos20 #492, like #11550).
+
+    ``omarchy-shell shikigon <fn> <text>`` puts the text into the caller's argv, readable by
+    every local user. A function of the IpcHandler that takes a string must turn it into one
+    of the fixed compass words (``Model.compassWord``) or not take it at all.
+    """
+    bad = []
+    for block in _blocks(source, "IpcHandler"):
+        for m in re.finditer(r"function\s+(\w+)\s*\(\s*\w+\s*:\s*string\s*\)[^{]*\{", block):
+            depth, end = 0, m.end() - 1
+            for end in range(m.end() - 1, len(block)):
+                depth += {"{": 1, "}": -1}.get(block[end], 0)
+                if depth == 0:
+                    break
+            if "Model.compassWord(" not in block[m.start():end + 1]:
+                bad.append(m.group(1))
+    return bad
+
+
+def test_the_ipc_target_takes_no_free_text() -> None:
+    for name, source in _sources():
+        assert not ipc_free_text(source), f"{name}: {ipc_free_text(source)}"
+
+
 def test_no_input_line_is_ever_editable() -> None:
     for name, source in _sources():
         assert not editable_lines(source), f"{name}: {editable_lines(source)}"
@@ -177,6 +202,13 @@ def test_the_guards_see_what_they_guard() -> None:
     assert clipboard_reads('command: ["sh", "-c", "timeout 2 wl-paste -n"]')
     assert not clipboard_reads('command: ["sh", "-c", "timeout 2 wl-paste -n | head -c 4096"]')
     assert rich_texts("component Line: Text {\n  color: red\n}")
+    ipc = "IpcHandler {\n  function ask(text: string): string { return root.ask(text) }\n}"
+    assert ipc_free_text(ipc) == ["ask"]
+    assert not ipc_free_text(
+        "IpcHandler {\n  function instruct(w: string): string { return Model.compassWord(w) }\n}"
+    )
+    service = (QML / "Service.qml").read_text(encoding="utf-8")
+    assert len(_blocks(service, "IpcHandler")) == 1
     assert blocking_calls("FileView {\n  blockLoading: true\n}")
     assert blocking_calls("xhr.open('GET', url, false)")
     assert endless_timers("Timer {\n  interval: 5000\n  running: true\n  repeat: true\n}")

@@ -6,6 +6,10 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.4 (2026-10-17)
 
+- The shortcut target takes no free text any more: `omarchy-shell shikigon instruct` takes one
+  compass word (`grow`, `defend`, `attack`, `trade`, `cooperate`, `explore`, `free`), and there
+  is no `ask` there. A command's arguments are readable by every local user; your words and
+  questions go through the panel or the terminal, on stdin.
 - Shikigon plays for place 1. Since 17 October 2026 the one Cosmergon ranking counts total
   energy: your energy plus what your fields, cubes, rooms and items are worth. The bar's rank
   is that place (`ranking.rang`; with an older SDK still the champion rank), and the advisor
