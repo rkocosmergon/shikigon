@@ -8,6 +8,9 @@ What changed for someone who uses Shikigon. Newest first.
   energy: your energy plus what your fields, cubes, rooms and items are worth. The bar's rank
   is that place (`ranking.rang`; with an older SDK still the champion rank), and the advisor
   is told the goal, your place and your own total energy before it picks a move.
+- Needs cosmergon-agent 0.27.13 and the rule tree 2.3.8. The rule tree keeps its items unless
+  its energy is below the subsistence line: an item counts at the house price, and selling it
+  at 95 % of the cheapest offer cost 5 % of its value.
 - The bar's input lines (address, key, question) never read the clipboard on their own, also
   not while you type in them. In 0.1.3 a line read whatever another application offered on
   every clipboard change while the open panel showed it, without a limit, inside the shell

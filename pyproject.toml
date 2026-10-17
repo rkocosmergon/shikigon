@@ -10,8 +10,8 @@ dependencies = [
     # 0.26.0 brought mission_word / mission_outcome_text (cos20 #475).
     # [dashboard]: "open terminal" starts cosmergon-dashboard, which needs textual; without
     # the extra the client only prints how to install it (seen in a fresh container, 11.10.2026).
-    "cosmergon-agent[dashboard]>=0.27.12",
-    "cosmergon-decider-tree>=2.3.7",
+    "cosmergon-agent[dashboard]>=0.27.13",
+    "cosmergon-decider-tree>=2.3.8",
 ]
 
 [project.optional-dependencies]
