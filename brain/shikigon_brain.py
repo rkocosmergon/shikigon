@@ -302,6 +302,18 @@ def mission_kind(action: str, params: dict[str, Any]) -> str:
 SERVER_BLOCK_BYTES = 8 * 1024
 
 
+# Every other text of the server in status.json is cut too (cos20 #492): a name, a persona, a
+# compass, the sentences of the situation. Together with the three blocks above the file stays
+# far below STATUS_BYTES, whatever the server sends (test_a_hostile_server_cannot_make_status_big).
+NAME_CHARS, WORD_CHARS, SENTENCE_CHARS, SENTENCES = 64, 32, 200, 8
+STATUS_BYTES = 64 * 1024
+
+
+def short(text: Any, chars: int) -> str:
+    """``text`` as a string of at most ``chars`` characters."""
+    return str(text or "")[:chars]
+
+
 def bounded(block: Any) -> Any:
     """``block`` as the server sent it, or ``None`` when it is past ``SERVER_BLOCK_BYTES``."""
     try:
@@ -317,8 +329,8 @@ def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
 
     rank, rank_of = advisor.place(getattr(state, "ranking", None))
     return {
-        "name": getattr(state, "agent_name", ""),
-        "persona": getattr(state, "persona_type", ""),
+        "name": short(getattr(state, "agent_name", ""), NAME_CHARS),
+        "persona": short(getattr(state, "persona_type", ""), WORD_CHARS),
         "mood": mood(state),
         "energy": round(float(getattr(state, "energy", 0.0)), 1),
         "fields": len(getattr(state, "fields", []) or []),
@@ -329,9 +341,9 @@ def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
         # runs in the shared shell, threat model §1b). Read from the state only; the switch is
         # the terminal's dialog [S], not the bar's.
         "public": bool(getattr(getattr(state, "showcase", None), "consented_version", None)),
-        "compass": getattr(state, "compass_preset", None) or "autonomous",
+        "compass": short(getattr(state, "compass_preset", None) or "autonomous", WORD_CHARS),
         "tick": getattr(state, "tick", 0),
-        "situation": situation(state),
+        "situation": [short(s, SENTENCE_CHARS) for s in situation(state)][:SENTENCES],
         # No field in a full world (the bar's first-time hint reads this, not a sentence)
         "first_field": FIRST_FIELD in situation(state),
         # The tournament it plays in, as the server sends it (cos20 #475): passed on, not

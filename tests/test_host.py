@@ -201,6 +201,23 @@ def test_a_server_block_too_big_for_the_bar_is_left_out() -> None:
     assert brain.bounded(None) is None
 
 
+def test_a_hostile_server_cannot_make_status_big() -> None:
+    """Every text of the server in status.json is cut (cos20 #492): the bar reads the file in
+    the shared shell. Counter-test: on 0.1.4 (d82710c) name, persona, compass and the
+    catastrophe went through whole."""
+    huge = "x" * 5_000_000
+    state = SimpleNamespace(
+        agent_name=huge, persona_type=huge, compass_preset=huge, energy=1.0, fields=[],
+        tick=1, ranking=None, showcase=None,
+        world_briefing=SimpleNamespace(situation=SimpleNamespace(
+            energy_trend="falling", fields_owned=0, active_catastrophe=huge)),
+        tournament={"rows": [huge]}, next_step={"next": huge}, key_expiry={"at": huge},
+    )
+    shown = brain.snapshot(state, {"action": "wait", "ok": True, "why": ""})
+    assert len(json.dumps(shown)) < brain.STATUS_BYTES
+    assert len(shown["name"]) == brain.NAME_CHARS
+
+
 # --- F6: the agent's key travels only encrypted or within home ----------------------------------
 
 
