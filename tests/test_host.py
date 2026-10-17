@@ -218,6 +218,15 @@ def test_a_hostile_server_cannot_make_status_big() -> None:
     assert len(shown["name"]) == brain.NAME_CHARS
 
 
+def test_an_address_is_never_taken_as_an_argument(tmp_path: Path) -> None:
+    """0.1.4 (H1/H6): ``advisor models|try`` take an agent as an argument, never an address —
+    it can carry a name and a password (https://me:pw@host). Counter-test: d82710c took it."""
+    cfg = {"world": {}, "character": {}, "brain": {}}
+    for what in ("models", "try"):
+        said = brain.advisor_command(cfg, what, ["https://me:pw@models.example/v1"])
+        assert said == {"ok": False, "why": brain.ADDRESS_ON_STDIN}, what
+
+
 # --- F6: the agent's key travels only encrypted or within home ----------------------------------
 
 

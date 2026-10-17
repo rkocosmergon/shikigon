@@ -829,8 +829,14 @@ def advisor_now(cfg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+ADDRESS_ON_STDIN = ("an address comes through the panel or on stdin, never as an argument: it can "
+                    "carry a name and a password, and arguments are readable by every local user")
+
+
 def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str, Any]:
     """What the panel's "WHO ANSWERS?" needs: look, try, take, switch, drop."""
+    if what in ("models", "try") and rest and not rest[0].startswith("agent:"):
+        return {"ok": False, "why": ADDRESS_ON_STDIN}  # see the comment on stdin below
     import advisor
     import connections
 
@@ -838,7 +844,8 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
     conf = advisor.settings(cfg, home)
     # The bar sends an address, a model and a key on stdin as one JSON line: an address can
     # carry a name and a password, and arguments stand in every local user's process list
-    # (cos20 #492 F3). Arguments still work at a terminal, for what is not private.
+    # (cos20 #492 F3). Arguments still work at a terminal for an agent (``agent:pi``), never for
+    # an address: it can carry a name and a password (0.1.4, H1/H6).
     given = json_on_stdin() if what in ("models", "try", "key") and not rest else {}
     if what == "list":
         return {"now": advisor_now(cfg), "found": connections.found(conf, connections.bounded_get)}
@@ -879,7 +886,8 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
         for name in (connections.CHOICE_FILE, connections.KEY_FILE):
             (home / name).unlink(missing_ok=True)
         return {"ok": True, "now": advisor_now(cfg)}
-    usage = "advisor list | models WHERE | key | try ID [MODEL] | advise off|N | forget"
+    usage = ("advisor list | models agent:NAME | key | try agent:NAME [MODEL] | advise off|N"
+             " | forget — an address goes through the panel or on stdin")
     return {"ok": False, "why": usage}
 
 

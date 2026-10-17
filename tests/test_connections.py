@@ -376,12 +376,16 @@ def test_a_connection_is_taken_only_after_it_answered(monkeypatch: pytest.Monkey
     # another connection replaces it whole (seen on the device: the agent's keys stayed behind)
     connections.choose(home, {**connections.chosen(home), "advise": 15, "every": 15})
     monkeypatch.setattr(advisor, "sender", lambda conf, state=None, patience=1: _says_ok)
-    assert brain.advisor_command(cfg, "try", ["http:http://x/v1", "m"])["ok"] is True
+    # an address comes on stdin, as the bar sends it (0.1.4: never as an argument)
+    monkeypatch.setattr(brain, "json_on_stdin", lambda: {"connection": "http:http://x/v1",
+                                                          "model": "m"})
+    assert brain.advisor_command(cfg, "try", [])["ok"] is True
     assert connections.chosen(home) == {
         "advise": 15, "every": 15, "via": "http", "base_url": "http://x/v1", "model": "m"}
     assert brain.advisor_command(cfg, "try", ["agent:claude"])["ok"] is False  # not offered
     assert brain.advisor_command(cfg, "try", ["agent:codex"])["ok"] is False  # not proven yet
-    assert brain.advisor_command(cfg, "try", ["http:http://x/v1"])["ok"] is False  # no model named
+    monkeypatch.setattr(brain, "json_on_stdin", lambda: {"connection": "http:http://x/v1"})
+    assert brain.advisor_command(cfg, "try", [])["ok"] is False  # no model named
 
 
 def test_advice_on_moves_is_a_switch_of_its_own_and_forget_drops_the_choice() -> None:

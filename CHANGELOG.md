@@ -10,6 +10,8 @@ What changed for someone who uses Shikigon. Newest first.
   address, a `.local` name or a name without a dot was allowed as "home" — on a café or hotel
   network those can be someone else's machine, and the key would travel readable. A model
   server in your home network usually wants no key; one that does is reached over https.
+- `shikigon advisor models|try` take an agent (`agent:pi`) as an argument, never an address: an
+  address can carry a name and a password. Addresses go through the panel or on stdin.
 - Every text the server sends for the bar is cut to a fixed length (name, persona, compass,
   the sentences of the situation), so `status.json` stays small whatever arrives.
 - The shortcut target takes no free text any more: `omarchy-shell shikigon instruct` takes one

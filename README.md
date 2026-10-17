@@ -245,7 +245,7 @@ shikigon instruct            # a word from you (it asks for it)
 shikigon advise              # dry run of the advisor: nothing is played
 shikigon ask                 # a question to its advisor (it asks for it)
 shikigon learn               # a lesson from its last moves now (after 30 moves)
-shikigon advisor list        # who could answer; also: try ID [MODEL] | advise off|N | forget
+shikigon advisor list        # who could answer; also: try agent:NAME [MODEL] | advise off|N | forget
 shikigon forget --yes        # delete it, on the server and here
 ```
 
