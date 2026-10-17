@@ -829,6 +829,8 @@ def advisor_now(cfg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+WORDS_ON_STDIN = ("words come on stdin or when it asks, never as arguments: arguments are "
+                  "readable by every local user")
 ADDRESS_ON_STDIN = ("an address comes through the panel or on stdin, never as an argument: it can "
                     "carry a name and a password, and arguments are readable by every local user")
 
@@ -1018,11 +1020,10 @@ def _parser() -> argparse.ArgumentParser:
         sub.add_parser(name)
     gone = sub.add_parser("forget")
     gone.add_argument("--yes", action="store_true", help="yes, delete it on the server and here")
-    for name in ("instruct", "ask"):
-        # Without text the words come in on stdin: arguments stand in /proc/<pid>/cmdline for
-        # every local user (#11550). The argument form stays for cosmergon-dashboard <= 0.27.9.
+    for name in ("instruct", "ask", "coach"):
+        # Words come in on stdin, or when it asks at a terminal: arguments stand in
+        # /proc/<pid>/cmdline for every local user (#11550). They are taken only to refuse them.
         sub.add_parser(name).add_argument("text", nargs="*")
-    sub.add_parser("coach").add_argument("text", nargs="*")
     who = sub.add_parser("advisor", help="who answers: list, try and take a connection")
     who.add_argument("what", nargs="?", default="list")
     who.add_argument("rest", nargs="*")
@@ -1032,10 +1033,13 @@ def _parser() -> argparse.ArgumentParser:
 def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     """What needs no Shikigon of its own: the coach's task, the advisor, the snapshot."""
     if args.command == "coach":
+        if args.text:
+            print(json.dumps({"ok": False, "why": WORDS_ON_STDIN}))
+            return 1
         # The task holds its snapshot (energy is the player's alone) and the question: it goes
         # to a file for the owner only, and the agent's command line names the file alone
         # (`omarchy agent prompt` takes its prompt as an argument; cos20 #492 F7).
-        asked = " ".join(args.text) or said_on_stdin("Your question (Enter: none)")
+        asked = said_on_stdin("Your question (Enter: none)")
         path = private_state() / "coach.md"
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -1090,11 +1094,12 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
 
 def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     """A word from the player: a question for the advisor (ask) or for the compass (instruct)."""
-    text = " ".join(args.text) or said_on_stdin(
-        "Your question" if args.command == "ask" else "Your words")
+    if args.text:
+        print(json.dumps({"ok": False, "why": WORDS_ON_STDIN}))
+        return 1
+    text = said_on_stdin("Your question" if args.command == "ask" else "Your words")
     if not text:
-        why = f"nothing to {args.command}: give the words as an argument or on stdin"
-        print(json.dumps({"ok": False, "why": why}))
+        print(json.dumps({"ok": False, "why": f"nothing to {args.command}: no words on stdin"}))
         return 1
     if args.command == "ask":
         import httpx

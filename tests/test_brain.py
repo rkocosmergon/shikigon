@@ -566,8 +566,11 @@ def test_the_words_come_in_on_stdin_not_as_an_argument(
     capsys.readouterr()
     assert brain.main(["instruct"]) == 1
     assert "stdin" in json.loads(capsys.readouterr().out)["why"]
-    # The argument form stays for cosmergon-dashboard <= 0.27.9, which sends the question so.
-    assert brain.main(["instruct", "be", "bold"]) == 0 and heard[-1] == "be bold"
+    # 0.1.4: no words as arguments, from anyone (the dashboard sends them on stdin since 0.27.10)
+    for command in ("instruct", "ask", "coach"):
+        assert brain.main([command, "be", "bold"]) == 1, command
+        assert "never as arguments" in json.loads(capsys.readouterr().out)["why"]
+    assert heard == ["be careful"]
 
 
 # --- One move per tick (found on the dev server, 11.10.2026) -----------------------------------
