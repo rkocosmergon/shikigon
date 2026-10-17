@@ -186,7 +186,7 @@ def test_an_address_says_its_models_or_that_it_wants_a_key_or_that_it_is_away() 
     ("http://macmini.local:11434/v1", False),
     ("http://macmini:11434/v1", False),
     ("http://10.20.30.40:11434/v1", False),
-    ("http://192.168.178.21/v1", False),
+    ("http://192.168.1.50/v1", False),
     ("http://169.254.1.1/v1", False),
     ("http://localhost.evil.com/v1", False),
     ("http://api.example.com/v1", False),

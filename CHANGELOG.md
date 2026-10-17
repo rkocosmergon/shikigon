@@ -27,9 +27,9 @@ What changed for someone who uses Shikigon. Newest first.
   the Terms. The bar only reads a yes or no from the brain — no new way to write from the shell.
 - Needs cosmergon-agent 0.27.15 and the rule tree 2.3.8. With 0.27.15 the terminal fits a small
   or tiled window like htop: lines end in "…" at the frame, names are shortened but numbers
-  never, below 54×27 it says so instead of drawing a cut picture, and dialogs scroll. The rule tree keeps its items unless
-  its energy is below the subsistence line: an item counts at the house price, and selling it
-  at 95 % of the cheapest offer cost 5 % of its value.
+  never, below 54×27 it says so instead of drawing a cut picture, and dialogs scroll. The rule
+  tree keeps its items unless its energy is below the subsistence line: an item counts at the
+  house price, and selling it at 95 % of the cheapest offer cost 5 % of its value.
 - The bar's input lines (address, key, question) never read the clipboard on their own, also
   not while you type in them. In 0.1.3 a line read whatever another application offered on
   every clipboard change while the open panel showed it, without a limit, inside the shell
@@ -53,10 +53,10 @@ What changed for someone who uses Shikigon. Newest first.
 - A key you enter for an address goes only to that address (scheme, host and port). Before,
   it went to every address you tried after it. A key kept by an earlier version belongs to
   the address picked then.
-- The world's key goes only to an `https` address, or to this machine and your home network,
-  like an advisor's key. A plain `http` address in the configuration is refused in a sentence.
-- `shikigon ask` and `shikigon instruct` ask for their words at a terminal instead of taking
-  them as arguments, and `coach` writes its task (its snapshot, energy included, and your
+- The world's key goes only to an `https` address, or to this machine (localhost), like an
+  advisor's key. Any other plain `http` address in the configuration is refused in a sentence.
+- `shikigon ask`, `shikigon instruct` and `shikigon coach` take your words on stdin or ask for
+  them at a terminal, and refuse them as arguments. `coach` writes its task (its snapshot, energy included, and your
   question) to a file only you can read and prints only that file's name. The README no
   longer shows questions in a command line.
 - The state folder is made readable by you only (0700) also when a command by hand comes

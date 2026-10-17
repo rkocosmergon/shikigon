@@ -268,9 +268,8 @@ def key_may_go_to(base_url: str) -> bool:
     in a café ``192.168.1.50`` is someone else's machine, anyone on the link answers for a
     ``.local`` name, and the network's DNS for a name without a dot (cos20 #492; the class of
     marketplace review #11798). A model server at home (Ollama, LM Studio) usually wants no
-    key; one that does is reached over https.
-    ~~„… or in the home network: .local, names without a dot, private addresses“~~ ÜBERHOLT
-    17.10.2026 (0.1.4).
+    key; one that does is reached over https. Up to 0.1.3 the home network counted as safe
+    (``.local``, names without a dot, private addresses).
     """
     parts = urllib.parse.urlsplit(base_url)
     if parts.scheme == "https":
