@@ -2,6 +2,16 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## Unreleased
+
+- The bar's input lines (address, key, question) never read the clipboard on their own, also
+  not while you type in them. In 0.1.3 a line read whatever another application offered on
+  every clipboard change while the open panel showed it, without a limit, inside the shell
+  (marketplace review). Now a line is never editable for Qt and takes your keys itself; the
+  clipboard is read only when you press Ctrl+V or Shift+Insert, by a separate `wl-paste`
+  with 2 seconds and 4 KiB at most, and the first line is pasted. Input methods (compose,
+  dead keys) no longer reach these lines.
+
 ## 0.1.3 (2026-10-16)
 
 Needs `cosmergon-agent` 0.27.12 and `cosmergon-decider-tree` 2.3.7 (pinned in

@@ -626,13 +626,10 @@ BarWidget {
           }
 
           // --- an address of its own: type it, pick a model; a key only if it asks ---
-          // Each line is read-only unless it is on screen: Qt fetches the clipboard's text
-          // into every editable line on each clipboard change, hidden or not, and the panel
-          // keeps its lines alive while closed (marketplace review #11665).
-          TextField {
+          // QuietLine: never editable, so the shell never fetches the clipboard (#11665).
+          QuietLine {
             id: addressField
             visible: root.step === "address"
-            readOnly: !(root.popupOpen && root.talking && root.step === "address")
             width: parent.width
             foreground: root.ink
             font.family: root.font
@@ -640,10 +637,9 @@ BarWidget {
             onAccepted: root.submitAddress()
             Keys.onEscapePressed: root.backInTalk()
           }
-          TextField {
+          QuietLine {
             id: keyField
             visible: root.step === "key"
-            readOnly: !(root.popupOpen && root.talking && root.step === "key")
             width: parent.width
             foreground: root.ink
             font.family: root.font
@@ -934,9 +930,8 @@ BarWidget {
           visible: root.talking && root.step === "talk"
           width: parent.width
           spacing: Style.space(8)
-          TextField {
+          QuietLine {
             id: askField
-            readOnly: !(root.popupOpen && root.talking && root.step === "talk")
             width: parent.width
             foreground: root.ink
             font.family: root.font
@@ -947,6 +942,69 @@ BarWidget {
           }
           Line { color: root.dim; text: "Enter sends · Up: who answers · Esc back" }
         }
+      }
+    }
+  }
+
+  // An input line that is never editable (marketplace review #11665). Qt fetches the
+  // clipboard's text into an editable line on every clipboard change and when it turns
+  // editable, with no limit and no deadline, inside the shared shell. So the line stays
+  // read-only and takes its keys here; a paste goes through `paster`, outside the shell.
+  // Input methods (compose, dead keys) do not reach a read-only line; keys that type a
+  // character themselves (ä, ß) do.
+  component QuietLine: TextField {
+    id: line
+    readOnly: true
+    cursorVisible: activeFocus
+
+    // The line as Model.lineKey reads it, and back: what a key or a paste left.
+    function snapshot() {
+      const c = cursorPosition
+      return { text: text, cursor: c, anchor: c === selectionStart ? selectionEnd : selectionStart }
+    }
+    function apply(next) {
+      text = next.text
+      if (next.anchor === next.cursor) { deselect(); cursorPosition = next.cursor }
+      else select(next.anchor, next.cursor)
+    }
+    function put(s) { apply(Model.lineInsert(snapshot(), s)) }
+
+    readonly property var keyNames: ({
+      [Qt.Key_Return]: "enter", [Qt.Key_Enter]: "enter", [Qt.Key_Backspace]: "backspace",
+      [Qt.Key_Delete]: "delete", [Qt.Key_Left]: "left", [Qt.Key_Right]: "right",
+      [Qt.Key_Home]: "home", [Qt.Key_End]: "end", [Qt.Key_Insert]: "insert",
+      [Qt.Key_V]: "v", [Qt.Key_A]: "a"
+    })
+    Keys.onPressed: function (event) {
+      const next = Model.lineKey(line.snapshot(), line.keyNames[event.key] || "", event.text, {
+        ctrl: (event.modifiers & Qt.ControlModifier) !== 0,
+        shift: (event.modifiers & Qt.ShiftModifier) !== 0,
+        other: (event.modifiers & (Qt.AltModifier | Qt.MetaModifier)) !== 0
+      })
+      event.accepted = next !== null
+      if (!next) return
+      if (next.action === "accept") line.accepted()
+      else if (next.action === "paste") root.pasteInto(line)
+      else line.apply(next)
+    }
+  }
+
+  // Ctrl+V or Shift+Insert in a QuietLine: the clipboard is read by its own process, only on
+  // that key, for 2 s at most and 4 KiB at most; the first line, without control characters.
+  property var pasteTarget: null
+  function pasteInto(line) {
+    if (paster.running) return
+    pasteTarget = line
+    paster.running = true
+  }
+  Process {
+    id: paster
+    command: ["sh", "-c", "timeout 2 wl-paste -n -t text 2>/dev/null | head -c 4096"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const s = Model.pastedLine(text)
+        if (root.pasteTarget && s !== "") root.pasteTarget.put(s)
+        root.pasteTarget = null
       }
     }
   }

@@ -89,6 +89,56 @@ function notifyBody(text) {
   return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
+// The input lines are read-only (cos20 #492, marketplace review #11665) and type what a key
+// press brings: only printable characters, never a control character (Enter, Tab, Esc have
+// their own handlers, and a stray one must not end up in an address or a key).
+function typedText(text) {
+  var s = String(text || "")
+  return /^[^\u0000-\u001f\u007f-\u009f]+$/.test(s) ? s : ""
+}
+
+// A paste, read by its own process (at most 4 KiB): its first line, control characters out.
+function pastedLine(text) {
+  return String(text || "").split(/\r?\n/)[0].replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+}
+
+// `s` in place of the selection (or at the cursor) of a line {text, cursor, anchor}; the
+// anchor is the selection's other end, equal to the cursor when nothing is selected.
+function lineInsert(line, s) {
+  var t = String(line.text || "")
+  var lo = Math.min(line.anchor, line.cursor), hi = Math.max(line.anchor, line.cursor)
+  return { text: t.slice(0, lo) + s + t.slice(hi), cursor: lo + s.length, anchor: lo + s.length }
+}
+
+// One key in a read-only input line (QuietLine): the line it leaves, {action: "accept"} or
+// {action: "paste"}, or null when the key is not the line's (Esc, Up, Tab go on).
+// `key` is a name ("enter", "backspace", "left", "v", …), `mods` {ctrl, shift, other}.
+function lineKey(line, key, typed, mods) {
+  var t = String(line.text || "")
+  var c = line.cursor
+  var selected = line.anchor !== c
+  function go(to) {
+    to = Math.max(0, Math.min(t.length, to))
+    return { text: t, cursor: to, anchor: mods.shift ? line.anchor : to }
+  }
+  if (key === "enter") return { action: "accept" }
+  if ((mods.ctrl && key === "v") || (mods.shift && key === "insert")) return { action: "paste" }
+  if (mods.ctrl && key === "a") return { text: t, cursor: t.length, anchor: 0 }
+  if (key === "backspace" || key === "delete") {
+    if (selected) return lineInsert(line, "")
+    var from = key === "backspace" ? Math.max(0, c - 1) : c
+    var to = key === "backspace" ? c : Math.min(t.length, c + 1)
+    return { text: t.slice(0, from) + t.slice(to), cursor: from, anchor: from }
+  }
+  if (key === "left") return go(c - 1)
+  if (key === "right") return go(c + 1)
+  if (key === "home") return go(0)
+  if (key === "end") return go(t.length)
+  var s = typedText(typed)
+  if (s !== "" && !mods.ctrl && !mods.other) return lineInsert(line, s)
+  return null
+}
+
 function nextTip(status, seen, lastAt, now, advisorPicked) {
   if (!status || !status.name || status.mood === "asleep") return null
   seen = seen || []
@@ -426,6 +476,10 @@ if (typeof module !== "undefined") {
     moveWords: moveWords,
     nextTip: nextTip,
     notifyBody: notifyBody,
+    typedText: typedText,
+    pastedLine: pastedLine,
+    lineInsert: lineInsert,
+    lineKey: lineKey,
     eyeMood: eyeMood,
     eyeSize: eyeSize,
     roundHalfEven: roundHalfEven,

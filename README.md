@@ -78,9 +78,12 @@ is yours alone (mode 700).
 
 On your desktop, the bar runs inside the shell and touches only this:
 
-- **Clipboard:** only the input lines of the open panel (address, key, question) can paste.
-  While the panel is closed they are read-only, so a clipboard change elsewhere reaches nothing
-  of Shikigon's.
+- **Clipboard:** read only when you press Ctrl+V or Shift+Insert in one of its input lines
+  (address, key, question), and then by a separate `wl-paste` that may take 2 seconds and
+  4 KiB at most; the first line is pasted. The lines themselves never read it: a clipboard
+  change elsewhere reaches nothing of Shikigon's, open panel or not. They take your keys
+  directly, so input methods (compose, dead keys) do not reach them; keys that type a
+  character themselves do.
 - **Notifications:** a few, through `notify-send`: once when it moves in, and a hint the first
   time something new happens; the hint's text is escaped, markup does not reach the notifier.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your

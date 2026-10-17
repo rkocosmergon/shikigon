@@ -426,4 +426,65 @@ TestCase {
     compare(Model.lessonView([], 0), null, "no block before the first lesson")
     compare(Model.lessonView(undefined, 0), null)
   }
+
+  function test_a_key_types_only_printable_characters() {
+    compare(Model.typedText("a"), "a")
+    compare(Model.typedText("ä"), "ä", "a key that types an umlaut itself")
+    compare(Model.typedText(" "), " ")
+    compare(Model.typedText(""), "", "a key without text (Shift, F1)")
+    compare(Model.typedText("\r"), "", "Enter has its own handler")
+    compare(Model.typedText("\t"), "")
+    compare(Model.typedText("\u001b"), "", "Esc")
+    compare(Model.typedText("\u007f"), "", "Delete")
+    compare(Model.typedText(undefined), "")
+  }
+
+  function test_a_read_only_line_types_with_its_own_keys() {
+    var none = { ctrl: false, shift: false, other: false }
+    var line = { text: "", cursor: 0, anchor: 0 }
+    "abc".split("").forEach(function (ch) { line = Model.lineKey(line, "", ch, none) })
+    compare(line.text, "abc")
+    compare(line.cursor, 3)
+    line = Model.lineKey(line, "left", "", none)
+    line = Model.lineKey(line, "", "ü", none)
+    compare(line.text, "abüc", "typed at the cursor")
+    line = Model.lineKey(line, "backspace", "\b", none)
+    compare(line.text, "abc")
+    line = Model.lineKey(line, "home", "", none)
+    line = Model.lineKey(line, "delete", "\u007f", none)
+    compare(line.text, "bc")
+    compare(line.cursor, 0)
+    line = Model.lineKey(line, "end", "", { ctrl: false, shift: true, other: false })
+    compare([line.anchor, line.cursor], [0, 2], "Shift+End selects to the end")
+    line = Model.lineKey(line, "", "x", none)
+    compare(line.text, "x", "typing replaces the selection")
+    line = Model.lineKey(line, "a", "\u0001", { ctrl: true, shift: false, other: false })
+    compare([line.anchor, line.cursor], [0, 1], "Ctrl+A selects all")
+    line = Model.lineKey(line, "backspace", "\b", none)
+    compare(line.text, "")
+    compare(Model.lineKey(line, "backspace", "\b", none).text, "", "nothing left to delete")
+    compare(Model.lineKey(line, "left", "", none).cursor, 0, "the cursor stays in the line")
+  }
+
+  function test_enter_and_paste_are_actions_and_foreign_keys_go_on() {
+    var line = { text: "x", cursor: 1, anchor: 1 }
+    var none = { ctrl: false, shift: false, other: false }
+    compare(Model.lineKey(line, "enter", "\r", none).action, "accept")
+    compare(Model.lineKey(line, "v", "\u0016", { ctrl: true, shift: false, other: false }).action, "paste")
+    compare(Model.lineKey(line, "insert", "", { ctrl: false, shift: true, other: false }).action, "paste")
+    compare(Model.lineKey(line, "", "\u001b", none), null, "Esc is the panel's")
+    compare(Model.lineKey(line, "", "", none), null, "Up, Tab, F-keys go on")
+    compare(Model.lineKey(line, "", "c", { ctrl: true, shift: false, other: false }), null, "Ctrl+C")
+    compare(Model.lineKey(line, "", "x", { ctrl: false, shift: false, other: true }), null, "Alt+x")
+    compare(Model.lineInsert({ text: "ab", cursor: 1, anchor: 1 }, "sk-1").text, "ask-1b", "a paste at the cursor")
+  }
+
+  function test_a_paste_is_its_first_line_without_control_characters() {
+    compare(Model.pastedLine("sk-abc123\n"), "sk-abc123", "a copied key with its newline")
+    compare(Model.pastedLine("http://localhost:11434/v1\r\nsecond"), "http://localhost:11434/v1")
+    compare(Model.pastedLine("a\tb\u0007c"), "abc")
+    compare(Model.pastedLine("größer"), "größer")
+    compare(Model.pastedLine(""), "")
+    compare(Model.pastedLine(undefined), "")
+  }
 }
