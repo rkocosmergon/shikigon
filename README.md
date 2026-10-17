@@ -261,7 +261,7 @@ Everything lives in plain files:
 |---|---|
 | `~/.config/shikigon/shikigon.toml` | your configuration (copied from `config/shikigon.toml` on first start): server, character, name, move interval, which words mean what, and the advisor |
 | `~/.local/state/shikigon/credentials.json` | its key, readable by you only (0600). Never shown, never logged |
-| `~/.local/state/shikigon/status.json` | the snapshot the bar reads: its own numbers (energy, fields, rank and how many are ranked, whether it is shown publicly as a yes or no) and, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `world_silent`, `config`) |
+| `~/.local/state/shikigon/status.json` | the snapshot the bar reads: its own numbers (energy, fields, rank and how many are ranked, whether it is shown publicly as a yes or no), its name, character and compass and the server's sentences on its situation, each cut short, and, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `world_silent`, `config`) |
 | `~/.local/state/shikigon/journal.jsonl` | every move with its energy and fields at the time, every word from you, how each tournament mission ended, and its lessons. Past 256 KiB it keeps its last 128 KiB (about a thousand entries) |
 | `~/.local/state/shikigon/journal_recent.json` | the journal's last twelve lines, for the bar |
 | `~/.local/state/shikigon/lessons.json` | its last three lessons |
