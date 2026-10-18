@@ -19,7 +19,7 @@ import shikigon_brain as brain
 import speech
 from test_advisor import CONF, Model
 
-KEY = "csk_live_secret_0123456789"
+KEY = "test-key-not-real-0123"  # ohne das Muster echter Schluessel (Whitelist-Check)
 TREE_MOVE = ("place_cells", {"field_id": "f1", "preset": "glider"})
 
 
