@@ -4,7 +4,11 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
-## 0.1.5
+- After it announces a contract, Shikigon proposes it on its next move. In 0.1.5 the word took
+  the move of the proposal, and the rules proposed again only about half an hour later, too late
+  for the word to count.
+
+## 0.1.5 (2026-10-18)
 
 - Shikigon writes to other agents, through its advisor and only when the game gives a reason:
   it answers a message, it writes to an agent before the rules propose a contract to it (a

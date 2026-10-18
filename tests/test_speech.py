@@ -131,6 +131,46 @@ async def test_a_name_from_the_world_reaches_the_bar_only_cut() -> None:
     assert len(announcing.last["speech"]["to"]) == speech.NAME_CHARS
 
 
+PROPOSE = ("propose_contract", {"contract_type": "alliance", "to_player_id": "p-neon"})
+NEON = SimpleNamespace(player_id="p-neon", username="Neon-warm")
+
+
+async def test_after_the_word_it_proposes_on_its_next_move() -> None:
+    """Journal 18.10.2026: the word took the move of the proposal, and the rules proposed again
+    only half an hour later, after the world's window. Now the proposal follows the word."""
+    model = Model("An alliance? I will propose it now.")
+    state = _state(targets=(NEON,))
+    assert (await _talking(model, Inner(PROPOSE)).decide(state))[0] == "message"
+    later = _talking(model, Inner(TREE_MOVE))  # the rules would play something else now
+    assert await later.decide(state) == PROPOSE
+    assert len(model.asked) == 1  # the proposal needs no model call
+    assert await later.decide(state) == TREE_MOVE  # and it is played once
+
+
+async def test_an_announced_proposal_that_waited_too_long_is_not_played(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = _state(targets=(NEON,))
+    await _talking(Model("An alliance?"), Inner(PROPOSE)).decide(state)
+    now = speech.time.time()
+    monkeypatch.setattr(speech.time, "time", lambda: now + speech.THEN_SECONDS + 1)
+    assert await _talking(Model("x"), Inner(TREE_MOVE)).decide(state) == TREE_MOVE
+
+
+async def test_an_announced_proposal_that_is_paused_is_not_played() -> None:
+    state = _state(targets=(NEON,))
+    await _talking(Model("An alliance?"), Inner(PROPOSE)).decide(state)
+    later = _talking(Model("x"), Inner(TREE_MOVE))
+    assert await later.decide(state, blocked=frozenset({"propose_contract"})) == TREE_MOVE
+    assert await later.decide(state) == TREE_MOVE  # not kept for later either
+
+
+async def test_a_skip_plays_the_proposal_at_once_and_keeps_nothing() -> None:
+    state = _state(targets=(NEON,))
+    assert await _talking(Model("SKIP"), Inner(PROPOSE)).decide(state) == PROPOSE
+    assert speech.load(brain.state_dir())["then"] is None
+
+
 async def test_now_and_then_it_posts_in_the_world_room_looking_for_allies() -> None:
     target = SimpleNamespace(player_id="p-neon", username="Neon-warm")
     decider = _talking(Model("Looking for allies against the top three."))

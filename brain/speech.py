@@ -6,7 +6,8 @@ Shikigon talks only when a model advises it (``[brain.advisor]``), and only when
 gives a reason:
 
 1. someone wrote to it and has no answer yet;
-2. the rule tree is about to propose a contract: it announces it to that agent first;
+2. the rule tree is about to propose a contract: it announces it to that agent first, and
+   proposes it on its next move (``then``);
 3. now and then, to find allies: a post in the world room, when the world names agents it
    could make a contract with (``contract_targets``).
 
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import difflib
 import inspect
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,6 +39,11 @@ CONTRACT_MOVES = ("propose_contract", "propose_from_template")
 QUOTE = ("<<<", ">>>")
 NEVER = -1_000_000  # "talked on move NEVER": the first occasion may speak at once
 WORLD_ROOM = "world room"
+# How long an announced proposal waits for its move. The world counts a word that came shortly
+# before the proposal (cos20 #507: half an hour by default); one move is about a minute, so a
+# quarter of an hour leaves room. Before 0.1.6 the proposal was simply lost: the word took its
+# move, and the rules proposed again only half an hour later (journal 18.10.2026, tick 211162).
+THEN_SECONDS = 15 * 60
 
 # The same reason the world gives its own agents to talk (cos20 #507: the founder's four
 # sentences and Machiavelli's coalition of the weak), said shorter for a small model.
@@ -81,7 +88,25 @@ def load(home: Path) -> dict[str, Any]:
         "talked": int(data.get("talked", NEVER)),
         "posted": int(data.get("posted", NEVER)),
         "answered": [str(i) for i in data.get("answered", [])][-50:],
+        "then": _then(data.get("then")),
+        "then_at": float(data.get("then_at", 0) or 0),
     }
+
+
+def _then(value: Any) -> list[Any] | None:
+    """The proposal it announced, as ``[action, params]`` — or ``None``."""
+    ok = isinstance(value, list) and len(value) == 2
+    return value if ok and isinstance(value[0], str) and isinstance(value[1], dict) else None
+
+
+def announced(
+    memo: dict[str, Any], blocked: frozenset[str]
+) -> tuple[str, dict[str, Any]] | None:
+    """The proposal to play now: announced on the last word, still fresh, and not paused."""
+    then = memo.get("then")
+    if not then or time.time() - memo["then_at"] > THEN_SECONDS or then[0] in blocked:
+        return None
+    return str(then[0]), dict(then[1])
 
 
 def inbox(state: Any) -> tuple[Any, ...]:
@@ -216,15 +241,22 @@ class TalkingDecider:
     async def decide(
         self, state: Any, blocked: frozenset[str] = frozenset()
     ) -> tuple[str, dict[str, Any]]:
+        memo = load(self.home)
+        then, memo["then"] = announced(memo, blocked), None  # played now or never
+        memo["moves"] += 1
+        if then is not None:  # the word went out: now the proposal it announced, no model call
+            files.write_json(memo_path(self.home), memo)
+            self.last = None
+            return then
         choice = await self._inner_choice(state, blocked)
         self.last = getattr(self.inner, "last", None)
-        memo = load(self.home)
-        memo["moves"] += 1
         occ = occasion(state, choice, memo, gap(self.conf))
         if occ is None or advisor.limit_reached(self.conf, self.home):
             files.write_json(memo_path(self.home), memo)
             return choice
         said = await self._write(state, occ)
+        if said is not None and occ.kind == "announce":
+            memo["then"], memo["then_at"] = [choice[0], choice[1]], time.time()
         self._remember(memo, occ, said)
         if said is None:
             return choice

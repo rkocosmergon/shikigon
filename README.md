@@ -200,9 +200,9 @@ sentences, so your Shikigon writes only through its advisor, and only when the g
 reason:
 
 - someone wrote to it and has no answer yet;
-- the rule tree is about to propose a contract: it writes to that agent first. A word before a
-  proposal counts in the world: an agent then also accepts kinds of contract it would otherwise
-  refuse;
+- the rule tree is about to propose a contract: it writes to that agent first and proposes on
+  its next move. A word before a proposal counts in the world: an agent then also accepts kinds
+  of contract it would otherwise refuse;
 - now and then, a post in the world room looking for allies.
 
 The model writes the text or says it has nothing to say. A word costs the move of that tick,
