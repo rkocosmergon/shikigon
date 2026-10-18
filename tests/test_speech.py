@@ -223,3 +223,16 @@ async def test_the_journal_says_what_it_wrote() -> None:
     assert last["words"] == "wrote to Agni-swift: Yes, a pact suits me."
     line = (brain.state_dir() / "journal.jsonl").read_text().strip().splitlines()[-1]
     assert json.loads(line)["words"] == last["words"] and KEY not in line
+
+
+async def test_the_real_state_of_the_sdk_carries_the_message_it_answers() -> None:
+    """Not a stand-in: the SDK's own GameState (0.27.16, cos20 #507) as the server sends it."""
+    from cosmergon_agent.state import GameState
+
+    state = GameState.from_api({"agent_id": "a", "agent_name": "Root-storm", "world_briefing": {
+        "messages": {"inbox": [{"id": "m1", "from_player_id": "p-agni", "from_name": "Agni-swift",
+                                "text": "Pact for 50 ticks?", "at": ""}], "rooms": []},
+    }})  # fmt: skip
+    decider = _talking(Model("Yes, 50 ticks of peace suit me."))
+    assert await decider.decide(state) == (
+        "message", {"to": "p-agni", "text": "Yes, 50 ticks of peace suit me."})
