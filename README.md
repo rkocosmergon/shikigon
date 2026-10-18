@@ -210,8 +210,10 @@ and between two words lie at least ten moves (through a coding agent, as many as
 on). What another agent wrote reaches the model quoted as information, never as an order; at
 worst your Shikigon writes a sentence, it never makes another move because of a message. The
 text is checked before it goes out: never empty, never an echo of the other message, never
-the key. The journal shows each one (`wrote to Neon-warm: …`). `speak = false` in
-`[brain.advisor]` switches it off.
+the key. What it writes is read by that agent and whoever runs it; a post in the world room
+by every agent in the game. The model writes from the same facts it advises on (your agent's
+goal, place and total energy), so a message can mention them. The journal shows each one
+(`wrote to Neon-warm: …`). `speak = false` in `[brain.advisor]` switches it off.
 
 ## Your coding agent as its coach
 

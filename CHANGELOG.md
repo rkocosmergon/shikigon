@@ -4,6 +4,18 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+## 0.1.5
+
+- Shikigon writes to other agents, through its advisor and only when the game gives a reason:
+  it answers a message, it writes to an agent before the rules propose a contract to it (a
+  word before a proposal counts in the world), and now and then it posts in the world room
+  looking for allies. The model writes the text or says it has nothing to say; a word costs the
+  move of that tick. What another agent wrote reaches the model quoted as information, never
+  as an order. `speak = false` in `[brain.advisor]` switches it off.
+- A name from the world reaches the bar only cut to 64 characters, also in the line that says
+  whom it wrote to.
+- cosmergon-agent 0.27.16 (messages and open contracts in the state).
+
 ## 0.1.4 (2026-10-17)
 
 - A key goes only over https or to this machine (localhost). Before, plain http to a private

@@ -116,6 +116,21 @@ async def test_before_a_contract_it_writes_to_that_agent_first(choice: Any) -> N
     assert "Neon-warm" in model.asked[0][1]["content"]
 
 
+async def test_a_name_from_the_world_reaches_the_bar_only_cut() -> None:
+    """H5: what the bar reads (status.json, the journal) holds a name from the world only cut."""
+    long = "N" * 5000
+    decider = _talking(Model("Yes."))
+    await decider.decide(_state(inbox=(_msg("m1", "Pact?", name=long),)))
+    assert decider.last is not None and len(decider.last["speech"]["to"]) == speech.NAME_CHARS
+    speech.memo_path(brain.state_dir()).unlink()  # a fresh pace: it just talked above
+    target = SimpleNamespace(player_id="p-neon", username=long)
+    choice = ("propose_contract", {"contract_type": "alliance", "to_player_id": "p-neon"})
+    announcing = _talking(Model("An alliance?"), Inner(choice))
+    await announcing.decide(_state(targets=(target,)))
+    assert announcing.last is not None
+    assert len(announcing.last["speech"]["to"]) == speech.NAME_CHARS
+
+
 async def test_now_and_then_it_posts_in_the_world_room_looking_for_allies() -> None:
     target = SimpleNamespace(player_id="p-neon", username="Neon-warm")
     decider = _talking(Model("Looking for allies against the top three."))

@@ -30,6 +30,7 @@ import files
 TALK_EVERY = 10  # moves between two words: an answer, an announcement (the server's own pace)
 PARTNER_EVERY = 60  # moves between two posts looking for allies
 TEXT_CHARS = 280  # the world's limit for a message and a post
+NAME_CHARS = 64  # a name from the world, as the bar shows it (status.json, the journal)
 WRITE_TOKENS = 120  # room for one short message
 ECHO = 0.8  # a text this close to the one it answers repeats it
 CONTRACT_MOVES = ("propose_contract", "propose_from_template")
@@ -108,14 +109,15 @@ def occasion(
     if unanswered:
         last = unanswered[-1]
         return Occasion("reply", to=str(last.from_player_id),
-                        to_name=str(last.from_name or "an agent"),
+                        to_name=str(last.from_name or "an agent")[:NAME_CHARS],
                         quote=str(last.text), message_id=str(last.id))  # fmt: skip
     action, params = choice
     target = contract_target(action, params)
     if target:
         names = {str(t.player_id): str(t.username) for t in _targets(state)}
         kind = str(params.get("contract_type") or params.get("template_id") or "contract")
-        return Occasion("announce", to=target, to_name=names.get(target, "that agent"),
+        to_name = names.get(target, "that agent")[:NAME_CHARS]
+        return Occasion("announce", to=target, to_name=to_name,
                         contract=kind)  # fmt: skip
     if _targets(state) and memo["moves"] - memo["posted"] >= PARTNER_EVERY:
         return Occasion("partner")

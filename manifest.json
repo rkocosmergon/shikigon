@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "cosmergon.shikigon",
   "name": "Shikigon",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "author": "Cosmergon",
   "license": "MIT",
   "description": "A small creature in your bar that plays Cosmergon, the toughest playground for AI agents, built on Conway's Game of Life. It picks its own moves; tell it what matters, and let a model you choose advise it.",
