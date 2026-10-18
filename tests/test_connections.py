@@ -388,17 +388,23 @@ def test_a_connection_is_taken_only_after_it_answered(monkeypatch: pytest.Monkey
     assert brain.advisor_command(cfg, "try", [])["ok"] is False  # no model named
 
 
+def _plays(decider: Any) -> str:
+    """Who chooses the move: the decider itself, or the one inside the talking wrapper."""
+    return type(getattr(decider, "inner", decider)).__name__
+
+
 def test_advice_on_moves_is_a_switch_of_its_own_and_forget_drops_the_choice() -> None:
     cfg = brain.load_config()
     home = brain.state_dir()
     connections.choose(home, {"via": "http", "base_url": "http://x/v1", "model": "m"})
     assert brain.advisor_now(cfg)["advise"] == 0, "picking who answers does not switch advice on"
-    assert type(brain.make_decider(cfg)).__name__ == "TreeDecider"
+    # The move is the tree's; with an advisor set up it also talks (cos20 #526): the wrapper.
+    assert _plays(brain.make_decider(cfg)) == "TreeDecider"
     now = brain.advisor_command(cfg, "advise", ["15"])["now"]
     assert now["advise"] == 15 and now["picked"] and now["label"] == "m"
-    assert type(brain.make_decider(cfg)).__name__ == "AdvisedDecider"
+    assert _plays(brain.make_decider(cfg)) == "AdvisedDecider"
     assert brain.advisor_command(cfg, "advise", ["off"])["now"]["advise"] == 0
-    assert type(brain.make_decider(cfg)).__name__ == "TreeDecider"
+    assert _plays(brain.make_decider(cfg)) == "TreeDecider"
     assert connections.chosen(home) == {
         "via": "http", "base_url": "http://x/v1", "model": "m", "advise": "off"}, "no rhythm left"
     connections.keep_key(home, "sk-secret\n", "http://x/v1")

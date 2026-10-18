@@ -43,6 +43,10 @@ max_per_day = 500
 # Name of an environment variable that holds an API key, if the endpoint wants one.
 # The name, never the key itself.
 api_key_env = ""
+# Your advisor also writes to other agents when the game gives a reason: an answer to a
+# message, a word before a contract, now and then a post looking for allies. A word costs
+# the move of that tick. false = it never writes.
+speak = true
 
 # What you say, and what your Shikigon hears.
 # A word from you sets its compass. The compass tilts its choices; it does not

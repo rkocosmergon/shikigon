@@ -594,6 +594,7 @@ async def tick(
         return fall_asleep(WORLD_SILENT, "no state from the world")
     if done_in and getattr(state, "tick", 0) == done_in:
         return {"action": "", "ok": True, "why": "", "skipped": "same tick"}
+    import speech
     from words import action_words, move_words
 
     paused = refusals.paused() if refusals else frozenset()
@@ -612,6 +613,8 @@ async def tick(
     advice = getattr(decider, "last", None)  # what an advisor did on this move, if one was asked
     if advice:
         last["advice"] = advice
+        if advice.get("speech") and last.get("ok"):  # it wrote: say what (speech.py, #526)
+            last["words"] = speech.words(advice["speech"])
     # its energy and fields when it chose: what it learns from (lessons.py)
     entry = {"at": int(time.time()), "tick": getattr(state, "tick", 0),
              "energy": round(float(getattr(state, "energy", 0.0)), 1),
@@ -910,17 +913,24 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
 
     Other deciders register under the SDK's entry-point group ``cosmergon.deciders``.
     ``advised=True`` builds the advisor whatever the config names (for the dry run).
+    The two built-in ones also talk once an advisor is set up (``speech.py``, cos20 #526);
+    a decider someone installed is theirs and is not wrapped.
     """
     import advisor
+    import speech
 
     conf = advisor.settings(cfg, state_dir())
     name = "advised" if advised else decider_name(cfg, conf)
     if name in ("tree", "advised"):
         from cosmergon_decider_tree import TreeDecider
 
-        if name == "tree":
-            return TreeDecider()
-        return advisor.AdvisedDecider(TreeDecider(), conf, state_dir(), dry=advised)
+        inner: Any = TreeDecider()
+        if name == "advised":
+            inner = advisor.AdvisedDecider(inner, conf, state_dir(), dry=advised)
+        if advised or not speech.wanted(conf):  # a dry run plays and says nothing
+            return inner
+        key = (load_credentials() or {}).get("api_key", "")
+        return speech.TalkingDecider(inner, conf, state_dir(), key)
     from importlib.metadata import entry_points
 
     installed = {point.name: point for point in entry_points(group="cosmergon.deciders")}
