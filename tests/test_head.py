@@ -58,6 +58,10 @@ def _move(action: str, params: dict[str, Any] | None = None, why: str = "because
     return json.dumps({"action": action, "params": params or {}, "why": why})
 
 
+MISSION = _move("start_mission", {"mission_type": "gather_spores",
+                                  "params": {"field_id": "f1"}})
+
+
 class RefusingAgent:
     """The world: refuses the moves it is told to, takes the rest."""
 
@@ -72,6 +76,8 @@ class RefusingAgent:
     async def act(self, action: str, **params: Any) -> FakeResult:
         self.acted.append((action, params))
         if action in self.refuse:
+            if getattr(self, "refuse_once", False):
+                self.refuse = ()
             return FakeResult(False, f"{action} refused: Marauder is on_mission")
         return FakeResult(True)
 
@@ -176,13 +182,12 @@ async def test_the_key_is_never_in_what_it_is_told() -> None:
 
 
 async def test_after_a_refusal_it_hears_why_and_chooses_again() -> None:
-    model = Replies(_move("start_mission", {"mission_type": "gather_spores"}),
-                    _move("claim_field", {}, "the marauder is busy"))
+    model = Replies(MISSION, _move("wait", {}, "the marauder is busy"))
     decider = _head(model)
     await decider.decide(_state())
     refused = {"action": "start_mission", "ok": False, "refused": True,
                "why": "Marauder is on_mission"}
-    assert await decider.again(_state(), refused) == ("claim_field", {})
+    assert await decider.again(_state(), refused) == ("wait", {})
     assert "Marauder is on_mission" in model.asked[-1][-1]["content"]
     assert decider.last is not None and decider.last["tries"][0]["action"] == "start_mission"
 
@@ -195,24 +200,27 @@ class StubTree:
 
 
 async def test_after_its_tries_the_rules_play_once_and_then_the_tick_is_over() -> None:
-    refused = {"action": "claim_field", "ok": False, "refused": True, "why": "no"}
+    refused = {"action": "start_mission", "ok": False, "refused": True, "why": "no"}
     decider = head.HeadDecider(StubTree(), CONF, brain.state_dir(),
-                               send=Replies(*[_move("claim_field")] * 4))
+                               send=Replies(*[MISSION] * 4))
     await decider.decide(_state())
     for _ in range(head.HEAD_RETRIES):
-        assert await decider.again(_state(), refused) == ("claim_field", {})
+        assert (await decider.again(_state(), refused) or ("", {}))[0] == "start_mission"
     assert await decider.again(_state(), refused) == ("create_field", {"size": 32}), "the rules"
     assert await decider.again(_state(), {**refused, "action": "create_field"}) is None
     assert decider.last is not None and len(decider.last["tries"]) == 4
 
 
 async def test_the_brain_plays_the_second_choice_in_the_same_tick() -> None:
-    model = Replies(_move("start_mission", {"mission_type": "gather_spores"}), _move("claim_field"))
+    second = _move("start_mission", {"mission_type": "siege_field",
+                                     "params": {"target_field_id": "t1"}})
+    model = Replies(MISSION, second)
     agent = RefusingAgent(_state(), refuse=("start_mission",))
+    agent.refuse_once = True
     refusals = brain.Refusals()
     last = await brain.tick(agent, _head(model), refusals=refusals)
-    assert [a for a, _ in agent.acted] == ["start_mission", "claim_field"]
-    assert last["action"] == "claim_field" and last["ok"]
+    assert [a for a, _ in agent.acted] == ["start_mission", "start_mission"]
+    assert last["action"] == "start_mission" and last["ok"]
     assert last["advice"]["tries"][0]["action"] == "start_mission"
     assert refusals.moves == 2, "the refusal counted once, the move once"
     journal = (brain.state_dir() / "journal.jsonl").read_text(encoding="utf-8").splitlines()
@@ -222,11 +230,11 @@ async def test_the_brain_plays_the_second_choice_in_the_same_tick() -> None:
 async def test_the_rule_tree_and_the_advisor_are_never_asked_again() -> None:
     talking = speech.TalkingDecider(_tree(), CONF, brain.state_dir(), KEY, send=Replies())
     assert await talking.again(_state(), {"action": "claim_field", "refused": True}) is None
-    wrapped = speech.TalkingDecider(_head(Replies(_move("wait"), _move("claim_field"))), CONF,
+    wrapped = speech.TalkingDecider(_head(Replies(MISSION, _move("wait"))), CONF,
                                     brain.state_dir(), KEY, send=Replies())
     await wrapped.decide(_state())
-    assert await wrapped.again(_state(), {"action": "wait", "refused": True, "why": "x"}) == (
-        "claim_field", {})
+    refused = {"action": "start_mission", "refused": True, "why": "x"}
+    assert await wrapped.again(_state(), refused) == ("wait", {})
 
 
 # --- The switch -------------------------------------------------------------------------------
@@ -343,3 +351,41 @@ async def test_a_move_waits_long_enough_for_the_head_and_says_why_it_fell_back(
     await failing.decide(_state())
     assert failing.last is not None and failing.last["fallback"] == "pi did not answer within 45 s"
     assert head.HEAD_WAIT_S >= 40
+
+
+
+# --- Only a form the world states goes out (device 19.10.2026, panel §12) -----------------
+
+
+async def test_a_move_written_without_a_known_form_never_goes_out() -> None:
+    """The device: asked to sell bombs, the head wrote market_list in names the server does
+    not know; the server made thirteen energy offers of them. Now it is refused here."""
+    sell = _move("market_list", {"item": "mega_bomb", "quantity": 5, "price": 900}, "sell bombs")
+    model = Replies(sell, sell)
+    wire = json.loads((Path(__file__).parent / "fixtures" / "state_newborn.json").read_text())
+    offers = {**wire["available_actions"], "market_list": {"available": True}}
+    state = _state(available_actions=offers)
+    assert "market_list" in head.offered(state, frozenset()), "offered, as on the device"
+    decider = head.HeadDecider(StubTree(), CONF, brain.state_dir(), send=model)
+    assert await decider.decide(state) == ("create_field", {"size": 32}), "the rules play"
+    assert decider.last is not None and "rules' line" in decider.last["fallback"]
+    assert "rules' line" in model.asked[1][-1]["content"], "and it is told why"
+
+
+async def test_a_rules_line_taken_unchanged_goes_out_as_the_rules_send_it() -> None:
+    model = Replies(_move("create_field", {"size": 32}))
+    decider = head.HeadDecider(StubTree(), CONF, brain.state_dir(), send=model)
+    assert await decider.decide(_state()) == ("create_field", {"size": 32})
+    assert decider.last is not None and "fallback" not in decider.last
+
+
+def test_a_mission_and_a_contract_answer_are_checked_against_the_world() -> None:
+    state = _state(contracts={"pending_inbound": [{"contract_id": "c1"}]})
+    assert head.form_problem("start_mission", {"mission_type": "gather_spores",
+                                               "params": {"field_id": "f"}}, state, []) == ""
+    assert "no field" in head.form_problem(
+        "start_mission", {"mission_type": "gather_spores", "params": {"spot": "f"}}, state, [])
+    assert "must be one of" in head.form_problem(
+        "start_mission", {"mission_type": "rob_the_bank", "params": {}}, state, [])
+    assert head.form_problem("accept_contract", {"contract_id": "c1"}, state, []) == ""
+    assert head.form_problem("accept_contract", {"contract_id": "c9"}, state, []) != ""
