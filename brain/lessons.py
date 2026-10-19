@@ -304,11 +304,14 @@ async def learn(
     note = ""
     if head and reader is not None:
         send, note = reader(review_folder(home, moves, numbers, world)), FILES_NOTE
+    started = time.monotonic()
     try:
         text = await send(lesson_messages(facts, numbers, before, note), LESSON_TOKENS)
     except advisor.call_errors() as exc:
         entry["why"] = f"no answer ({type(exc).__name__})"
         return entry
+    finally:  # how long a look back takes: the head's must fit between its moves (#527)
+        entry["ms"] = int((time.monotonic() - started) * 1000)
     lesson, unfit = read_lesson(text)
     if lesson is None:
         entry["why"] = f"the answer did not fit: {unfit}"

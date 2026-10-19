@@ -274,7 +274,7 @@ async def test_while_it_has_taken_over_it_looks_back_every_few_moves_and_updates
     assert lessons.due(lessons.journal_tail(home), 5)
     model = Replies(LESSON)
     first = await lessons.learn(home, conf, "facts", model, head=True)
-    assert first is not None and first["ok"]
+    assert first is not None and first["ok"] and isinstance(first["ms"], int), "its duration"
     _played(home, 5)
     second = Replies(LESSON)
     await lessons.learn(home, conf, "facts", second, head=True)
