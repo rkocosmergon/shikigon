@@ -28,6 +28,9 @@ What changed for someone who uses Shikigon. Newest first.
   gave it back when it expired, and the lessons blamed and praised the wrong moves (cos20 #527).
   Each move in head mode also notes what the rule tree would have played and whether your
   agent wrote its own move, so the two can be compared on the same situations.
+- The rules a question to your advisor carries leave out the forms of the moves again: the
+  world now publishes them for every move, which made the rules two and a half times as long
+  as a small model can take. The head still reads them.
 
 ## 0.1.6 (2026-10-18)
 

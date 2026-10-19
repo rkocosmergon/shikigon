@@ -480,8 +480,12 @@ def test_the_rules_come_from_the_server_and_an_unreachable_one_is_no_crash() -> 
         def json(self) -> dict[str, Any]:
             return {
                 "actions": {
-                    "place_cells": {"description": "Place cells", "use_case": "U1"},
-                    "say": {"use_case": "U12", "requires": [], "effects": ["message_sent"]},
+                    # since cos20 #530 every action carries its forms: the head reads them
+                    # (world_forms), a player's question does not need them
+                    "place_cells": {"description": "Place cells", "use_case": "U1",
+                                    "forms": [{"params": ["field_id", "preset"]}]},
+                    "say": {"use_case": "U12", "requires": [], "effects": ["message_sent"],
+                            "forms": [{"params": ["message"]}]},
                 },
                 "products": {"x": 1},
                 "economy": {"e": 1},

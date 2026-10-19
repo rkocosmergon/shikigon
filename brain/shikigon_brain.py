@@ -702,8 +702,9 @@ NOTES = Path(__file__).resolve().parent / "advisor_notes.md"  # what only the pl
 # The parts of the server's game info a player asks about (not: products, affiliate, links).
 RULE_PARTS = ("actions", "conway_rules", "economy", "tournaments", "player_tiers")
 # Per action, what a program needs and a player does not. Left out to keep the text small
-# enough for a model with a 4,000-token window.
-PROGRAM_ONLY = ("use_case", "requires", "effects")
+# enough for a model with a 4,000-token window. ``forms`` (cos20 #530, on every action) more
+# than doubled it; the head reads them on their own (``world_forms``).
+PROGRAM_ONLY = ("use_case", "requires", "effects", "forms")
 
 
 def chat_path() -> Path:
