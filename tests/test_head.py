@@ -304,6 +304,7 @@ def test_the_look_back_may_read_and_nothing_else() -> None:
     argv = connections.agent_argv({"agent": "pi", "agent_model": "m"}, review=True)
     assert argv[argv.index("--tools") + 1] == "read"
     assert not {"write", "edit", "bash"} & set(argv)
+    assert "--append-system-prompt" in argv and "--system-prompt" not in argv, "keeps pi's tools"
     assert "--no-tools" in connections.agent_argv({"agent": "pi"}), "the move stays without"
     assert connections.reads_back({"via": "agent", "agent": "pi"})
     assert not connections.reads_back({"via": "agent", "agent": "opencode"})

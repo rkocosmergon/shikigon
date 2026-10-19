@@ -108,6 +108,9 @@ PI_SYSTEM = "You answer one question in plain text. You have no tools."
 # The head's look back (cos20 #527, panel 19.10.2026 §10/§11): the same narrow switches, but
 # pi's own allowlist keeps one built-in tool, `read`. It writes nothing and runs nothing; its
 # answer is text on stdout, and the brain keeps it. It runs in a folder the brain filled.
+# Appended to pi's own system prompt, not replacing it: with `--system-prompt` pi's tool
+# guidance is gone and the model never called `read` (device 19.10.2026: 0 tool calls;
+# appended: 6 calls, the file read in 8 s; asked to write, no file appeared).
 # Read-only and not more: what it reads holds names other agents chose (threat model G7),
 # and an agent that could also write would carry their words into any file of the player.
 PI_REVIEW_SYSTEM = ("You look back on the moves of your own Cosmergon agent. You may read the "
@@ -145,7 +148,7 @@ AGENTS: dict[str, dict[str, Any]] = {
         "review_argv": ["pi", "-p", "--tools", "read", "--no-session", "--no-extensions",
                         "--no-mcp", "--no-skills", "--no-prompt-templates", "--no-context-files",
                         "--no-approve", "--offline", "--thinking", "off",
-                        "--system-prompt", PI_REVIEW_SYSTEM],
+                        "--append-system-prompt", PI_REVIEW_SYSTEM],
         "model_flag": ["--model", "{model}"],
         "answer": "stdout",
         "sign_in": ["pi"],  # its sign-in is "/login" inside pi
