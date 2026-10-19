@@ -395,6 +395,7 @@ def test_a_mission_and_a_contract_answer_are_checked_against_the_world() -> None
 
 LIST_FORMS = [
     {"params": ["item_type", "item_data", "price_energy"],
+     "types": {"item_type": "string", "item_data": "object", "price_energy": "number"},
      "required": ["item_type", "item_data.amount", "price_energy"],
      "description": "sell energy", "when": {"item_type": ["energy"]}},
     {"params": ["item_type", "item_data", "price_energy"],
@@ -431,6 +432,7 @@ async def test_a_move_with_a_published_form_is_its_own_and_goes_out_strict() -> 
     assert params["item_type"] == "mega_bomb" and params["params"]["item_data"] == {"count": 5}
     told = model.asked[0][-1]["content"].split("Moves you write yourself:", 1)[1]
     assert "- market_list:" in told.split("\n\n", 1)[0] and "needs item_type, price_energy" in told
+    assert "item_data (object)" in told, "the type, where the world names it (device: cells)"
 
 
 async def test_its_wrong_names_come_back_from_the_world_and_it_mends_them() -> None:
@@ -467,3 +469,15 @@ async def test_a_silent_world_keeps_the_old_list_and_is_asked_again_next_move() 
     assert "rules' line" in model.asked[1][-1]["content"], "no form known: the old list holds"
     await decider.decide(_sell_state())
     assert len(calls) == 2, "asked again, the world may answer now"
+
+
+async def test_the_journal_sets_its_choice_against_the_rules_on_the_same_situation() -> None:
+    """The goal is to play better than the rule tree: each move says what the tree would have
+    played and whether the head wrote its own move."""
+    decider = head.HeadDecider(StubTree(), CONF, brain.state_dir(),
+                               send=Replies(_move("create_field", {"size": 32}), MISSION))
+    await decider.decide(_state())
+    assert decider.last is not None and decider.last["rules"] == "create_field"
+    assert decider.last["own"] is False, "it took the rules' line"
+    await decider.decide(_state())
+    assert decider.last["rules"] == "create_field" and decider.last["own"] is True

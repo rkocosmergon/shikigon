@@ -21,6 +21,11 @@ What changed for someone who uses Shikigon. Newest first.
 - While it has taken over, it looks back every five moves (`review_every`) on its last hundred
   and updates its lessons instead of starting over. Through pi it uses pi's read-only tool in a
   folder the brain fills; a lesson that holds its key is dropped.
+- A move is judged by the **total energy** the world gives (energy plus offers, fields and
+  items), no longer by the balance alone: an energy offer took energy out of the balance and
+  gave it back when it expired, and the lessons blamed and praised the wrong moves (cos20 #527).
+  Each move in head mode also notes what the rule tree would have played and whether your
+  agent wrote its own move, so the two can be compared on the same situations.
 
 ## 0.1.6 (2026-10-18)
 

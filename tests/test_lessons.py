@@ -65,6 +65,39 @@ async def test_a_move_in_the_journal_carries_its_energy_and_fields() -> None:
     assert line["energy"] == 1234.6 and line["fields"] == 1 and line["action"] == "place_cells"
 
 
+async def test_a_move_in_the_journal_carries_the_goals_measure_when_the_world_gives_it() -> None:
+    """cos20 #527: the total energy (energy plus offers, fields, items) is what it plays for."""
+    from types import SimpleNamespace
+
+    state = _state()
+    await brain.tick(FakeAgent(state), FakeDecider(("place_cells", {"preset": "blinker"})))
+    line = json.loads((brain.state_dir() / "journal.jsonl").read_text().splitlines()[-1])
+    assert "total" not in line, "an older world gives no total: nothing is made up"
+    state.ranking = SimpleNamespace(champion_rang=7, gesamtenergie=3_302_108.44)
+    await brain.tick(FakeAgent(state), FakeDecider(("place_cells", {"preset": "blinker"})))
+    line = json.loads((brain.state_dir() / "journal.jsonl").read_text().splitlines()[-1])
+    assert line["total"] == 3_302_108.4 and line["energy"] == 1234.6
+
+
+def test_an_energy_offer_is_judged_by_the_total_not_by_the_balance() -> None:
+    """The device, 19.10.2026: an offer took 70,000 out of the balance and gave it back when it
+    expired. Judged by the balance, the moves after the offer lost and the moves at its end
+    won; the lesson praised selling and blamed contracts. The total does not move."""
+    moves = []
+    for number in range(30):
+        held = 70_000.0 if 1 <= number < 16 else 0.0  # the offer, from move 1 until it expires
+        moves.append({"tick": number, "energy": 100_000.0 - held, "total": 100_000.0,
+                      "fields": 0, "action": "propose_contract", "ok": True, "why": ""})
+    assert lessons.measure(moves) == "total"
+    assert {change for _, change in lessons.rated(moves)} == {0.0}
+    assert "total energy 100,000 -> 100,000" in lessons.summary(moves)
+    by_balance = [{k: v for k, v in move.items() if k != "total"} for move in moves]
+    assert lessons.measure(by_balance) == "energy", "without the total: the balance, as before"
+    assert max(change for _, change in lessons.rated(by_balance)) == 70_000.0
+    mixed = by_balance[:1] + moves[1:]
+    assert lessons.measure(mixed) == "energy", "never two measures in one look back"
+
+
 def test_the_journal_is_read_from_its_end_and_odd_lines_are_skipped() -> None:
     home = _write(_moves(600))
     with (home / "journal.jsonl").open("a", encoding="utf-8") as handle:

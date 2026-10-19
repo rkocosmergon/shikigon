@@ -90,12 +90,17 @@ def forms_of(info: Any) -> Forms:
 
 
 def form_lines(forms: list[dict[str, Any]]) -> list[str]:
-    """One line per form: what it is for, its fields, the ones it needs."""
+    """One line per form: what it is for, its fields (with their type where the world names
+    it), the ones it needs."""
     lines = []
     for form in forms:
         needs = ", ".join(form.get("required") or []) or "none"
+        given = form.get("types")
+        types: dict[str, Any] = given if isinstance(given, dict) else {}
+        fields = ", ".join(f"{f} ({types[f]})" if f in types else str(f)
+                           for f in form.get("params") or [])
         lines.append(f"  form: {_short(form.get('description') or '', 160)} — fields "
-                     f"{', '.join(form.get('params') or [])}; needs {needs}")
+                     f"{fields}; needs {needs}")
     text = "\n".join(lines)
     return [text if len(text) <= FORM_CHARS else text[: FORM_CHARS - 1] + "…"]
 
@@ -350,7 +355,8 @@ class HeadDecider:
     def _take(self, move: Move) -> tuple[str, dict[str, Any]]:
         action, params, why = move
         if self.last is not None:
-            self.last.update({"choice": action, "why": why})
+            line = any(action == a and _same(params, p) for a, p in self._suggested)
+            self.last.update({"choice": action, "why": why, "own": not line})
         if not params or any(action == a and _same(params, p) for a, p in self._suggested):
             return action, params  # a rules' line goes out as the rules send it
         if action in self.forms:  # the world checks its names: a wrong one is refused, honestly
@@ -370,7 +376,10 @@ class HeadDecider:
         moves = offered(state, blocked)
         self._allowed = set(moves) | {action for action, _ in suggested}
         self._again = 0
-        self.last = {"head": True, "model": advisor.who(self.conf), "ms": 0}
+        # ``rules``: what the rule tree would have played here, so the journal can set the head's
+        # choices against the tree's on the same situation (the goal: better than the tree).
+        self.last = {"head": True, "model": advisor.who(self.conf), "ms": 0,
+                     "rules": self._rules[0]}
         situation = brief(state, moves, suggested, lessons.latest_text(self.home),
                           recent_moves(self.home), self.forms)
         self._talk = [{"role": "system", "content": HEAD_SYSTEM},

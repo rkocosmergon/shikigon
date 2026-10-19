@@ -640,10 +640,15 @@ async def tick(
         last["advice"] = advice
         if advice.get("speech") and last.get("ok"):  # it wrote: say what (speech.py, #526)
             last["words"] = speech.words(advice["speech"])
-    # its energy and fields when it chose: what it learns from (lessons.py)
+    # its energy and fields when it chose: what it learns from (lessons.py). ``total`` is the
+    # goal's measure (energy plus offers, fields, items; cos20 #504): an energy offer moves
+    # energy out of the balance but not out of the total.
     entry = {"at": int(time.time()), "tick": getattr(state, "tick", 0),
              "energy": round(float(getattr(state, "energy", 0.0)), 1),
              "fields": len(getattr(state, "fields", []) or []), **last}
+    total = getattr(getattr(state, "ranking", None), "gesamtenergie", None)
+    if total is not None:
+        entry["total"] = round(float(total), 1)
     journal(entry)
     await tournament_journal(agent, state)
     files.write_json(state_dir() / "status.json", snapshot(state, last))

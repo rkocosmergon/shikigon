@@ -99,10 +99,23 @@ def review_folder(home: Path, moves: list[dict[str, Any]], numbers: str, world: 
     return folder
 
 
+def measure(moves: list[dict[str, Any]]) -> str:
+    """What a move is judged by: ``total`` (the goal's measure, cos20 #504) when every move
+    carries it, else ``energy``.
+
+    Measured on the device (19.10.2026, cos20 #527): judged by the balance, an energy offer
+    read as a loss for the moves after it and its return as a gain for whatever was played
+    when it expired; the lesson then praised selling and blamed contracts.
+    """
+    return "total" if moves and all("total" in move for move in moves) else "energy"
+
+
 def rated(moves: list[dict[str, Any]]) -> list[tuple[dict[str, Any], float]]:
-    """Each move with the energy change until ``HORIZON`` moves later; the last ones have none."""
+    """Each move with the change of its measure until ``HORIZON`` moves later; the last ones
+    have none."""
+    key = measure(moves)
     return [
-        (move, float(moves[number + HORIZON]["energy"]) - float(move["energy"]))
+        (move, float(moves[number + HORIZON][key]) - float(move[key]))
         for number, move in enumerate(moves[:-HORIZON] if len(moves) > HORIZON else [])
     ]
 
@@ -123,10 +136,12 @@ def summary(moves: list[dict[str, Any]]) -> str:
     if not judged:
         return ""
     overall = _signed(sum(c for _, c in played) / len(played)) if played else "-"
+    key = measure(moves)
+    said = "total energy" if key == "total" else "energy"
     lines = [
-        (f"{len(moves)} moves, energy {moves[0]['energy']:,.0f} -> {moves[-1]['energy']:,.0f}, "
+        (f"{len(moves)} moves, {said} {moves[0][key]:,.0f} -> {moves[-1][key]:,.0f}, "
          f"fields {moves[0].get('fields', '?')} -> {moves[-1].get('fields', '?')}."),
-        f"Energy change in the {HORIZON} moves after a played move: {overall} on average.",
+        f"Change of {said} in the {HORIZON} moves after a played move: {overall} on average.",
         "Per kind of move (played, refused, the same average for that kind):",
     ]
     from words import move_words  # the player's words, so the lesson comes back in them
