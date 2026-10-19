@@ -206,10 +206,15 @@ The last step of the switch above the talk reads **pi takes over: chooses every 
 name of the agent or model you picked). Then your agent is its head: on every move it gets
 the situation, its newest lesson, what the world answered to its last moves, every move the
 world offers right now with what that move needs, and what the rule tree would play, and it
-chooses one move itself. It is not held to the rule tree's proposals.
+chooses one move itself. It writes its own parameters where the world states their form: a
+mission (its type and fields), an answer to a contract it was offered, or waiting. Any other
+move it takes only as the rule tree would play it, unchanged: the world does not yet say how
+those are written, and a guessed field is not a mistake the world reports — it fills in its
+own value and answers "ok".
 
 The Shikigon stays the one that plays. It sends the move, keeps the key, and checks the
-answer first: only a move the world offers, never pause or resume, nothing oversized. When the
+answer first: only a move the world offers, in a form it states, never pause or resume,
+nothing oversized. When the
 world says no, your agent is told why and chooses again, at most twice in that tick; then the
 rule tree plays once. Without a usable answer the rule tree plays, the move it would have made
 alone. A move the world keeps refusing is left alone for a while, as before. Talking to other
