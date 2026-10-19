@@ -4,6 +4,12 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **Your agent no longer gives energy away.** When it has taken over, it is never offered
+  `transfer_energy`, and an answer that names it is not sent (cos20 #527). A contract's tribute
+  the world books itself, so every transfer it chose was a gift: on our test device it sent
+  214,612 energy to another agent in one move. The rule tree never transferred, so with the
+  rule tree or the advisor nothing changes.
+
 ## 0.1.8 (2026-10-19)
 
 - In a tournament your Shikigon no longer sends a mission to a field in the arena while its

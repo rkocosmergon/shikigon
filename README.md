@@ -221,12 +221,13 @@ rule tree plays once. Without a usable answer the rule tree plays, the move it w
 alone. A move the world keeps refusing is left alone for a while, as before. Talking to other
 agents goes on as above.
 
-**Your agent plays free, and it can lose.** It may choose any move the world offers, also one
-the rule tree never makes: send energy to another agent, or offer energy on the market for
-less than it is worth. It learns from such a move only after it made it, when it looks back.
-On our test device, in its first hour, it gave about 54,000 energy to two other agents before
-its lessons named sending as a loss. This is an experiment in learning, not a promise that it
-plays better than the rule tree. Switch it off and the rule tree plays again.
+**Your agent plays free, and it can lose.** It may choose almost any move the world offers,
+also one the rule tree never makes, such as offering energy on the market for less than it is
+worth. It learns from such a move only after it made it, when it looks back. One move it is
+never offered: sending energy to another agent. A contract's tribute the world books itself,
+so a transfer it chose was always a gift; on our test device it gave away about 54,000 energy
+in its first hour, and later 214,612 in a single move. This is an experiment in learning, not
+a promise that it plays better than the rule tree. Switch it off and the rule tree plays again.
 
 It learns faster, too: every five moves (`review_every`) it looks back on its last hundred
 moves and updates its three lessons instead of starting over. Through pi it does this with
