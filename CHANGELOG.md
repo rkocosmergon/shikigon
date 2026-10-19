@@ -17,7 +17,9 @@ What changed for someone who uses Shikigon. Newest first.
   plays: it checks the answer, sends the move and keeps the key. When the world refuses, your
   agent hears why and chooses again, at most twice in that tick; then the rule tree plays once.
   Through a coding agent this asks on every move; there is no preset daily limit
-  (`head_max_per_day`).
+  (`head_max_per_day`). It plays free and can lose: it may send energy away or sell it below
+  its worth, and learns that only when it looks back. It is not promised to play better than
+  the rule tree.
 - While it has taken over, it looks back every five moves (`review_every`) on its last hundred
   and updates its lessons instead of starting over. Through pi it uses pi's read-only tool in a
   folder the brain fills; a lesson that holds its key is dropped.
