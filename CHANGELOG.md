@@ -4,6 +4,13 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+## 0.1.8 (2026-10-19)
+
+- In a tournament your Shikigon no longer sends a mission to a field in the arena while its
+  tournament body is busy there: the rule tree (2.3.9) starts a mission only on a field the
+  world names ready, and rejects a contract the world says it cannot accept (cos20 #529).
+  Before, about one move in sixteen was refused this way during a tournament.
+
 ## 0.1.7 (2026-10-19)
 
 - **Your agent can take over.** The last step of the switch above the talk lets the agent or

@@ -20,9 +20,9 @@ cosmergon-agent==0.27.16 \
     # via
     #   -r requirements.in
     #   cosmergon-decider-tree
-cosmergon-decider-tree==2.3.8 \
-    --hash=sha256:25fc0c4ed25ad773d9d3dd1a65b3820331d24a047908dad6ce7bb66773ca4f9c \
-    --hash=sha256:9c86eefd88a1c728a9997ce6e497408da59f681a997e1d831f177ee867226e32
+cosmergon-decider-tree==2.3.9 \
+    --hash=sha256:7fac0d38abaeb24e14abec7b3e4bc8243282f8d14935cbe9fe8c7266cb4b75be \
+    --hash=sha256:ceab6484f31f8c9ed36e08e15b1159ff6d26032555a220f057b8f896e6867e81
     # via -r requirements.in
 h11==0.16.0 \
     --hash=sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1 \
