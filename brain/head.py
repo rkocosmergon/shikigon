@@ -37,6 +37,10 @@ FACTS_CHARS = 300  # what the world says about one move
 PARAMS_BYTES = 1024  # parameters of one move, as JSON
 WHY_CHARS = 120
 HEAD_TOKENS = 220  # room for one move in JSON
+# How long a move waits for the head. The advisor's 20 s were too short: on the device a head's
+# answer took 18-19 s (a longer situation than the advisor's three proposals, 19.10.2026), and
+# the first move in head mode fell back with "did not answer". A move comes every ~70 s.
+HEAD_WAIT_S = 45.0
 OPERATOR_SWITCHES = frozenset({"pause", "resume"})  # the player's controls, never a game move
 CONTRACT_ANSWERS = ("accept_contract", "reject_contract")
 QUOTE = ("<<<", ">>>")
@@ -203,7 +207,8 @@ class HeadDecider:
         self.tree = tree
         self.conf = conf
         self.home = home
-        self.send = send or advisor.sender(conf, home)
+        waits = {**conf, "timeout_s": max(float(conf.get("timeout_s", 20)), HEAD_WAIT_S)}
+        self.send = send or advisor.sender(waits, home)
         self.last: dict[str, Any] | None = None
         self._talk: list[dict[str, str]] = []
         self._allowed: set[str] = set()
@@ -225,7 +230,10 @@ class HeadDecider:
         try:
             text = await self.send(self._talk, HEAD_TOKENS)
         except advisor.call_errors() as exc:
-            return None, type(exc).__name__
+            import connections
+
+            said = str(exc) if isinstance(exc, connections.AgentError) else type(exc).__name__
+            return None, said[:WHY_CHARS]
         if self.last is not None:
             self.last["ms"] = self.last.get("ms", 0) + int((time.monotonic() - started) * 1000)
         self._talk.append({"role": "assistant", "content": text[:2000]})

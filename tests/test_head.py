@@ -325,3 +325,21 @@ def test_the_look_back_runs_in_its_folder_and_the_prompt_goes_on_stdin(tmp_path:
     assert seen["cwd"] == str(tmp_path)
     assert "MARKER-527" in seen["input"] and "MARKER-527" not in " ".join(seen["argv"])
     assert "You may read the files" in seen["input"]
+
+
+async def test_a_move_waits_long_enough_for_the_head_and_says_why_it_fell_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Device 19.10.2026: a head's answer took 18-19 s, the advisor's 20 s were too short."""
+    import advisor
+
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(advisor, "sender", lambda conf, home=None, patience=1: seen.update(conf))
+    head.HeadDecider(_tree(), {**CONF, "via": "agent", "agent": "pi", "timeout_s": 20},
+                     brain.state_dir())
+    assert seen["timeout_s"] == head.HEAD_WAIT_S
+    monkeypatch.undo()
+    failing = _head(Replies(connections.AgentError("pi did not answer within 45 s")))
+    await failing.decide(_state())
+    assert failing.last is not None and failing.last["fallback"] == "pi did not answer within 45 s"
+    assert head.HEAD_WAIT_S >= 40
