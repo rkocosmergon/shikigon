@@ -110,6 +110,18 @@ def measure(moves: list[dict[str, Any]]) -> str:
     return "total" if moves and all("total" in move for move in moves) else "energy"
 
 
+def measured(moves: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The moves judged together: once the newest carries the total, only the moves since the
+    total came. Without this the switch would wait a whole window (100 moves, four hours) and
+    keep judging by the balance meanwhile; with it a look back waits for ``HORIZON`` moves."""
+    if not moves or "total" not in moves[-1]:
+        return moves
+    start = len(moves)
+    while start > 0 and "total" in moves[start - 1]:
+        start -= 1
+    return moves[start:]
+
+
 def rated(moves: list[dict[str, Any]]) -> list[tuple[dict[str, Any], float]]:
     """Each move with the change of its measure until ``HORIZON`` moves later; the last ones
     have none."""
@@ -304,7 +316,7 @@ async def learn(
     since = moves_since_lesson(entries)
     every = max(1, int(conf.get("review_every", 5) or 5)) if head else LEARN_EVERY
     enough = len(since) >= every or (force and len(since) >= FORCED_MIN)
-    moves = window(entries) if head else since
+    moves = measured(window(entries) if head else since)
     if not enough or not advisor.configured(conf) or len(moves) <= HORIZON:
         return None
     entry: dict[str, Any] = {"at": int(time.time()), "tick": moves[-1].get("tick", 0),

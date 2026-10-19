@@ -96,6 +96,8 @@ def test_an_energy_offer_is_judged_by_the_total_not_by_the_balance() -> None:
     assert max(change for _, change in lessons.rated(by_balance)) == 70_000.0
     mixed = by_balance[:1] + moves[1:]
     assert lessons.measure(mixed) == "energy", "never two measures in one look back"
+    assert lessons.measured(mixed) == moves[1:], "once the total came: only the moves since"
+    assert lessons.measured(by_balance) == by_balance and lessons.measured([]) == []
 
 
 def test_the_journal_is_read_from_its_end_and_odd_lines_are_skipped() -> None:
@@ -176,6 +178,21 @@ async def test_it_learns_keeps_three_lessons_and_tells_its_journal() -> None:
         lessons.keep(home, {**json.loads(GOOD), "lessons": "x" * 100})
     assert len(lessons.kept(home)) == 3
     assert lessons.latest_text(home).startswith("x" * 100)
+
+
+async def test_after_the_switch_it_learns_only_from_moves_that_carry_the_total() -> None:
+    """Device 19.10.2026: the journal held a hundred moves judged by the balance. The look back
+    must not mix them in, nor wait four hours for the window to fill with the total."""
+    old = _moves(100)
+    new = [{**move, "total": 9_000.0} for move in _moves(5, 3000)]
+    home = _write(old + new)
+    stub = Model(GOOD)
+    assert await lessons.learn(home, CONF, "", stub, head=True) is None, "too few with total"
+    later = [{**move, "total": 9_000.0} for move in _moves(10, 3005)]
+    _write(later)
+    entry = await lessons.learn(home, CONF, "", stub, head=True)
+    assert entry is not None and entry["from_moves"] == 15
+    assert "15 moves, total energy 9,000 -> 9,000" in stub.asked[0][1]["content"]
 
 
 async def test_without_an_advisor_or_before_its_time_nothing_is_asked() -> None:
