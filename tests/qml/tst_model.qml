@@ -383,10 +383,19 @@ TestCase {
     compare(Model.adviseText(null), "advise on moves: off")
     compare(Model.adviseNext({ via: "http", advise: 0 }), 15)
     compare(Model.adviseNext({ via: "http", advise: 15 }), 1)
-    compare(Model.adviseNext({ via: "http", advise: 1 }), 0)
+    compare(Model.adviseNext({ via: "http", advise: 1 }), "head")
+    compare(Model.adviseNext({ via: "http", advise: "head" }), 0)
     compare(Model.adviseNext({ via: "agent", advise: 0 }), 15)
-    compare(Model.adviseNext({ via: "agent", advise: 15 }), 0, "an agent's allowance is the player's")
+    compare(Model.adviseNext({ via: "agent", advise: 15 }), "head", "an agent's allowance is the player's")
+    compare(Model.adviseNext({ via: "agent", advise: "head" }), 0)
     compare(Model.adviseSteps("agent").indexOf(1), -1)
+  }
+
+  function test_the_last_step_lets_its_agent_take_over() {
+    // cos20 #527: the founder's switch "soll pi übernehmen", named by who answers
+    compare(Model.adviseText({ advise: "head", label: "pi" }), "pi takes over: chooses every move")
+    compare(Model.adviseText({ advise: "head" }), "your agent takes over: chooses every move")
+    compare(Model.adviseSteps("http").indexOf("head"), 3)
   }
 
   function test_the_wake_scripts_stage_is_believed_only_while_it_runs() {

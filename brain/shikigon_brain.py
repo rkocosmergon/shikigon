@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import json
 import os
 import shutil
@@ -579,6 +580,30 @@ async def choose(decider: Any, state: Any, paused: frozenset[str]) -> tuple[str,
     return choice
 
 
+async def try_again(
+    agent: Any, decider: Any, state: Any, last: dict[str, Any], refusals: Refusals | None
+) -> dict[str, Any]:
+    """After the world said no, a decider that can (the head, cos20 #527) chooses again.
+
+    A refusal frees the tick on the server, so the new move counts for this tick. Each
+    refusal is counted, so a move the world keeps refusing is paused as before. The decider
+    ends it (``None``) after its own few tries.
+    """
+    again = getattr(decider, "again", None)
+    while again is not None and last.get("refused"):
+        paused = refusals.paused() if refusals is not None else frozenset()
+        choice = await again(state, last, paused)
+        if choice is None:
+            break  # the last refusal is counted by the caller, like any move's
+        if refusals is not None:
+            refusals.note(last)
+        action, params = choice
+        if action == "wait":
+            return {"action": "wait", "ok": True, "why": "chose to wait"}
+        last = await play(agent, action, params)
+    return last
+
+
 async def tick(
     agent: Any, decider: Any, done_in: int | None = None, refusals: Refusals | None = None
 ) -> dict[str, Any]:
@@ -605,7 +630,7 @@ async def tick(
     elif action == "wait":
         last = {"action": "wait", "ok": True, "why": "chose to wait"}
     else:
-        last = await play(agent, action, params)
+        last = await try_again(agent, decider, state, await play(agent, action, params), refusals)
     if refusals is not None and refusals.note(last):
         said = f"refused {REFUSALS_BEFORE_PAUSE} times, paused for {PAUSED_MOVES} moves"
         last["why"] = f"{last['why']} — {said}" if last.get("why") else said
@@ -808,12 +833,18 @@ class UnknownDecider(Exception):
 
 def decider_name(cfg: dict[str, Any], conf: dict[str, Any]) -> str:
     """Which decider plays. The panel's line "advise on moves" goes over the config file for
-    the two built-in ones; a decider someone installed is theirs to keep."""
+    the built-in ones; its last step lets the player's agent take over (``head``, cos20 #527).
+    A decider someone installed is theirs to keep."""
     named = str(cfg.get("brain", {}).get("decider") or "tree")
     advise = conf.get("advise")
-    if advise is None or named not in ("tree", "advised"):
+    if advise is None or named not in BUILT_IN:
         return named
+    if advise == "head":
+        return "head"
     return "tree" if advise == "off" else "advised"
+
+
+BUILT_IN = ("tree", "advised", "head")
 
 
 def advisor_now(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -822,13 +853,17 @@ def advisor_now(cfg: dict[str, Any]) -> dict[str, Any]:
 
     conf = advisor.settings(cfg, state_dir())
     name = decider_name(cfg, conf)
+    advise: int | str = advisor.every(conf) if name == "advised" else 0
+    limit_key = "max_per_day"
+    if name == "head":  # the head plays every move; a limit is the player's to set (#527 D4)
+        advise, limit_key = "head", "head_max_per_day"
     return {
         "picked": advisor.configured(conf),
         "label": advisor.who(conf) if advisor.configured(conf) else "",
         "via": str(conf.get("via") or "http"),
-        "advise": advisor.every(conf) if name == "advised" else 0,
+        "advise": advise,
         "calls": advisor.calls_today(state_dir()),
-        "limit": int(conf.get("max_per_day", 0) or 0),
+        "limit": int(conf.get(limit_key, 0) or 0),
     }
 
 
@@ -882,16 +917,18 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
             result["label"] = advisor.who(tried)
         return result
     if what == "advise" and rest:
-        often = "off" if rest[0] == "off" else max(1, int(rest[0]))
+        if rest[0] not in ("off", "head") and not rest[0].isdigit():
+            return {"ok": False, "why": "advise off, a number of moves, or head"}
+        often: int | str = rest[0] if rest[0] in ("off", "head") else max(1, int(rest[0]))
         kept = {key: value for key, value in connections.chosen(home).items() if key != "every"}
         connections.choose(home, {**kept, "advise": often,
-                                  **({} if often == "off" else {"every": often})})
+                                  **({} if often in ("off", "head") else {"every": often})})
         return {"ok": True, "now": advisor_now(cfg)}
     if what == "forget":
         for name in (connections.CHOICE_FILE, connections.KEY_FILE):
             (home / name).unlink(missing_ok=True)
         return {"ok": True, "now": advisor_now(cfg)}
-    usage = ("advisor list | models agent:NAME | key | try agent:NAME [MODEL] | advise off|N"
+    usage = ("advisor list | models agent:NAME | key | try agent:NAME [MODEL] | advise off|N|head"
              " | forget — an address goes through the panel or on stdin")
     return {"ok": False, "why": usage}
 
@@ -909,11 +946,12 @@ def pick(connection: str, model: str) -> dict[str, Any] | None:
 
 
 def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
-    """The decider named in ``[brain] decider``: ``tree``, ``advised``, or an installed one.
+    """The decider named in ``[brain] decider``: ``tree``, ``advised``, ``head``, or an
+    installed one.
 
     Other deciders register under the SDK's entry-point group ``cosmergon.deciders``.
     ``advised=True`` builds the advisor whatever the config names (for the dry run).
-    The two built-in ones also talk once an advisor is set up (``speech.py``, cos20 #526);
+    The built-in ones also talk once an advisor is set up (``speech.py``, cos20 #526);
     a decider someone installed is theirs and is not wrapped.
     """
     import advisor
@@ -921,12 +959,18 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
 
     conf = advisor.settings(cfg, state_dir())
     name = "advised" if advised else decider_name(cfg, conf)
-    if name in ("tree", "advised"):
+    if name in BUILT_IN:
         from cosmergon_decider_tree import TreeDecider
 
         inner: Any = TreeDecider()
         if name == "advised":
             inner = advisor.AdvisedDecider(inner, conf, state_dir(), dry=advised)
+        elif name == "head":  # the player's agent chooses every move (cos20 #527)
+            import head
+
+            inner = head.HeadDecider(inner, conf, state_dir())
+            # one counter, one limit: the head's, which is the player's to set (D4)
+            conf = {**conf, "max_per_day": conf.get("head_max_per_day", 0)}
         if advised or not speech.wanted(conf):  # a dry run plays and says nothing
             return inner
         key = (load_credentials() or {}).get("api_key", "")
@@ -935,7 +979,7 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
 
     installed = {point.name: point for point in entry_points(group="cosmergon.deciders")}
     if name not in installed:
-        known = ", ".join(sorted({"tree", "advised", *installed}))
+        known = ", ".join(sorted({*BUILT_IN, *installed}))
         raise UnknownDecider(f"unknown decider '{name}': known are {known}")
     return installed[name].load()()
 
@@ -951,7 +995,21 @@ async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
     if not advisor.configured(conf):
         return None
     send = send or advisor.sender(conf, home, patience=advisor.ANSWER_PATIENCE)
-    entry = await lessons.learn(home, conf, advisor.facts(state), send, force=force)
+    head = decider_name(cfg, conf) == "head"
+    world, secret = "", ""
+    reader: Callable[[Path], Any] | None = None
+    if head:  # it has taken over: it looks back often, reads if it can (cos20 #527)
+        import connections
+        import httpx
+
+        conf = {**conf, "max_per_day": conf.get("head_max_per_day", 0)}
+        secret = (load_credentials() or {}).get("api_key", "")
+        if connections.reads_back(conf):
+            world = await asyncio.to_thread(world_rules, cfg, httpx.get)
+            reader = functools.partial(
+                connections.review_send, conf, wait=connections.AGENT_ANSWER_S)
+    entry = await lessons.learn(home, conf, advisor.facts(state), send, force=force,
+                                head=head, world=world, reader=reader, secret=secret)
     if entry is not None:
         journal(entry)
     return entry
@@ -976,7 +1034,13 @@ def learning_next(cfg: dict[str, Any], state: Any, learning: Any) -> Any:
         return learning
     if learning is not None and not learning.cancelled() and learning.exception() is not None:
         print(f"learning failed: {learning.exception()!r}"[:200], file=sys.stderr)
-    if lessons.due(lessons.journal_tail(state_dir())):
+    import advisor
+
+    every = lessons.LEARN_EVERY
+    conf = advisor.settings(cfg, state_dir())
+    if decider_name(cfg, conf) == "head":  # it has taken over: it looks back often (#527)
+        every = max(1, int(conf.get("review_every", 5) or 5))
+    if lessons.due(lessons.journal_tail(state_dir()), every):
         return asyncio.create_task(learn(cfg, state))
     return None
 

@@ -105,6 +105,14 @@ OPENCODE_ADVISOR = {
 #     --thinking off does not reach a model the player added to pi; a local one with a
 #     thinking mode needs "samplingParams" in pi's models.json (README).
 PI_SYSTEM = "You answer one question in plain text. You have no tools."
+# The head's look back (cos20 #527, panel 19.10.2026 §10/§11): the same narrow switches, but
+# pi's own allowlist keeps one built-in tool, `read`. It writes nothing and runs nothing; its
+# answer is text on stdout, and the brain keeps it. It runs in a folder the brain filled.
+# Read-only and not more: what it reads holds names other agents chose (threat model G7),
+# and an agent that could also write would carry their words into any file of the player.
+PI_REVIEW_SYSTEM = ("You look back on the moves of your own Cosmergon agent. You may read the "
+                    "files in your working folder. You write nothing and run nothing. You "
+                    "answer in plain text.")
 AGENTS: dict[str, dict[str, Any]] = {
     "codex": {
         "name": "Codex",
@@ -134,6 +142,10 @@ AGENTS: dict[str, dict[str, Any]] = {
         "argv": ["pi", "-p", "--no-tools", "--no-session", "--no-extensions", "--no-mcp",
                  "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve",
                  "--offline", "--thinking", "off", "--system-prompt", PI_SYSTEM],
+        "review_argv": ["pi", "-p", "--tools", "read", "--no-session", "--no-extensions",
+                        "--no-mcp", "--no-skills", "--no-prompt-templates", "--no-context-files",
+                        "--no-approve", "--offline", "--thinking", "off",
+                        "--system-prompt", PI_REVIEW_SYSTEM],
         "model_flag": ["--model", "{model}"],
         "answer": "stdout",
         "sign_in": ["pi"],  # its sign-in is "/login" inside pi
@@ -476,15 +488,21 @@ def table_models(listing: str) -> list[str]:
 # ---------- asking an agent -------------------------------------------------------------------
 
 
-def prompt_text(messages: list[dict[str, str]]) -> str:
+NO_TOOLS = "Answer with text only. Do not run commands, do not read or write files."
+READ_ONLY = ("Answer with text only. You may read the files in your working folder; do not "
+             "write any file and do not run commands.")
+
+
+def prompt_text(messages: list[dict[str, str]], may_read: bool = False) -> str:
     """One text for the agent's stdin: what the model is told, then the talk, then the question.
 
     The question stays last, with its own line on language and length. With a closing
     sentence after it, a question in English was answered in German (seen on the device:
-    the earlier exchange was German).
+    the earlier exchange was German). ``may_read``: the look back of the head, where the
+    agent reads what the brain wrote for it (cos20 #527).
     """
     parts = [m["content"] for m in messages if m["role"] == "system"]
-    parts.append("Answer with text only. Do not run commands, do not read or write files.")
+    parts.append(READ_ONLY if may_read else NO_TOOLS)
     turns = [m for m in messages if m["role"] != "system"]
     for message in turns[:-1]:
         if message["role"] == "user":
@@ -496,10 +514,11 @@ def prompt_text(messages: list[dict[str, str]]) -> str:
     return "\n\n".join(parts)
 
 
-def agent_argv(conf: dict[str, Any]) -> list[str]:
-    """The agent's command; the prompt is not in it (it goes in on stdin)."""
+def agent_argv(conf: dict[str, Any], review: bool = False) -> list[str]:
+    """The agent's command; the prompt is not in it (it goes in on stdin). ``review``: the one
+    that may read, for the head's look back (only an agent that has one, ``reads_back``)."""
     spec = AGENTS[str(conf["agent"])]
-    argv = list(spec["argv"])
+    argv = list(spec["review_argv"] if review else spec["argv"])
     model = str(conf.get("agent_model") or "")
     if model:
         argv += [model if part == "{model}" else part for part in spec["model_flag"]]
@@ -526,13 +545,18 @@ def last_line(text: str) -> str:
 
 
 def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
-              run: Callable[..., Any] = subprocess.run) -> str:
-    """Call the agent once, in an empty folder, and return what it answered."""
+              run: Callable[..., Any] = subprocess.run, review_in: Path | None = None) -> str:
+    """Call the agent once, in an empty folder, and return what it answered.
+
+    ``review_in``: the head looks back (cos20 #527). The agent runs with its read-only
+    command in that folder, where the brain wrote what it may read.
+    """
     spec = AGENTS[str(conf["agent"])]
     env = {**os.environ, **spec.get("env", {})}
+    argv = agent_argv(conf, review=review_in is not None)
     with tempfile.TemporaryDirectory(prefix="shikigon-ask-") as empty:
         try:
-            done = run(agent_argv(conf), cwd=empty, env=env, capture_output=True,
+            done = run(argv, cwd=str(review_in or empty), env=env, capture_output=True,
                        text=True, timeout=timeout, check=False, input=prompt)
         except subprocess.TimeoutExpired:
             raise AgentError(f"{spec['name']} did not answer within {int(timeout)} s") from None
@@ -558,6 +582,22 @@ def agent_send(conf: dict[str, Any], wait: float,
     async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
         text = prompt_text(messages)
         return await asyncio.to_thread(run_agent, conf, text, wait, run)
+
+    return send
+
+
+def reads_back(conf: dict[str, Any]) -> bool:
+    """True when the picked agent has a read-only command for the head's look back."""
+    return conf.get("via") == "agent" and "review_argv" in AGENTS.get(str(conf.get("agent")), {})
+
+
+def review_send(conf: dict[str, Any], folder: Path, wait: float,
+                run: Callable[..., Any] = subprocess.run) -> Send:
+    """The head's look back through the agent's read-only command, in ``folder``."""
+
+    async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
+        text = prompt_text(messages, may_read=True)
+        return await asyncio.to_thread(run_agent, conf, text, wait, run, folder)
 
     return send
 

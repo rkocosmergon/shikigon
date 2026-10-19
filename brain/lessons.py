@@ -72,8 +72,31 @@ def moves_since_lesson(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [entry for entry in entries[start:] if "action" in entry and "energy" in entry]
 
 
-def due(entries: list[dict[str, Any]]) -> bool:
-    return len(moves_since_lesson(entries)) >= LEARN_EVERY
+def due(entries: list[dict[str, Any]], every: int = LEARN_EVERY) -> bool:
+    return len(moves_since_lesson(entries)) >= every
+
+
+HEAD_WINDOW = 100  # moves the head's look back is rated on, whatever came since its last one
+REVIEW_FOLDER = "review"  # what the head may read while it looks back (cos20 #527)
+LINE_CHARS = 200  # one journal line in that folder
+
+
+def window(entries: list[dict[str, Any]], size: int = HEAD_WINDOW) -> list[dict[str, Any]]:
+    """The last ``size`` moves that carry their energy: the head looks back every few moves,
+    so the moves since its last lesson alone would be too few to rate (cos20 #527)."""
+    return [entry for entry in entries if "action" in entry and "energy" in entry][-size:]
+
+
+def review_folder(home: Path, moves: list[dict[str, Any]], numbers: str, world: str) -> Path:
+    """Write what the head may read while it looks back; the folder is inside the state
+    folder (0700). Its moves one per line, the numbers, the rules of the world."""
+    folder = home / REVIEW_FOLDER
+    folder.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps(move, ensure_ascii=False)[:LINE_CHARS] for move in moves]
+    (folder / "moves.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (folder / "rated.txt").write_text(numbers + "\n", encoding="utf-8")
+    (folder / "world.txt").write_text(world[:8000] + "\n", encoding="utf-8")
+    return folder
 
 
 def rated(moves: list[dict[str, Any]]) -> list[tuple[dict[str, Any], float]]:
@@ -127,11 +150,22 @@ def summary(moves: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def lesson_messages(facts: str, numbers: str) -> list[dict[str, str]]:
-    return [
-        {"role": "system", "content": LESSON_SYSTEM},
-        {"role": "user", "content": f"The agent now:\n{facts}\n\nIts last moves:\n{numbers}"},
-    ]
+FILES_NOTE = ("In your working folder: moves.txt (its last moves, one per line, with what the "
+              "world answered), rated.txt (the numbers above), world.txt (the rules as the "
+              "world states them). Read what helps you.")
+
+
+def lesson_messages(facts: str, numbers: str, before: str = "",
+                    files_note: str = "") -> list[dict[str, str]]:  # fmt: skip
+    """``before``: the lesson it wrote last time. The head updates it instead of starting
+    over, so a rule changes only when the numbers say so (cos20 #527)."""
+    text = f"The agent now:\n{facts}\n\nIts last moves:\n{numbers}"
+    if before:
+        text += ("\n\nWhat you wrote last time. Keep what the numbers still show, change what "
+                 f"they contradict:\n{before}")
+    if files_note:
+        text += f"\n\n{files_note}"
+    return [{"role": "system", "content": LESSON_SYSTEM}, {"role": "user", "content": text}]
 
 
 def _fit(text: str, longest: int) -> str:
@@ -235,19 +269,28 @@ def latest_text(home: Path) -> str:
 
 
 async def learn(
-    home: Path, conf: dict[str, Any], facts: str, send: Send, force: bool = False
+    home: Path, conf: dict[str, Any], facts: str, send: Send, force: bool = False,
+    head: bool = False, world: str = "", reader: Any = None, secret: str = "",
 ) -> dict[str, Any] | None:
     """Look back and keep a lesson. ``None`` without an advisor, or when it is not time
     (forced: fewer than ``FORCED_MIN`` moves).
 
     The returned entry goes into the journal either way, so a failed attempt waits another
     ``LEARN_EVERY`` moves instead of asking on every move. A failure is said, never raised.
+
+    ``head``: the player's agent has taken over (cos20 #527). It looks back every
+    ``review_every`` moves on the last ``HEAD_WINDOW`` and updates its last lesson. ``reader``
+    makes a sender for an agent that may read (``connections.review_send``), given the folder
+    with its moves, the numbers and ``world``; without one, the numbers go in the prompt.
     """
     import advisor
 
-    moves = moves_since_lesson(journal_tail(home))
-    enough = len(moves) >= LEARN_EVERY or (force and len(moves) >= FORCED_MIN)
-    if not enough or not advisor.configured(conf):
+    entries = journal_tail(home)
+    since = moves_since_lesson(entries)
+    every = max(1, int(conf.get("review_every", 5) or 5)) if head else LEARN_EVERY
+    enough = len(since) >= every or (force and len(since) >= FORCED_MIN)
+    moves = window(entries) if head else since
+    if not enough or not advisor.configured(conf) or len(moves) <= HORIZON:
         return None
     entry: dict[str, Any] = {"at": int(time.time()), "tick": moves[-1].get("tick", 0),
                              "learned": "", "ok": False, "from_moves": len(moves),
@@ -256,14 +299,24 @@ async def learn(
         entry["why"] = "daily limit reached"
         return entry
     advisor.count_call(home)
+    numbers = summary(moves)
+    before = latest_text(home) if head else ""
+    note = ""
+    if head and reader is not None:
+        send, note = reader(review_folder(home, moves, numbers, world)), FILES_NOTE
     try:
-        text = await send(lesson_messages(facts, summary(moves)), LESSON_TOKENS)
+        text = await send(lesson_messages(facts, numbers, before, note), LESSON_TOKENS)
     except advisor.call_errors() as exc:
         entry["why"] = f"no answer ({type(exc).__name__})"
         return entry
     lesson, unfit = read_lesson(text)
     if lesson is None:
         entry["why"] = f"the answer did not fit: {unfit}"
+        return entry
+    if secret and any(secret in value for value in lesson.values()):
+        # an agent that may read can read the key file: a lesson with the key is never kept
+        # (it would stand in the bar and go back to the model, threat model G8)
+        entry["why"] = "the answer held its key and was dropped"
         return entry
     keep(home, {"at": entry["at"], "tick": entry["tick"], "model": entry["model"],
                 "from_moves": len(moves), **lesson})

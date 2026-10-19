@@ -263,9 +263,10 @@ Item {
     return "ok"
   }
   function keepKey(key) { keyKeeper.secret = key; keyKeeper.running = true }
-  // 0 = off; the brain reads it at its start, so it is started again.
+  // 0 = off, "head" = its agent takes over; the brain reads it at its start, so it is
+  // started again.
   function setAdvise(every) {
-    adviser.value = every > 0 ? String(every) : "off"
+    adviser.value = every === "head" ? "head" : (every > 0 ? String(every) : "off")
     adviser.running = true
   }
   function restartBrain() {

@@ -437,18 +437,26 @@ function tryingText(name) {
   return "asking " + (name || "it") + " once…"
 }
 
-// "advise on moves": off, then every 15th move, then every move. Through an agent there is
-// no "every move": a call starts a whole program on the player's allowance.
-function adviseSteps(via) { return via === "agent" ? [0, 15] : [0, 15, 1] }
+// "advise on moves": off, then every 15th move, then every move, then "takes over": the
+// player's agent chooses every move itself (cos20 #527, the founder's switch "soll pi
+// übernehmen"). Through an agent there is no "advise every move": that advice starts a whole
+// program on the player's allowance; taking over is the player's own choice of that.
+function adviseSteps(via) { return via === "agent" ? [0, 15, "head"] : [0, 15, 1, "head"] }
+
+function adviseStep(now) {
+  var advise = now && now.advise
+  return advise === "head" ? "head" : (Number(advise) || 0)
+}
 
 function adviseNext(now) {
   var steps = adviseSteps(now && now.via)
-  var at = steps.indexOf(Number(now && now.advise) || 0)
+  var at = steps.indexOf(adviseStep(now))
   return steps[(at + 1) % steps.length]
 }
 
 function adviseText(now) {
-  var n = Number(now && now.advise) || 0
+  var n = adviseStep(now)
+  if (n === "head") return (now.label || "your agent") + " takes over: chooses every move"
   var how = n === 0 ? "off" : (n === 1 ? "every move" : "every " + n + "th move")
   return "advise on moves: " + how
 }

@@ -264,6 +264,18 @@ class TalkingDecider:
             "kind": occ.kind, "to": occ.to_name or WORLD_ROOM, "text": said[:120]}}  # fmt: skip
         return move(occ, said)
 
+    async def again(
+        self, state: Any, refused: dict[str, Any], blocked: frozenset[str] = frozenset()
+    ) -> tuple[str, dict[str, Any]] | None:
+        """A new choice after the world said no, if the inner decider offers one (the head,
+        cos20 #527); the rule tree and the advisor do not."""
+        inner = getattr(self.inner, "again", None)
+        if inner is None:
+            return None
+        choice: tuple[str, dict[str, Any]] | None = await inner(state, refused, blocked)
+        self.last = getattr(self.inner, "last", None)
+        return choice
+
     async def _write(self, state: Any, occ: Occasion) -> str | None:
         advisor.count_call(self.home)
         try:

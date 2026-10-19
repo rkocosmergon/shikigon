@@ -16,6 +16,9 @@ name = ""
 # Who chooses its moves:
 #   "tree"     the rule tree, cosmergon-decider-tree (https://pypi.org/project/cosmergon-decider-tree/)
 #   "advised"  the rule tree proposes up to three moves, the model in [brain.advisor] picks one
+#   "head"     your agent or model in [brain.advisor] takes over: it chooses every move itself,
+#              may try again when the world says no, and the rule tree plays when it has no
+#              usable answer (the panel's "takes over")
 #   any other  a decider you installed (Python entry-point group "cosmergon.deciders")
 decider = "tree"
 # Seconds between two moves. The world ticks about once a minute; faster is wasted.
@@ -40,6 +43,11 @@ every = 1
 timeout_s = 20
 # Calls a day, advice and questions together. 0 = no limit.
 max_per_day = 500
+# The same while it has taken over ("head"): about 26 moves and 5 looks back an hour, so
+# 500 would stop it after about 15 hours. 0 = no limit. On a provider's account, set one.
+head_max_per_day = 0
+# While it has taken over, it looks back on its moves every n-th move and updates its lessons.
+review_every = 5
 # Name of an environment variable that holds an API key, if the endpoint wants one.
 # The name, never the key itself.
 api_key_env = ""
