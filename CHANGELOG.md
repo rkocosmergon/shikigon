@@ -4,6 +4,8 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+## 0.1.9 (2026-10-19)
+
 - **Your agent no longer gives energy away.** When it has taken over, it is never offered
   `transfer_energy`, and an answer that names it is not sent (cos20 #527). A contract's tribute
   the world books itself, so every transfer it chose was a gift: on our test device it sent
