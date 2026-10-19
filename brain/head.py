@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -48,8 +49,14 @@ CONTRACT_ANSWERS = ("accept_contract", "reject_contract")
 # other move goes out only as one of the rules' lines, unchanged. Device 19.10.2026 (panel §12):
 # asked to sell bombs, the head wrote market_list under names the server does not know; the
 # server filled in its defaults (energy, the surplus, a price) and answered "ok" thirteen times,
-# 985,394 energy held in offers nobody buys. The world publishes no form for that move yet.
+# 985,394 energy held in offers nobody buys. Since the world publishes every move's form
+# (``GET /api/v1/game/info``, ``actions.<name>.forms``, cos20 #530), the head writes any move
+# that has one, sent with ``strict``: a name the world does not know comes back as a refusal
+# naming the right fields, never as the world's own defaults. A world without forms keeps this
+# list.
 OWN_FORM = frozenset({"start_mission", *CONTRACT_ANSWERS, "wait"})
+FORM_CHARS = 700  # the forms of one move in the situation (market_list has one per kind)
+Forms = dict[str, list[dict[str, Any]]]
 QUOTE = ("<<<", ">>>")
 _NOISE = {"sichtbarkeits_schwelle", "cost_by_cube_size", "reference_prices", "mission_types"}
 
@@ -67,6 +74,30 @@ HEAD_SYSTEM = (
 def _short(value: Any, chars: int) -> str:
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
     return text if len(text) <= chars else text[: chars - 1] + "…"
+
+
+def forms_of(info: Any) -> Forms:
+    """The form of each move from the world's ``game/info``; empty when it states none."""
+    actions = info.get("actions") if isinstance(info, dict) else None
+    if not isinstance(actions, dict):
+        return {}
+    found: Forms = {}
+    for name, body in actions.items():
+        forms = body.get("forms") if isinstance(body, dict) else None
+        if isinstance(forms, list) and forms and all(isinstance(f, dict) for f in forms):
+            found[str(name)] = forms
+    return found
+
+
+def form_lines(forms: list[dict[str, Any]]) -> list[str]:
+    """One line per form: what it is for, its fields, the ones it needs."""
+    lines = []
+    for form in forms:
+        needs = ", ".join(form.get("required") or []) or "none"
+        lines.append(f"  form: {_short(form.get('description') or '', 160)} — fields "
+                     f"{', '.join(form.get('params') or [])}; needs {needs}")
+    text = "\n".join(lines)
+    return [text if len(text) <= FORM_CHARS else text[: FORM_CHARS - 1] + "…"]
 
 
 def possible(action: str, facts: Any, state: Any) -> bool:
@@ -129,8 +160,10 @@ def recent_moves(home: Path, count: int = RECENT) -> list[str]:
 
 
 def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str, Any]]],
-          lesson: str, recent: list[str]) -> str:
-    """The situation for the head, at most ``BRIEF_CHARS``; a cut says so."""
+          lesson: str, recent: list[str], forms: Forms | None = None) -> str:
+    """The situation for the head, at most ``BRIEF_CHARS``; a cut says so. ``forms``: what the
+    world publishes; a move with a form is one it writes itself."""
+    forms = forms or {}
     parts = [advisor.facts(state)]
     if lesson:
         parts.append(f"What you learned from your own moves:\n{lesson}")
@@ -152,7 +185,12 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
             continue
         shown = ({k: v for k, v in facts.items() if k not in _NOISE}
                  if isinstance(facts, dict) else facts)
-        (own if action in OWN_FORM else other).append(f"- {action}: {_short(shown, FACTS_CHARS)}")
+        line = f"- {action}: {_short(shown, FACTS_CHARS)}"
+        if action in forms and action not in OWN_FORM:
+            own.append(line)
+            own.extend(form_lines(forms[action]))
+            continue
+        (own if action in OWN_FORM else other).append(line)
     parts.append("Moves you write yourself:\n" + "\n".join(own))
     if other:
         parts.append("Other moves the world offers now (take them only as one of the rules' "
@@ -206,9 +244,10 @@ def mission_form(params: dict[str, Any], state: Any) -> str:
 
 
 def form_problem(action: str, params: dict[str, Any], state: Any,
-                 suggested: list[tuple[str, dict[str, Any]]]) -> str:
-    """Empty when the move's form is known: a rules' line taken unchanged, or one of its own
-    moves written in the world's form (``OWN_FORM``). Else what is wrong, for the head."""
+                 suggested: list[tuple[str, dict[str, Any]]], forms: Forms | None = None) -> str:
+    """Empty when the move's form is known: a rules' line taken unchanged, one of its own moves
+    written in the world's form (``OWN_FORM``), or a move whose form the world publishes (it
+    goes out with ``strict``; the world checks the names). Else what is wrong, for the head."""
     if any(action == a and _same(params, p) for a, p in suggested) or action == "wait":
         return ""
     if action == "start_mission":
@@ -217,6 +256,8 @@ def form_problem(action: str, params: dict[str, Any], state: Any,
         offered_ids = {str(c.get("contract_id")) for c in getattr(state, "pending_contracts", ())}
         wanted = str((params.get("params") or params).get("contract_id") or "")
         return "" if wanted in offered_ids else "contract_id must be one of the contracts offered"
+    if forms and action in forms:
+        return ""
     return (f"{action} goes out only as the rules' line, unchanged: the world states no form "
             "for writing it yourself")
 
@@ -255,8 +296,11 @@ class HeadDecider:
     version = "0.1.0"
 
     def __init__(self, tree: Any, conf: dict[str, Any], home: Path,
-                 send: advisor.Send | None = None) -> None:  # fmt: skip
+                 send: advisor.Send | None = None,
+                 forms: Callable[[], Awaitable[Forms]] | None = None) -> None:  # fmt: skip
         self.tree = tree
+        self._load_forms = forms  # the world's forms, read once it answers (cos20 #530)
+        self.forms: Forms = {}
         self.conf = conf
         self.home = home
         waits = {**conf, "timeout_s": max(float(conf.get("timeout_s", 20)), HEAD_WAIT_S)}
@@ -293,7 +337,7 @@ class HeadDecider:
         self._talk.append({"role": "assistant", "content": text[:2000]})
         move, why_not = parse_move(text, self._allowed)
         if move is not None:  # the form, before anything goes out (panel §12)
-            why_not = form_problem(move[0], move[1], self._state, self._suggested)
+            why_not = form_problem(move[0], move[1], self._state, self._suggested, self.forms)
             if why_not:
                 return None, why_not
         return move, why_not
@@ -309,6 +353,8 @@ class HeadDecider:
             self.last.update({"choice": action, "why": why})
         if not params or any(action == a and _same(params, p) for a, p in self._suggested):
             return action, params  # a rules' line goes out as the rules send it
+        if action in self.forms:  # the world checks its names: a wrong one is refused, honestly
+            return action, {**shaped(params), "strict": True}
         return action, shaped(params)
 
     async def decide(
@@ -316,6 +362,8 @@ class HeadDecider:
     ) -> tuple[str, dict[str, Any]]:
         import lessons
 
+        if not self.forms and self._load_forms is not None:
+            self.forms = await self._load_forms()  # empty while the world is silent: next move
         suggested = await advisor.proposals(self.tree, state, limit=SUGGESTED, paused=blocked)
         self._rules = suggested[0] if suggested else ("wait", {})
         self._suggested, self._state = suggested, state
@@ -324,7 +372,7 @@ class HeadDecider:
         self._again = 0
         self.last = {"head": True, "model": advisor.who(self.conf), "ms": 0}
         situation = brief(state, moves, suggested, lessons.latest_text(self.home),
-                          recent_moves(self.home))
+                          recent_moves(self.home), self.forms)
         self._talk = [{"role": "system", "content": HEAD_SYSTEM},
                       {"role": "user", "content": situation}]
         move, why_not = await self._ask()

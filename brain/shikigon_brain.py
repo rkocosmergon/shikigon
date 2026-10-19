@@ -736,6 +736,21 @@ def world_rules(cfg: dict[str, Any], get: Callable[..., Any]) -> str:
     return json.dumps(rules)
 
 
+def world_forms(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:
+    """The form of each move as the server states it (public, no key; cos20 #530); empty if
+    the world is unreachable or publishes none."""
+    import advisor
+    import head
+
+    url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/game/info"
+    try:
+        resp = get(url, timeout=15)
+        resp.raise_for_status()
+        return head.forms_of(resp.json())
+    except advisor.call_errors():
+        return {}
+
+
 def recent_moves(count: int) -> list[str]:
     """Its last moves from the journal, in words."""
     lines = files.tail(state_dir() / "journal.jsonl", 10 * count)  # words, missions between
@@ -967,8 +982,10 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
             inner = advisor.AdvisedDecider(inner, conf, state_dir(), dry=advised)
         elif name == "head":  # the player's agent chooses every move (cos20 #527)
             import head
+            import httpx
 
-            inner = head.HeadDecider(inner, conf, state_dir())
+            inner = head.HeadDecider(inner, conf, state_dir(),
+                                     forms=lambda: asyncio.to_thread(world_forms, cfg, httpx.get))
             # one counter, one limit: the head's, which is the player's to set (D4)
             conf = {**conf, "max_per_day": conf.get("head_max_per_day", 0)}
         if advised or not speech.wanted(conf):  # a dry run plays and says nothing

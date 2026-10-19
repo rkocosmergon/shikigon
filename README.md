@@ -206,11 +206,12 @@ The last step of the switch above the talk reads **pi takes over: chooses every 
 name of the agent or model you picked). Then your agent is its head: on every move it gets
 the situation, its newest lesson, what the world answered to its last moves, every move the
 world offers right now with what that move needs, and what the rule tree would play, and it
-chooses one move itself. It writes its own parameters where the world states their form: a
-mission (its type and fields), an answer to a contract it was offered, or waiting. Any other
-move it takes only as the rule tree would play it, unchanged: the world does not yet say how
-those are written, and a guessed field is not a mistake the world reports — it fills in its
-own value and answers "ok".
+chooses one move itself. It writes its own parameters where the world states their form: the
+world publishes the fields of every move (`GET /api/v1/game/info`, `actions.<name>.forms`), and
+a move your agent writes goes out with `strict`, so a field the world does not know comes back
+as a refusal that names the right fields, never as the world's own default values. Against a
+world that publishes no forms it writes only a mission, an answer to a contract it was offered,
+or waiting, and takes any other move only as the rule tree would play it, unchanged.
 
 The Shikigon stays the one that plays. It sends the move, keeps the key, and checks the
 answer first: only a move the world offers, in a form it states, never pause or resume,

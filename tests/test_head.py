@@ -389,3 +389,81 @@ def test_a_mission_and_a_contract_answer_are_checked_against_the_world() -> None
         "start_mission", {"mission_type": "rob_the_bank", "params": {}}, state, [])
     assert head.form_problem("accept_contract", {"contract_id": "c1"}, state, []) == ""
     assert head.form_problem("accept_contract", {"contract_id": "c9"}, state, []) != ""
+
+
+# --- The world publishes every move's form (cos20 #530) ---------------------------------------
+
+LIST_FORMS = [
+    {"params": ["item_type", "item_data", "price_energy"],
+     "required": ["item_type", "item_data.amount", "price_energy"],
+     "description": "sell energy", "when": {"item_type": ["energy"]}},
+    {"params": ["item_type", "item_data", "price_energy"],
+     "required": ["item_type", "price_energy"],
+     "description": "sell items from your inventory", "when": {"item_type": ["mega_bomb"]}},
+]
+INFO = {"actions": {"market_list": {"forms": LIST_FORMS}, "evolve": {"description": "x"},
+                    "say": {"forms": "not a list"}}}
+
+
+def _sell_state() -> Any:
+    wire = json.loads((Path(__file__).parent / "fixtures" / "state_newborn.json").read_text())
+    offers = {**wire["available_actions"],
+              "market_list": {"available": True, "sellable_items": {"mega_bomb": 18}}}
+    return _state(available_actions=offers)
+
+
+async def _forms() -> dict[str, Any]:
+    return head.forms_of(INFO)
+
+
+def test_the_forms_are_read_from_what_the_world_publishes() -> None:
+    assert head.forms_of(INFO) == {"market_list": LIST_FORMS}, "no forms, or not a list: none"
+    assert head.forms_of({"actions": []}) == {} and head.forms_of("down") == {}
+
+
+async def test_a_move_with_a_published_form_is_its_own_and_goes_out_strict() -> None:
+    """The device's wish, now in the world's form: the world checks the names (``strict``)."""
+    sell = {"item_type": "mega_bomb", "item_data": {"count": 5}, "price_energy": 900}
+    model = Replies(_move("market_list", sell, "bombs to energy"))
+    decider = head.HeadDecider(StubTree(), CONF, brain.state_dir(), send=model, forms=_forms)
+    action, params = await decider.decide(_sell_state())
+    assert action == "market_list" and params["strict"] is True
+    assert params["item_type"] == "mega_bomb" and params["params"]["item_data"] == {"count": 5}
+    told = model.asked[0][-1]["content"].split("Moves you write yourself:", 1)[1]
+    assert "- market_list:" in told.split("\n\n", 1)[0] and "needs item_type, price_energy" in told
+
+
+async def test_its_wrong_names_come_back_from_the_world_and_it_mends_them() -> None:
+    """Strict answers with the right fields; the head hears them and writes the move again."""
+    wrong = _move("market_list", {"item": "mega_bomb", "quantity": 5})
+    right = _move("market_list", {"item_type": "mega_bomb", "item_data": {"count": 5},
+                                  "price_energy": 900})
+    agent = RefusingAgent(_sell_state(), refuse=("market_list",))
+    agent.refuse_once = True
+    decider = head.HeadDecider(StubTree(), CONF, brain.state_dir(), send=Replies(wrong, right),
+                               forms=_forms)
+    last = await brain.tick(agent, decider, refusals=brain.Refusals())
+    assert [p.get("strict") for _, p in agent.acted] == [True, True]
+    assert agent.acted[1][1]["item_type"] == "mega_bomb" and last["ok"]
+
+
+async def test_a_move_without_a_published_form_still_goes_out_only_as_the_rules_line() -> None:
+    model = Replies(_move("transfer_energy", {"to": "p2", "energy": 5}), _move("wait"))
+    decider = head.HeadDecider(StubTree(), CONF, brain.state_dir(), send=model, forms=_forms)
+    assert await decider.decide(_sell_state()) == ("wait", {})
+    assert "rules' line" in model.asked[1][-1]["content"]
+
+
+async def test_a_silent_world_keeps_the_old_list_and_is_asked_again_next_move() -> None:
+    calls: list[int] = []
+
+    async def silent() -> dict[str, Any]:
+        calls.append(1)
+        return {}
+
+    model = Replies(_move("market_list", {"item_type": "energy"}), _move("wait"), _move("wait"))
+    decider = head.HeadDecider(StubTree(), CONF, brain.state_dir(), send=model, forms=silent)
+    assert await decider.decide(_sell_state()) == ("wait", {}), "its second answer"
+    assert "rules' line" in model.asked[1][-1]["content"], "no form known: the old list holds"
+    await decider.decide(_sell_state())
+    assert len(calls) == 2, "asked again, the world may answer now"

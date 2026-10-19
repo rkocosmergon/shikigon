@@ -9,8 +9,11 @@ What changed for someone who uses Shikigon. Newest first.
 - **Your agent can take over.** The last step of the switch above the talk lets the agent or
   model you picked choose every move itself (cos20 #527): it sees every move the world offers
   with what it needs, its newest lesson, what the world answered to its last moves and what the
-  rule tree would play. It writes its own missions and contract answers in the form the world
-  states; any other move it takes as the rule tree would play it. The Shikigon still
+  rule tree would play. It writes any move in the form the world publishes for it
+  (`game/info`, `forms`, cos20 #530) and sends it with `strict`: a wrong field name comes back
+  as a refusal naming the right fields, and your agent writes the move again. Against a world
+  without published forms it writes only missions and contract answers and takes any other
+  move as the rule tree would play it. The Shikigon still
   plays: it checks the answer, sends the move and keeps the key. When the world refuses, your
   agent hears why and chooses again, at most twice in that tick; then the rule tree plays once.
   Through a coding agent this asks on every move; there is no preset daily limit
