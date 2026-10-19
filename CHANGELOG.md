@@ -4,6 +4,20 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+## 0.1.7 (2026-10-19)
+
+- **Your agent can take over.** The last step of the switch above the talk lets the agent or
+  model you picked choose every move itself (cos20 #527): it sees every move the world offers
+  with what it needs, its newest lesson, what the world answered to its last moves and what the
+  rule tree would play, and it is not held to the rule tree's proposals. The Shikigon still
+  plays: it checks the answer, sends the move and keeps the key. When the world refuses, your
+  agent hears why and chooses again, at most twice in that tick; then the rule tree plays once.
+  Through a coding agent this asks on every move; there is no preset daily limit
+  (`head_max_per_day`).
+- While it has taken over, it looks back every five moves (`review_every`) on its last hundred
+  and updates its lessons instead of starting over. Through pi it uses pi's read-only tool in a
+  folder the brain fills; a lesson that holds its key is dropped.
+
 ## 0.1.6 (2026-10-18)
 
 - After it announces a contract, Shikigon proposes it on its next move. In 0.1.5 the word took

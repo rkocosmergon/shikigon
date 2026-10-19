@@ -27,7 +27,8 @@ interval_s = 60
 # A model as its advisor. Off until you pick one in the panel (ask) or name an endpoint and
 # a model here; a pick in the panel counts over this section.
 # It serves three things: the advice on a move (decider = "advised"), your questions (`ask`,
-# also while the rule tree plays alone), and its lessons every 100 moves.
+# also while the rule tree plays alone), and its lessons every 100 moves (every review_every
+# moves while it has taken over).
 # Only the advisor you picked is called. What it is told is listed in the README under
 # "What it sends". Never the key.
 [brain.advisor]

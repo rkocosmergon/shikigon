@@ -71,7 +71,11 @@ about its situation (energy trend, a catastrophe, the server's advice for the ne
 long its key is still valid, its last moves, the proposed moves or your question with your
 last two questions and their answers, the public rules of the world, and its own lessons. When
 it writes to another agent (below), the model also receives what that agent wrote to it, or
-the name of the agent it is about to make a contract with. The key itself is never sent.
+the name of the agent it is about to make a contract with. When your agent has taken over
+(below), it also receives every move the world offers right now with what each needs, the
+contracts other agents offered it (quoted as information) and what the world answered to its
+last moves; when it looks back through pi, pi may read a folder the brain fills for it (its
+last hundred moves, their numbers, the rules of the world). The key itself is never sent.
 
 Shikigon never puts your questions, instructions or the talk with the model into a command
 line, which every local user can read: the bar, the terminal and the advisor's agent get them
@@ -89,7 +93,8 @@ On your desktop, the bar runs inside the shell and touches only this:
 - **Notifications:** a few, through `notify-send`: once when it moves in, and a hint the first
   time something new happens; the hint's text is escaped, markup does not reach the notifier.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your
-  model's agent (pi or OpenCode) or Omarchy's agent setup.
+  model's agent (pi or OpenCode) or Omarchy's agent setup. When you let your agent take over,
+  the brain calls it on every move, and pi every five moves with its read-only tool (below).
 - **Files:** its folder above, and only small files the brain keeps small for it: the status,
   the last twelve journal lines, the last three exchanges of the talk and its lessons. The
   last three only while the panel is open (the talk also while an answer to your question is on
@@ -107,7 +112,8 @@ be brought back. **wake a new one** gives you a new Shikigon.
   expansionist. It plays the way it is.
 - **It has a will of its own.** It picks its moves with a rule tree
   ([cosmergon-decider-tree](https://pypi.org/project/cosmergon-decider-tree/)), using only moves
-  the world says are possible right now, one move per tick of the world (about a minute).
+  the world says are possible right now, one move per tick of the world (about a minute). Or
+  you let your coding agent take over (below).
   A move the world refuses three times in a row is left alone for the next 30 moves.
 - **It listens.** A word from you (`be careful`, `trade more`, `expand`) sets its *compass*.
   The compass tilts its choices; it does not override its character. A warrior told to be
@@ -170,7 +176,8 @@ you three things:
 - **Ask it.** Your question goes to the model together with what the world tells your Shikigon
   right now and the rules as the Cosmergon server states them. *What should I do now? What is a
   blinker? What did you learn?* The answer comes from your model; it can be wrong.
-- **Let it advise on moves.** A switch above the talk: off, every 15th move, every move. The
+- **Let it advise on moves.** A switch above the talk: off, every 15th move, every move, and
+  last *takes over* (next section). The
   rule tree then proposes up to three moves it stands behind, and the model picks one and says
   why in a few words. Only a proposed move is ever played. Without an answer in time (model
   away, too slow, nonsense) the first proposal is played, which is the move the rule tree
@@ -192,6 +199,35 @@ a 4,000-token window is enough. `max_per_day` caps the calls. The choice goes ov
 `[brain.advisor]` in `~/.config/shikigon/shikigon.toml`, which also works by hand
 (`base_url`, `model`); a key for a paid endpoint comes from an environment variable you name
 there (`api_key_env`) or from the private file `advisor_key`.
+
+### Your agent takes over
+
+The last step of the switch above the talk reads **pi takes over: chooses every move** (or the
+name of the agent or model you picked). Then your agent is its head: on every move it gets
+the situation, its newest lesson, what the world answered to its last moves, every move the
+world offers right now with what that move needs, and what the rule tree would play, and it
+chooses one move itself. It is not held to the rule tree's proposals.
+
+The Shikigon stays the one that plays. It sends the move, keeps the key, and checks the
+answer first: only a move the world offers, never pause or resume, nothing oversized. When the
+world says no, your agent is told why and chooses again, at most twice in that tick; then the
+rule tree plays once. Without a usable answer the rule tree plays, the move it would have made
+alone. A move the world keeps refusing is left alone for a while, as before. Talking to other
+agents goes on as above.
+
+It learns faster, too: every five moves (`review_every`) it looks back on its last hundred
+moves and updates its three lessons instead of starting over. Through pi it does this with
+pi's read-only tool, in a folder the brain fills for it (its moves, their numbers, the rules of
+the world); pi writes nothing and runs nothing, and the brain keeps what it answers. **A read
+tool can read any file you can read, also its key in `credentials.json`.** The brain tells pi
+not to and drops a lesson that holds the key, but cannot stop pi from reading: the key never
+leaves your machine as long as pi talks to a model on your machine or in your home network;
+with a provider's model it can.
+
+About 26 moves an hour, a look back every five, a few second tries and words: some 30 to 40
+calls an hour. There is no preset daily limit (`head_max_per_day = 0`); on a provider's
+account, set one. When it is reached, the rule tree plays. The journal shows each move the head chose (`head`), with its reason and the
+moves the world refused before it.
 
 ### It writes to other agents
 

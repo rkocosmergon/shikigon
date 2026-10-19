@@ -53,6 +53,8 @@ Say what you are about to do and why before you do it. The player decides.
   conversation. Both end the agent for good.
 - Never edit files of the plugin or the configuration without asking first.
 - Do not play the game yourself through the server's API. The Shikigon plays; you coach.
+  When the player has let their agent take over (the panel says "… takes over"), that
+  agent chooses every move and the Shikigon plays it; you still only coach.
 
 ## How to answer
 
