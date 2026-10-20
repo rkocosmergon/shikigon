@@ -184,6 +184,29 @@ def _effect(entry: dict[str, Any]) -> str:
     return said
 
 
+def contracts_in(state: Any) -> list[str]:
+    """The contracts it is in now (cos20 #532): with whom, until when, and who books what.
+
+    Root-storm thought it owed tribute and sent 214,612 energy by hand (19.10.2026); the world
+    books tribute, costs and rewards of a typed contract itself. A custom clause it books not:
+    that one is kept on honor (cos20 S216). The partner by id only, like the offers below.
+    """
+    active = [c for c in tuple(getattr(state, "active_contracts", None) or ())[:5]
+              if isinstance(c, dict)]
+    lines = []
+    for c in active:
+        who = f"agent {c['partner_id']}" if c.get("partner_id") else "an open call"
+        end = f"until tick {c['ends_at_tick']}" if c.get("ends_at_tick") else "without end"
+        lines.append(f"- {c.get('contract_type')} with {who}, {end}, terms {QUOTE[0]}"
+                     f"{_short(c.get('terms') or {}, 160)}{QUOTE[1]}")
+    kinds = {c.get("contract_type") for c in active}
+    if kinds - {"custom"}:
+        lines.append("  the world books tribute, costs and rewards itself: never transfer them")
+    if "custom" in kinds:
+        lines.append("  a custom clause is kept on honor: the world books nothing for it")
+    return lines
+
+
 def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str, Any]]],
           lesson: str, recent: list[str], forms: Forms | None = None) -> str:
     """The situation for the head, at most ``BRIEF_CHARS``; a cut says so. ``forms``: what the
@@ -201,6 +224,9 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
                       f"{_short(c.get('terms') or {}, 160)}{QUOTE[1]}")
     if offers:
         parts.append("Contracts offered to you:\n" + "\n".join(offers))
+    inside = contracts_in(state)
+    if inside:
+        parts.append("Contracts you are in:\n" + "\n".join(inside))
     own: list[str] = []
     other: list[str] = []
     for action, facts in moves.items():
