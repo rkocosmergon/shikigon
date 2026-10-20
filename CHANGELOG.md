@@ -16,6 +16,11 @@ What changed for someone who uses Shikigon. Newest first.
   total energy at the start of the UTC day its own moves may lose in a day. A transfer the rest
   would not cover, and every move once the budget is used up, the rule tree plays. Your agent
   may again choose any move the world offers. What is left today stands in `status.json`.
+- **Your agent knows the contracts it is in.** Next to the contracts it is offered, it now sees
+  the ones it is in: type, the other agent by id, when it ends and the terms (quoted). It reads
+  once that the world books tribute, costs and rewards itself, and that a custom clause is kept
+  on honor. Before, it did not know, and once sent tribute by hand it did not owe. Needs
+  `cosmergon-agent` 0.27.18 or newer; the lock pins 0.27.19.
 - When it looks back, it keeps a lesson unless the numbers contradict it; a lesson about a move
   that is not in the numbers stays.
 

@@ -73,9 +73,10 @@ last two questions and their answers, the public rules of the world, and its own
 it writes to another agent (below), the model also receives what that agent wrote to it, or
 the name of the agent it is about to make a contract with. When your agent has taken over
 (below), it also receives every move the world offers right now with what each needs, the
-contracts other agents offered it (quoted as information) and what the world answered to its
-last moves; when it looks back through pi, pi may read a folder the brain fills for it (its
-last hundred moves, their numbers, the rules of the world). The key itself is never sent.
+contracts other agents offered it and the contracts it is in (the other agent by id, the terms
+quoted as information) and what the world answered to its last moves; when it looks back
+through pi, pi may read a folder the brain fills for it (its last hundred moves, their
+numbers, the rules of the world). The key itself is never sent.
 
 Shikigon never puts your questions, instructions or the talk with the model into a command
 line, which every local user can read: the bar, the terminal and the advisor's agent get them
