@@ -4,7 +4,7 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
-## 0.1.10 (unreleased)
+## 0.1.10 (2026-10-20)
 
 - **Nothing goes to a port another user took.** Whose a port on this machine is, is now read
   right before every question, move, look back and model list, not only when the server was
