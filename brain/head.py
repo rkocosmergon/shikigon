@@ -424,8 +424,7 @@ class HeadDecider:
         except advisor.call_errors() as exc:
             import connections
 
-            said = str(exc) if isinstance(exc, connections.AgentError) else type(exc).__name__
-            return None, said[:WHY_CHARS]
+            return None, connections.failed_why(exc)[:WHY_CHARS]
         if self.last is not None:
             self.last["ms"] = self.last.get("ms", 0) + int((time.monotonic() - started) * 1000)
         self._talk.append({"role": "assistant", "content": text[:2000]})

@@ -15,9 +15,10 @@ What changed for someone who uses Shikigon. Newest first.
 - **The world's key goes only to the world that gave it.** If the config names another world,
   Shikigon sends nothing and asks you to register a new Shikigon there. A key from an earlier
   version is bound to the world it goes to first.
-- A model's answer and the world's rules are read only up to 256 KiB and within the move's
-  time; an endless answer cannot fill the brain's memory.
-- When a coding agent does not answer in time, everything it started ends with it.
+- A model's answer is read only up to 256 KiB and within the move's time, the world's rules
+  up to 256 KiB and within eight seconds: an endless answer cannot fill the brain's memory.
+- When a coding agent does not answer in time, it ends together with the processes it started
+  (its process group).
 - A model name that starts with `-` is refused, so it can never become an option of the
   agent's command.
 

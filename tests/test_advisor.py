@@ -17,6 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 
 import advisor
+import connections
 import shikigon_brain as brain
 from test_brain import FakeAgent
 
@@ -143,6 +144,8 @@ async def test_the_models_choice_is_played_and_noted_with_its_reason() -> None:
         (TimeoutError(), "TimeoutError"),
         (ConnectionRefusedError(), "ConnectionRefusedError"),
         (KeyError("choices"), "KeyError"),  # an answer in a shape that is not the protocol's
+        # the port on this machine changed hands (H9): said in words on the panel's move line
+        (connections.NotOurs(connections.NOT_OURS), connections.NOT_OURS_SHORT),
     ],
 )
 async def test_without_a_usable_answer_the_first_proposal_is_played(

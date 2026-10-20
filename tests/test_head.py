@@ -369,6 +369,9 @@ async def test_a_move_waits_long_enough_for_the_head_and_says_why_it_fell_back(
     failing = _head(Replies(connections.AgentError("pi did not answer within 45 s")))
     await failing.decide(_state())
     assert failing.last is not None and failing.last["fallback"] == "pi did not answer within 45 s"
+    taken = _head(Replies(connections.NotOurs(connections.NOT_OURS)))
+    await taken.decide(_state())
+    assert taken.last is not None and taken.last["fallback"] == connections.NOT_OURS_SHORT
     assert head.HEAD_WAIT_S >= 40
 
 

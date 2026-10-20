@@ -423,7 +423,9 @@ class AdvisedDecider:
         try:
             text = await self.send(move_messages(state, options, learned), MOVE_TOKENS)
         except call_errors() as exc:  # the endpoint failed: the rules play on
-            note["fallback"] = type(exc).__name__
+            import connections
+
+            note["fallback"] = connections.failed_why(exc)
             return options[0]
         note["ms"] = int((time.monotonic() - started) * 1000)
         picked = parse(text, len(options))

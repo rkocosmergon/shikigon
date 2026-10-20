@@ -463,6 +463,15 @@ def proc_tables() -> list[str]:
 
 NOT_OURS = ("that address is on this machine, and its port is not yours right now (another "
             "user listens there, or nothing does): nothing was sent")
+NOT_OURS_SHORT = "its port on this machine is not yours right now"  # the panel's move line
+
+
+def failed_why(exc: BaseException) -> str:
+    """What a failed call is called on the panel: an agent's own words, the port that is not
+    the player's in words, anything else by its kind."""
+    if isinstance(exc, AgentError):
+        return str(exc)
+    return NOT_OURS_SHORT if isinstance(exc, NotOurs) else type(exc).__name__
 
 
 class NotOurs(OSError):
