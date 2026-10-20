@@ -167,8 +167,9 @@ def recent_moves(home: Path, count: int = RECENT) -> list[str]:
 def _effect(entry: dict[str, Any]) -> str:
     """What the move itself booked, as the world said it (cos20 #533); empty without that word.
 
-    ``, this move: -214,612`` and ``, 100,403 held in an offer`` where energy now sits in its
-    own offer or escrow; goods at the house price where the inventory changed.
+    ``, this move: -214,612`` and ``, held +100,403 in your offers or contracts`` where energy
+    now sits in its own offer or escrow (signed: a cancelled offer comes back as ``held -X``);
+    goods at the house price where the inventory changed.
     """
     effect = entry.get("effect")
     if not isinstance(effect, dict):
@@ -176,7 +177,7 @@ def _effect(entry: dict[str, Any]) -> str:
     said = f", this move: {float(effect.get('free') or 0):+,.0f}"
     held = float(effect.get("held") or 0)
     if held:
-        said += f", {held:,.0f} held in an offer"
+        said += f", held {held:+,.0f} in your offers or contracts"
     items = float(effect.get("items") or 0)
     if items:
         said += f", items {items:+,.0f} at house price"

@@ -229,10 +229,10 @@ learning, not a promise that it plays better than the rule tree. Switch it off a
 tree plays again.
 
 It sees what each move did. The world answers every move with what the move itself booked
-(`energy_effect`): energy spent, energy now held in its own offer, goods at the house price;
-not income, decay or what other agents did meanwhile. Your agent reads this next to its last
-moves (`this move: -214,612`), and when it looks back, each kind of move shows its own effect
-beside the change of total energy that followed it from all causes.
+(`energy_effect`): energy spent, energy now held in its own offers or contracts, goods at the
+house price; not income, decay or what other agents did meanwhile. Your agent reads this next to
+its last moves (`this move: -214,612`), and when it looks back, each kind of move shows its own
+effect beside the change of total energy that followed it from all causes.
 
 **What it may lose is up to you.** `learning_budget_pct` (default 5) is the share of its total
 energy at the start of the UTC day that its own moves may lose in a day. A transfer the rest

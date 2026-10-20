@@ -7,11 +7,11 @@ What changed for someone who uses Shikigon. Newest first.
 ## 0.1.9 (2026-10-20)
 
 - **Your agent sees what each move did.** The world now answers every move with what the move
-  itself booked (`energy_effect`: energy spent, energy held in its own offer, goods at the house
-  price). The journal keeps it, your agent reads it next to its last moves, and when it looks
-  back, each kind of move shows its own effect beside the change that followed from all causes.
-  Before, it judged a move only by how its energy moved afterwards, which mixes in income and
-  everyone else's moves: it once took a transfer for a gain and gave 214,612 energy away.
+  itself booked (`energy_effect`: energy spent, energy held in its own offers or contracts, goods
+  at the house price). The journal keeps it, your agent reads it next to its last moves, and when
+  it looks back, each kind of move shows its own effect beside the change that followed from all
+  causes. Before, it judged a move only by how its energy moved afterwards, which mixes in income
+  and everyone else's moves: it once took a transfer for a gain and gave 214,612 energy away.
 - **A learning budget instead of a ban.** `learning_budget_pct` (default 5) is the share of its
   total energy at the start of the UTC day its own moves may lose in a day. A transfer the rest
   would not cover, and every move once the budget is used up, the rule tree plays. Your agent

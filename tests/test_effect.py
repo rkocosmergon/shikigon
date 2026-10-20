@@ -67,8 +67,15 @@ def test_the_head_sees_what_its_last_moves_did() -> None:
     lines = head.recent_moves(home)
     assert lines[0] == "- tick 7: transfer_energy — taken, this move: -214,612"
     assert lines[1] == (
-        "- tick 8: market_list — taken, this move: -100,403, 100,403 held in an offer"
+        "- tick 8: market_list — taken, this move: -100,403, held +100,403 in your offers or "
+        "contracts"
     )
+
+
+def test_a_cancelled_offer_reads_as_held_coming_back() -> None:
+    """cos20 #533 review: unsigned, a cancel read "-1,000 held in an offer", like a stock."""
+    said = head._effect({"effect": {"free": 1000.0, "held": -1000.0, "items": 0.0}})
+    assert said == ", this move: +1,000, held -1,000 in your offers or contracts"
 
 
 def test_the_look_back_sets_the_own_effect_beside_the_window() -> None:
