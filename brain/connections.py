@@ -22,10 +22,14 @@ Three rules this file keeps (cos20 #451, concept 10.5d):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ipaddress
+import itertools
 import json
 import os
 import shutil
+import signal
+import socket
 import subprocess
 import tempfile
 import time
@@ -309,14 +313,31 @@ MODELS_KEPT = 200
 NAME_CHARS = 120
 
 
-class TooLong(Exception):
-    """An answer past ``ANSWER_BYTES`` or ``ANSWER_SECONDS``."""
+class TooLong(ValueError):
+    """An answer past ``ANSWER_BYTES`` or ``ANSWER_SECONDS`` (an odd answer, like bad JSON)."""
+
+
+async def bounded_body(resp: Any, seconds: float) -> bytes:
+    """A streamed answer, read only up to ``ANSWER_BYTES`` and ``seconds`` in all: a server
+    that sends without end, or a byte at a time, cannot fill the brain's memory or hold it
+    (the class of marketplace review #12064; a model server can be plain http in the LAN)."""
+    started = time.monotonic()
+    body = bytearray()
+    async for chunk in resp.aiter_bytes():
+        body += chunk
+        if len(body) > ANSWER_BYTES or time.monotonic() - started > seconds:
+            raise TooLong("the answer was too long")
+    return bytes(body)
 
 
 def bounded_get(url: str, headers: dict[str, str] | None = None, timeout: float = 4) -> Any:
-    """``httpx.get`` with a limit on the body and on the whole time, not only on each read."""
+    """``httpx.get`` with a limit on the body and on the whole time, not only on each read.
+
+    Nothing goes to a port on this machine that is not the player's right now (H9)."""
     import httpx
 
+    if not ours(url):
+        raise NotOurs(NOT_OURS)
     started = time.monotonic()
     body = bytearray()
     with httpx.stream("GET", url, headers=headers or {}, timeout=timeout) as resp:
@@ -350,6 +371,8 @@ def models_at(base_url: str, get: Callable[..., Any], key: str = "") -> dict[str
     """The models an OpenAI-compatible address offers. ``needs_key`` if it wants one."""
     if key and not key_may_go_to(base_url):
         return {"ok": False, "models": [], "why": KEY_ONLY_SAFE}
+    if not ours(base_url):  # also an address typed by hand, not only one found (H9)
+        return {"ok": False, "models": [], "why": NOT_OURS}
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     try:
         resp = get(base_url.rstrip("/") + "/models", headers=headers, timeout=4)
@@ -407,20 +430,117 @@ def own_server(base_url: str, tables: list[str] | None = None, me: int | None = 
     "on this machine" for the player, and their question would go to that person
     (cos20 #492 F2). Ollama on Arch runs as the system user ``ollama``.
     """
-    port = urllib.parse.urlsplit(base_url).port
+    port = port_of(base_url)
     if port is None:
         return False
-    if tables is None:
-        tables = []
-        for name in ("/proc/net/tcp", "/proc/net/tcp6"):
-            try:
-                tables.append(Path(name).read_text(encoding="utf-8"))
-            except OSError:
-                continue
-    owners = listeners(port, tables)
+    owners = listeners(port, proc_tables() if tables is None else tables)
     me = os.getuid() if me is None else me
     below = system_accounts_below()
     return bool(owners) and all(uid == me or uid < below for uid in owners)
+
+
+def port_of(base_url: str) -> int | None:
+    """The port an address goes to, also when it names none (``http`` 80, ``https`` 443)."""
+    parts = urllib.parse.urlsplit(base_url)
+    try:
+        return parts.port or {"http": 80, "https": 443}.get(parts.scheme)
+    except ValueError:  # a port that is no number
+        return None
+
+
+def proc_tables() -> list[str]:
+    """The kernel's lists of TCP sockets, IPv4 and IPv6."""
+    tables = []
+    for name in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            tables.append(Path(name).read_text(encoding="utf-8"))
+        except OSError:
+            continue
+    return tables
+
+
+# ---------- checked when sending, not when found (H9, cos20 #492, review #12356) -----------------
+
+NOT_OURS = ("that address is on this machine, and its port is not yours right now (another "
+            "user listens there, or nothing does): nothing was sent")
+
+
+class NotOurs(OSError):
+    """An address on this machine whose port the player does not hold right now."""
+
+
+def own_addresses() -> set[str]:
+    """This machine's own addresses (``/proc/net/fib_trie`` LOCAL, ``/proc/net/if_inet6``)."""
+    found_here: set[str] = set()
+    try:
+        lines = Path("/proc/net/fib_trie").read_text(encoding="utf-8").splitlines()
+        for before, line in itertools.pairwise(lines):
+            if "/32 host LOCAL" in line:
+                found_here.add(before.split()[-1])
+    except (OSError, IndexError):
+        pass
+    try:
+        for line in Path("/proc/net/if_inet6").read_text(encoding="utf-8").splitlines():
+            found_here.add(str(ipaddress.ip_address(bytes.fromhex(line.split()[0]))))
+    except (OSError, ValueError, IndexError):
+        pass
+    return found_here
+
+
+def _here(address: str, own: set[str]) -> bool:
+    try:
+        ip = ipaddress.ip_address(address.split("%", 1)[0])
+    except ValueError:
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback or ip.is_unspecified or str(ip) in own
+
+
+def on_this_machine(
+    base_url: str,
+    resolve: Callable[..., Any] | None = None,
+    own: Callable[[], set[str]] | None = None,
+) -> bool:
+    """True if the address leads to this machine: ``localhost``, a loopback address,
+    ``0.0.0.0``, one of the machine's own addresses, or a name that resolves to one of
+    these (the machine's own name is ``127.0.1.1`` on many systems)."""
+    host = (urllib.parse.urlsplit(base_url).hostname or "").lower()
+    if not host:
+        return False
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    mine = (own or own_addresses)()
+    try:
+        ipaddress.ip_address(host.split("%", 1)[0])
+        return _here(host, mine)
+    except ValueError:
+        pass
+    try:
+        answers = (resolve or socket.getaddrinfo)(host, None)
+    except (OSError, UnicodeError):
+        return False
+    return any(_here(str(answer[4][0]), mine) for answer in answers)
+
+
+def ours(base_url: str, tables: list[str] | None = None, me: int | None = None) -> bool:
+    """May anything be sent to this address now?
+
+    An address that leads to this machine is used only while every listener on its port runs
+    as the player or as a system service — read right before each sending, not once when it
+    was found: the server found can stop, and another local user can take the freed port
+    (review of 0.1.9, #12356). A port nobody listens on is not the player's either: someone
+    could take it between this check and the connection. Any other address is not ours to
+    judge here (H3 guards the key on its way).
+
+    Over https the certificate already does it: whoever listens on the port cannot prove the
+    name, the handshake fails before a byte of the request leaves, and nothing here turns
+    verification off. So only plain http is looked at, and no name is resolved for an https
+    address (the running brain checks its world before every move).
+    """
+    if urllib.parse.urlsplit(base_url).scheme == "https":
+        return True
+    return not on_this_machine(base_url) or own_server(base_url, tables, me)
 
 
 def found(
@@ -457,7 +577,28 @@ def short_host(base_url: str) -> str:
     return urllib.parse.urlsplit(base_url).hostname or ""
 
 
-def agent_models(agent: str, run: Callable[..., Any] = subprocess.run) -> list[str]:
+def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str] | None = None,
+                 input: str | None = None, timeout: float | None = None,
+                 capture_output: bool = True, text: bool = True, check: bool = False) -> Any:
+    """``subprocess.run`` in a process group of its own. On a timeout the whole group ends,
+    also what the agent started itself: an agent is a program around the model, and a
+    child left running would go on after its answer was given up (class of review #12242)."""
+    del capture_output, check  # always captured, never raised on the exit code
+    stdin = subprocess.PIPE if input is not None else subprocess.DEVNULL
+    with subprocess.Popen(argv, cwd=cwd, env=env, text=text, stdin=stdin, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, start_new_session=True) as proc:
+        try:
+            out, err = proc.communicate(input, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(proc.pid, signal.SIGKILL)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                proc.communicate(timeout=2)  # a child that left the group keeps no pipe open
+            raise
+    return subprocess.CompletedProcess(argv, proc.returncode, out, err)
+
+
+def agent_models(agent: str, run: Callable[..., Any] = run_in_group) -> list[str]:
     """The models an agent can use, by its own listing command; empty if it has none."""
     argv = AGENTS.get(agent, {}).get("models")
     if not argv:
@@ -523,6 +664,8 @@ def agent_argv(conf: dict[str, Any], review: bool = False) -> list[str]:
     spec = AGENTS[str(conf["agent"])]
     argv = list(spec["review_argv"] if review else spec["argv"])
     model = str(conf.get("agent_model") or "")
+    if model.startswith("-"):  # a name, never an option of the agent's command
+        raise AgentError(f"{spec['name']}: a model name cannot start with '-'")
     if model:
         argv += [model if part == "{model}" else part for part in spec["model_flag"]]
     return argv
@@ -548,7 +691,7 @@ def last_line(text: str) -> str:
 
 
 def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
-              run: Callable[..., Any] = subprocess.run, review_in: Path | None = None) -> str:
+              run: Callable[..., Any] = run_in_group, review_in: Path | None = None) -> str:
     """Call the agent once, in an empty folder, and return what it answered.
 
     ``review_in``: the head looks back (cos20 #527). The agent runs with its read-only
@@ -579,7 +722,7 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
 
 
 def agent_send(conf: dict[str, Any], wait: float,
-               run: Callable[..., Any] = subprocess.run) -> Send:
+               run: Callable[..., Any] = run_in_group) -> Send:
     """The same shape as the HTTP sender, through the player's agent; ``wait`` in seconds."""
 
     async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
@@ -595,7 +738,7 @@ def reads_back(conf: dict[str, Any]) -> bool:
 
 
 def review_send(conf: dict[str, Any], folder: Path, wait: float,
-                run: Callable[..., Any] = subprocess.run) -> Send:
+                run: Callable[..., Any] = run_in_group) -> Send:
     """The head's look back through the agent's read-only command, in ``folder``."""
 
     async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
@@ -614,7 +757,8 @@ async def probe(send: Send) -> dict[str, Any]:
     try:
         text = await send([{"role": "user", "content": PROBE_QUESTION}], 20)
     except Exception as exc:  # noqa: BLE001 — whatever failed, the panel shows one sentence
-        why = str(exc) if isinstance(exc, AgentError) else f"no answer ({type(exc).__name__})"
+        said = isinstance(exc, AgentError | NotOurs)
+        why = str(exc) if said else f"no answer ({type(exc).__name__})"
         return {"ok": False, "why": why[:200]}
     ms = int((time.monotonic() - started) * 1000)
     if not text.strip():

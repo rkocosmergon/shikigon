@@ -161,7 +161,14 @@ shows **WHO ANSWERS?**, one list:
   `~/.pi/agent/models.json`, or an answer can take minutes.
 - **A model server on this machine** (Ollama, LM Studio), found by itself, and only one that
   runs as you or as a system service: on a machine with several people, a server someone else
-  started on that port is not offered, so your question never goes to them.
+  started on that port is not offered, so your question never goes to them. Whose the port is,
+  is read again right before **every** question, move and look back, not only when the server
+  was found: if your server stops and another user takes its port, nothing more is sent there,
+  and the panel says so. The same holds for every address that leads to this machine, also one
+  you typed (`localhost`, `127.0.0.1`, your machine's own name or address), and for a world on
+  this machine. Over https the certificate already makes sure of it. What remains is the
+  moment between that check and the connection, about a millisecond: only if your own server
+  ended exactly then could another user's take it.
 - **set up an agent in Omarchy…** opens Omarchy's own chooser; signing in is the agent's part.
 - **an address of its own…**: type any OpenAI-compatible address and pick one of the models it
   offers. It asks for a key only if the address wants one; the key is then kept in a file only
@@ -169,7 +176,9 @@ shows **WHO ANSWERS?**, one list:
   this machine (localhost): never in plain text over a network, also not one that looks like
   home — in a café `192.168.1.50` or `macmini.local` can be someone else. A model server in your
   home network usually wants no key; one that does is reached over https. The same holds for
-  the world: its key goes only to an `https` address (or this machine).
+  the world: its key goes only to an `https` address (or this machine), and only to the world
+  that gave it. If you point the config at another world, Shikigon says so and sends nothing;
+  register a new Shikigon there. A model's answer is read only up to 256 KiB.
 
 Whatever you pick is asked one real question first and taken only if it answers. That gives
 you three things:

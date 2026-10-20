@@ -33,6 +33,7 @@ import shutil
 import sys
 import time
 import tomllib
+import urllib.parse
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -161,6 +162,37 @@ def world_is_safe(cfg: dict[str, Any]) -> bool:
     return connections.key_may_go_to(str(world))
 
 
+def world_refusal(cfg: dict[str, Any]) -> str:
+    """Why nothing may go to the world right now, or ``""``: its key travels encrypted or stays
+    on this machine (H3), and on this machine only to a port that is the player's at this
+    moment (H9) — read before every sending, also before each move of the running brain."""
+    import connections
+
+    world = str(cfg.get("world", {}).get("base_url") or "https://cosmergon.com")
+    if not world_is_safe(cfg):
+        return WORLD_KEY_SAFE
+    return "" if connections.ours(world) else connections.NOT_OURS
+
+
+def key_refusal(cfg: dict[str, Any], creds: dict[str, str]) -> str:
+    """Why this Shikigon's key may not go to the configured world, or ``""``: a key goes only
+    to the world it was given by (H3; class of reviews #11895, #12267). A key kept before 0.1.10
+    names no world; it is bound to the one it first goes to after the update, which is the
+    configured one, as before."""
+    import connections
+
+    world = connections.origin(str(cfg.get("world", {}).get("base_url") or "https://cosmergon.com"))
+    given_by = creds.get("world") or ""
+    if not given_by:
+        write_private(credentials_path(), {**creds, "world": world})
+        return ""
+    if given_by == world:
+        return ""
+    host = urllib.parse.urlsplit(given_by).hostname or given_by
+    return (f"this Shikigon's key belongs to the world at {host}; for another world, "
+            "register a new Shikigon (register --new)")
+
+
 def register(
     cfg: dict[str, Any], post: Callable[..., Any], replace: bool = False
 ) -> dict[str, str]:
@@ -171,11 +203,12 @@ def register(
     ``post`` is ``httpx.post`` in use and a stub in tests.
     """
     import advisor
+    import connections
 
     if load_credentials() is not None and not replace:
         raise SystemExit("A Shikigon already lives here. Use `register --new` to replace it.")
-    if not world_is_safe(cfg):
-        raise SystemExit(WORLD_KEY_SAFE)
+    if why := world_refusal(cfg):
+        raise SystemExit(why)
     url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/auth/register/anonymous-agent"
     try:
         resp = post(url, json=registration_body(cfg), timeout=30)
@@ -191,6 +224,7 @@ def register(
         "agent_id": data["agent_id"],
         "api_key": data["api_key"],
         "expires_at": data.get("expires_at", ""),
+        "world": connections.origin(url),  # the key goes to this world only (H3)
     }
     write_private(credentials_path(), creds)
     return {"agent_id": creds["agent_id"], "expires_at": creds["expires_at"]}
@@ -209,8 +243,8 @@ def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
     creds = load_credentials()
     if creds is None:
         raise SystemExit("No Shikigon lives here.")
-    if not world_is_safe(cfg):
-        return {"ok": False, "why": WORLD_KEY_SAFE}
+    if why := world_refusal(cfg) or key_refusal(cfg, creds):
+        return {"ok": False, "why": why}
     url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/players/me"
     try:
         resp = delete(url, headers={"Authorization": f"api-key {creds['api_key']}"}, timeout=30)
@@ -701,6 +735,8 @@ def make_agent(cfg: dict[str, Any]) -> Any:
     creds = load_credentials()
     if creds is None:
         raise SystemExit("No Shikigon yet. Run: shikigon_brain.py register")
+    if why := world_refusal(cfg) or key_refusal(cfg, creds):
+        raise SystemExit(why)
     return CosmergonAgent(
         api_key=creds["api_key"],
         agent_id=creds["agent_id"],
@@ -745,6 +781,8 @@ def world_rules(cfg: dict[str, Any], get: Callable[..., Any]) -> str:
     """The rules as the server itself states them (public, no key); empty if unreachable."""
     import advisor
 
+    if world_refusal(cfg):
+        return ""
     url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/game/info"
     try:
         resp = get(url, timeout=15)
@@ -771,6 +809,8 @@ def world_forms(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:
     import advisor
     import head
 
+    if world_refusal(cfg):
+        return {}
     url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/game/info"
     try:
         resp = get(url, timeout=15)
@@ -1010,11 +1050,13 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
         if name == "advised":
             inner = advisor.AdvisedDecider(inner, conf, state_dir(), dry=advised)
         elif name == "head":  # the player's agent chooses every move (cos20 #527)
+            import connections
             import head
-            import httpx
 
-            inner = head.HeadDecider(inner, conf, state_dir(),
-                                     forms=lambda: asyncio.to_thread(world_forms, cfg, httpx.get))
+            def forms() -> Any:
+                return asyncio.to_thread(world_forms, cfg, connections.bounded_get)
+
+            inner = head.HeadDecider(inner, conf, state_dir(), forms=forms)
             # one counter, one limit: the head's, which is the player's to set (D4)
             conf = {**conf, "max_per_day": conf.get("head_max_per_day", 0)}
         if advised or not speech.wanted(conf):  # a dry run plays and says nothing
@@ -1046,12 +1088,11 @@ async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
     reader: Callable[[Path], Any] | None = None
     if head:  # it has taken over: it looks back often, reads if it can (cos20 #527)
         import connections
-        import httpx
 
         conf = {**conf, "max_per_day": conf.get("head_max_per_day", 0)}
         secret = (load_credentials() or {}).get("api_key", "")
         if connections.reads_back(conf):
-            world = await asyncio.to_thread(world_rules, cfg, httpx.get)
+            world = await asyncio.to_thread(world_rules, cfg, connections.bounded_get)
             reader = functools.partial(
                 connections.review_send, conf, wait=connections.AGENT_ANSWER_S)
     entry = await lessons.learn(home, conf, advisor.facts(state), send, force=force,
@@ -1103,6 +1144,9 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
     learning: Any = None
     refusals = Refusals()
     while True:
+        if why := world_refusal(cfg):  # the world's port can change hands while it runs (H9)
+            fall_asleep(CONFIG, why)
+            return
         last = await tick(agent, decider, done_in, refusals)
         if last.get("skipped"):  # the world's tick is late: one choice per tick, so wait for it
             await asyncio.sleep(LATE_TICK_S)
@@ -1121,8 +1165,9 @@ async def with_agent(cfg: dict[str, Any], work: Callable[[Any], Awaitable[Any]])
     """
     from cosmergon_agent.exceptions import AuthenticationError
 
-    if not world_is_safe(cfg):
-        return fall_asleep(CONFIG, WORLD_KEY_SAFE)
+    creds = load_credentials()
+    if why := world_refusal(cfg) or (key_refusal(cfg, creds) if creds else ""):
+        return fall_asleep(CONFIG, why)
     agent = make_agent(cfg)
     try:
         async with agent:
@@ -1222,9 +1267,9 @@ def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
         print(json.dumps({"ok": False, "why": f"nothing to {args.command}: no words on stdin"}))
         return 1
     if args.command == "ask":
-        import httpx
+        import connections
 
-        rules = world_rules(cfg, httpx.get)
+        rules = world_rules(cfg, connections.bounded_get)
         print(json.dumps(asyncio.run(with_agent(cfg, lambda a: ask(a, cfg, text, rules)))))
     else:
         table = cfg.get("instructions", {})
@@ -1240,10 +1285,33 @@ COMMANDS: dict[str, Callable[[argparse.Namespace, dict[str, Any]], int]] = {
 }
 
 
+class CutLines:
+    """stderr as the bar reads it: each line at most ``limit`` characters (H5, §1b). The bar's
+    ``SplitParser`` keeps a whole line before it cuts it, so a line from a traceback or a
+    server's message is cut here, before it can reach the shared shell."""
+
+    def __init__(self, stream: Any, limit: int = 200) -> None:
+        self.stream, self.limit, self.used = stream, limit, 0
+
+    def write(self, text: str) -> int:
+        for index, part in enumerate(text.split("\n")):
+            if index:
+                self.stream.write("\n")
+                self.used = 0
+            kept = part[: max(0, self.limit - self.used)]
+            self.stream.write(kept)
+            self.used += len(kept)
+        return len(text)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.stream, name)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     private_state()
     return COMMANDS[args.command](args, load_config())
 
 if __name__ == "__main__":
+    sys.stderr = CutLines(sys.stderr)
     sys.exit(main())

@@ -413,7 +413,7 @@ def test_an_unknown_decider_sleeps_and_names_the_known_ones(
 
 # --- A question to the advisor ----------------------------------------------------------------
 
-CFG = {"world": {"base_url": "http://world.test"}, "brain": {"advisor": CONF}}
+CFG = {"world": {"base_url": "https://world.test"}, "brain": {"advisor": CONF}}
 
 
 async def test_a_question_is_answered_and_kept_with_the_models_name() -> None:
@@ -504,7 +504,7 @@ def test_the_rules_come_from_the_server_and_an_unreachable_one_is_no_crash() -> 
         raise OSError("unreachable")
 
     rules = json.loads(brain.world_rules(CFG, get))
-    assert asked == ["http://world.test/api/v1/game/info"]
+    assert asked == ["https://world.test/api/v1/game/info"]
     # What a player asks about: not the shop, and per action not what only a program needs.
     assert rules == {
         "actions": {"place_cells": {"description": "Place cells"}},

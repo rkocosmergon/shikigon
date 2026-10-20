@@ -285,7 +285,8 @@ def http_send(
 
     ``transport`` stands in for the network in tests; in use it is ``None``.
     ``patience`` multiplies the time it waits. ``key`` is one the player entered in the
-    panel; a key named through ``api_key_env`` comes first.
+    panel; a key named through ``api_key_env`` comes first. Whose the port is, is read on
+    every call, not once when the server was found (H9, review of 0.1.9).
     """
 
     async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
@@ -295,17 +296,22 @@ def http_send(
         headers = {}
         secret = os.environ.get(str(conf.get("api_key_env") or ""), "") or key
         url = str(conf["base_url"]).rstrip("/") + "/chat/completions"
+        if not connections.ours(url):
+            raise connections.NotOurs(connections.NOT_OURS)
         if secret:
             if not connections.key_may_go_to(url):
                 raise connections.AgentError(connections.KEY_ONLY_SAFE)
             headers["Authorization"] = f"Bearer {secret}"
         timeout = float(conf.get("timeout_s", 20)) * patience
-        async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
-            resp = await client.post(
-                url, json=request_body(conf, messages, max_tokens), headers=headers
-            )
+        async with (
+            httpx.AsyncClient(timeout=timeout, transport=transport) as client,
+            client.stream(
+                "POST", url, json=request_body(conf, messages, max_tokens), headers=headers
+            ) as resp,
+        ):
             resp.raise_for_status()
-            return str(resp.json()["choices"][0]["message"].get("content") or "")
+            body = await connections.bounded_body(resp, timeout)
+        return str(json.loads(body)["choices"][0]["message"].get("content") or "")
 
     return send
 
@@ -459,7 +465,8 @@ async def answer(
     except call_errors() as exc:  # the endpoint did not answer: say so, the game goes on
         import connections
 
-        said = str(exc) if isinstance(exc, connections.AgentError) else type(exc).__name__
+        own_words = (connections.AgentError, connections.NotOurs)
+        said = str(exc) if isinstance(exc, own_words) else type(exc).__name__
         turn["why"] = f"no answer ({said})"[:220]
         return turn
     turn["ms"] = int((time.monotonic() - started) * 1000)

@@ -1,0 +1,393 @@
+"""What leaves the brain, checked when it is sent (H9) — and the classes found beside it.
+
+The marketplace review of 0.1.9 (#12356): whose a port on this machine is, was read when the
+server was found, not when the next question went out. Each test here was red against 0.1.9
+(``c9c348a``). Beside it, the variant review of 20.10.2026 against the reviewer's findings on
+other plugins found four more (cos20 #492): a key not bound to its world (K9), answers read
+without a limit (K6), a model name taken as an option (K12), an agent's children outliving
+its timeout (K14).
+"""
+
+from __future__ import annotations
+
+import ast
+import asyncio
+import json
+import os
+import subprocess
+import sys
+import time
+from collections.abc import Callable
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Self
+
+import httpx
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
+
+import advisor
+import connections
+import shikigon_brain as brain
+
+BRAIN = Path(__file__).resolve().parent.parent / "brain"
+ME = os.getuid()
+STRANGER = 4242 if ME != 4242 else 4343  # a person's account: at or above UID_MIN
+
+
+@pytest.fixture(autouse=True)
+def _private_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+
+
+def _table(port: int, uid: int | None) -> str:
+    """``/proc/net/tcp`` with one listener on ``127.0.0.1:port`` (none for ``uid=None``)."""
+    head = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid\n"
+    if uid is None:
+        return head
+    return head + f"   0: 0100007F:{port:04X} 00000000:0000 0A 0:0 00:0 0 {uid:>5} 0 1 1\n"
+
+
+class Kernel:
+    """Stands in for ``/proc/net/tcp``: who listens on which port, changed by the test."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, port: int, uid: int | None) -> None:
+        self.port, self.uid = port, uid
+        monkeypatch.setattr(connections, "proc_tables", lambda: [_table(self.port, self.uid)])
+        monkeypatch.setattr(connections, "own_addresses", set)
+
+
+def _chat(text: str) -> bytes:
+    return json.dumps({"choices": [{"message": {"content": text}}]}).encode()
+
+
+MODEL = {"via": "http", "base_url": "http://localhost:11434/v1", "model": "m", "timeout_s": 5}
+ASK = [{"role": "user", "content": "the private question"}]
+
+
+# --- H9: a server on this machine is the player's at the moment of sending ---------------------
+
+
+def test_a_question_never_reaches_a_port_another_user_took_after_it_was_found(
+    real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel = Kernel(monkeypatch, 11434, ME)
+    seen: list[bytes] = []
+
+    def server(request: httpx.Request) -> httpx.Response:
+        seen.append(request.content)
+        return httpx.Response(200, content=_chat("ok"))
+
+    send = advisor.http_send(MODEL, transport=httpx.MockTransport(server))
+    assert asyncio.run(send(ASK, 10)) == "ok", "the player's own server answers"
+    kernel.uid = STRANGER  # the server stopped; another user took its port
+    with pytest.raises(connections.NotOurs):
+        asyncio.run(send(ASK, 10))
+    kernel.uid = None  # nobody listens: someone could take it before the connection
+    with pytest.raises(connections.NotOurs):
+        asyncio.run(send(ASK, 10))
+    assert len(seen) == 1, "nothing went out after the port changed hands"
+    assert issubclass(connections.NotOurs, advisor.call_errors()), "the rules play the move"
+
+
+def test_a_question_to_a_port_that_is_not_ours_says_why_in_one_sentence(
+    real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    Kernel(monkeypatch, 11434, STRANGER)
+    turn = asyncio.run(advisor.answer(MODEL, tmp_path, "q?", "facts", []))
+    assert turn["ok"] is False and connections.NOT_OURS in turn["why"]
+
+
+@pytest.mark.parametrize("where", [
+    "http://localhost:8080/v1", "http://127.0.0.2:8080/v1", "http://[::1]:8080/v1",
+    "http://0.0.0.0:8080/v1", "http://localhost/v1",
+])
+def test_a_typed_address_on_this_machine_is_asked_only_on_the_players_port(
+    real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch, where: str,
+) -> None:
+    Kernel(monkeypatch, connections.port_of(where) or 0, STRANGER)
+    asked: list[str] = []
+    found = connections.models_at(where, lambda url, **_: asked.append(url))
+    assert found == {"ok": False, "models": [], "why": connections.NOT_OURS}
+    assert asked == [], "the list was not even asked for"
+
+
+def test_over_https_the_certificate_guards_and_no_name_is_resolved(
+    real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    Kernel(monkeypatch, 443, STRANGER)
+    monkeypatch.setattr(connections, "on_this_machine", lambda *_: pytest.fail("no lookup"))
+    assert connections.ours("https://localhost/v1") and connections.ours("https://cosmergon.com")
+
+
+def test_the_bounded_read_itself_reads_the_port_first(
+    real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    Kernel(monkeypatch, 1234, STRANGER)
+    monkeypatch.setattr(httpx, "stream", lambda *a, **k: pytest.fail("nothing may be sent"))
+    with pytest.raises(connections.NotOurs):
+        connections.bounded_get("http://localhost:1234/v1/models")
+
+
+def test_this_machine_is_found_by_every_name_it_goes_by() -> None:
+    def resolve(host: str, *_: Any) -> list[Any]:
+        table = {"myhost": "127.0.1.1", "api.example": "93.184.216.34", "lan": "192.168.1.20"}
+        if host not in table:
+            raise OSError("no such name")
+        return [(2, 1, 6, "", (table[host], 0))]
+
+    def here(url: str) -> bool:
+        return connections.on_this_machine(url, resolve, own=lambda: {"192.168.1.20"})
+
+    assert here("http://localhost:1/v1") and here("http://x.localhost:1/v1")
+    assert here("http://myhost:11434/v1"), "the machine's own name (127.0.1.1)"
+    assert here("http://lan:11434/v1") and here("http://192.168.1.20:11434/v1"), "own address"
+    assert here("http://[::ffff:127.0.0.1]:1/v1") and here("http://0.0.0.0:1/v1")
+    assert not here("https://api.example/v1") and not here("http://192.168.1.50:1/v1")
+    assert not here("http://unknown.example/v1"), "a name that does not resolve goes nowhere"
+    assert connections.port_of("http://localhost/v1") == 80
+    assert connections.port_of("https://localhost/v1") == 443
+
+
+def test_the_world_on_a_port_of_another_user_gets_nothing(
+    real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    Kernel(monkeypatch, 8080, STRANGER)
+    cfg = {"world": {"base_url": "http://127.0.0.1:8080"}}
+
+    def never(*_: Any, **__: Any) -> Any:
+        pytest.fail("nothing may go to that port")
+
+    with pytest.raises(SystemExit, match="not yours"):
+        brain.register(cfg, never)
+    brain.write_private(brain.credentials_path(), {"agent_id": "a", "api_key": "AGENT-x:s"})
+    assert brain.forget(cfg, never)["why"] == connections.NOT_OURS
+    assert brain.world_rules(cfg, never) == "" and brain.world_forms(cfg, never) == {}
+    with pytest.raises(SystemExit, match="not yours"):
+        brain.make_agent(cfg)
+    said = asyncio.run(brain.with_agent(cfg, never))
+    assert said["why"] == connections.NOT_OURS
+
+
+async def test_the_running_brain_reads_the_worlds_port_before_every_move(
+    real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel = Kernel(monkeypatch, 8080, ME)
+    moves: list[int] = []
+
+    async def tick(*_: Any) -> dict[str, Any]:
+        moves.append(1)
+        kernel.uid = STRANGER  # while it plays, the world's port changes hands
+        return {"action": "wait", "ok": True}
+
+    async def sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr(brain, "tick", tick)
+    monkeypatch.setattr(brain.asyncio, "sleep", sleep)
+    monkeypatch.setattr(brain, "learning_next", lambda *_: None)
+    cfg = {"world": {"base_url": "http://127.0.0.1:8080"}, "brain": {"interval_s": 60}}
+    await brain.run(cfg, SimpleNamespace(state=None), None)
+    assert moves == [1], "no second move went to the other user's port"
+    status = json.loads((brain.state_dir() / "status.json").read_text())
+    assert status["mood"] == brain.ASLEEP and status["last"]["why"] == connections.NOT_OURS
+
+
+# --- the class guard: every place that sends reads the port first -------------------------------
+
+SENDERS = {"get", "post", "delete", "put", "patch", "stream", "request", "AsyncClient", "Client"}
+CHECKS = {"ours", "world_refusal"}
+
+
+def _own_body(fn: ast.AST) -> list[ast.AST]:
+    """The nodes of a function, without those of functions defined inside it."""
+    nodes: list[ast.AST] = []
+    todo = list(ast.iter_child_nodes(fn))
+    while todo:
+        node = todo.pop()
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            continue
+        nodes.append(node)
+        todo.extend(ast.iter_child_nodes(node))
+    return nodes
+
+
+def _name(call: ast.Call) -> str:
+    func = call.func
+    return func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+
+
+def _sends(call: ast.Call, params: set[str]) -> bool:
+    func = call.func
+    if isinstance(func, ast.Attribute) and getattr(func.value, "id", "") == "httpx":
+        return func.attr in SENDERS
+    name = getattr(func, "id", "")
+    return name == "CosmergonAgent" or (name in params and name in {"get", "post", "delete"})
+
+
+def sending_functions() -> dict[str, bool]:
+    """Every function in the brain that opens a connection, and whether it reads the port
+    first. Derived from the code, never a list kept by hand."""
+    found: dict[str, bool] = {}
+    for path in sorted(BRAIN.glob("*.py")):
+        for fn in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            params = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
+            calls = [n for n in _own_body(fn) if isinstance(n, ast.Call)]
+            sends = [c.lineno for c in calls if _sends(c, params)]
+            if not sends:
+                continue
+            checks = [c.lineno for c in calls if _name(c) in CHECKS]
+            found[f"{path.name}:{fn.name}"] = bool(checks) and min(checks) < min(sends)
+    return found
+
+
+def test_every_place_that_sends_reads_the_port_first() -> None:
+    found = sending_functions()
+    assert {"connections.py:bounded_get", "advisor.py:send", "shikigon_brain.py:register",
+            "shikigon_brain.py:make_agent"} <= set(found), sorted(found)
+    assert all(found.values()), [where for where, ok in found.items() if not ok]
+
+
+def test_the_guard_turns_red_on_a_place_that_sends_unchecked(tmp_path: Path) -> None:
+    source = (BRAIN / "connections.py").read_text(encoding="utf-8")
+    unchecked = source.replace("    if not ours(url):\n        raise NotOurs(NOT_OURS)\n", "", 1)
+    assert unchecked != source
+    tree = ast.parse(unchecked)
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+              and n.name == "bounded_get")
+    calls = [n for n in _own_body(fn) if isinstance(n, ast.Call)]
+    assert any(_sends(c, set()) for c in calls) and not any(_name(c) in CHECKS for c in calls)
+
+
+def test_no_unbounded_reader_is_handed_on() -> None:
+    """``httpx.get`` reads a whole answer; the brain hands on ``bounded_get`` instead (K6)."""
+    for path in BRAIN.glob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Attribute) and getattr(node.value, "id", "") == "httpx":
+                assert node.attr != "get", f"{path.name}:{node.lineno}"
+
+
+# --- K9: the world's key goes only to the world that gave it ------------------------------------
+
+
+def _registered(post_url: list[str]) -> Callable[..., Any]:
+    def post(url: str, **_: Any) -> Any:
+        post_url.append(url)
+        body = {"agent_id": "a1", "api_key": "AGENT-a1:secret", "expires_at": ""}
+        return SimpleNamespace(status_code=200, json=lambda: body)
+
+    return post
+
+
+def test_the_worlds_key_goes_only_to_the_world_that_gave_it() -> None:
+    brain.register({"world": {"base_url": "https://world.test/"}}, _registered([]))
+    assert brain.load_credentials()["world"] == "https://world.test:443"
+    other = {"world": {"base_url": "https://other.test"}}
+
+    def never(*_: Any, **__: Any) -> Any:
+        pytest.fail("the key may not go to another world")
+
+    with pytest.raises(SystemExit, match="world.test") as said:
+        brain.make_agent(other)
+    assert "secret" not in str(said.value)
+    assert "world.test" in brain.forget(other, never)["why"]
+    assert "world.test" in asyncio.run(brain.with_agent(other, never))["why"]
+    brain.make_agent({"world": {"base_url": "https://world.test"}})  # its own world: fine
+
+
+def test_a_key_from_before_names_no_world_and_is_bound_to_the_one_it_goes_to_first() -> None:
+    brain.write_private(brain.credentials_path(), {"agent_id": "a", "api_key": "AGENT-a:s"})
+    brain.make_agent({"world": {"base_url": "https://cosmergon.com"}})
+    assert brain.load_credentials()["world"] == "https://cosmergon.com:443"
+    with pytest.raises(SystemExit, match="cosmergon.com"):
+        brain.make_agent({"world": {"base_url": "https://other.test"}})
+
+
+# --- K6: an answer is read only up to its limit -------------------------------------------------
+
+
+def test_a_model_answer_is_read_only_up_to_its_limit() -> None:
+    huge = _chat("x" * (connections.ANSWER_BYTES + 1))
+    send = advisor.http_send(
+        MODEL, transport=httpx.MockTransport(lambda request: httpx.Response(200, content=huge)))
+    with pytest.raises(connections.TooLong):
+        asyncio.run(send(ASK, 10))
+    assert issubclass(connections.TooLong, advisor.call_errors()), "the rules play the move"
+
+
+def test_the_worlds_rules_are_read_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Endless:
+        status_code = 200
+        request = None
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def iter_bytes(self) -> Any:
+            while True:
+                yield b"x" * 65536
+
+    monkeypatch.setattr(httpx, "stream", lambda *a, **k: Endless())
+    cfg = {"world": {"base_url": "https://world.test"}}
+    assert brain.world_rules(cfg, connections.bounded_get) == ""
+
+
+# --- K12: a model name is a name, never an option ------------------------------------------------
+
+
+def test_a_model_name_is_never_an_option_of_the_agents_command() -> None:
+    with pytest.raises(connections.AgentError, match="cannot start with"):
+        connections.agent_argv({"agent": "pi", "agent_model": "--tools=bash"})
+    argv = connections.agent_argv({"agent": "pi", "agent_model": "ollama/qwen3:4b"})
+    assert argv[-2:] == ["--model", "ollama/qwen3:4b"]
+
+
+# --- K14: on a timeout the agent ends with everything it started ---------------------------------
+
+
+def _alive(pid: int) -> bool:
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text()
+    except OSError:
+        return False
+    return stat.rsplit(")", 1)[1].split()[0] != "Z"  # a zombie has ended
+
+
+def test_on_a_timeout_the_agent_ends_with_everything_it_started(tmp_path: Path) -> None:
+    pidfile = tmp_path / "child"
+    argv = ["sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"]
+    with pytest.raises(subprocess.TimeoutExpired):
+        connections.run_in_group(argv, input="", timeout=0.5)
+    child = int(pidfile.read_text())
+    for _ in range(20):
+        if not _alive(child):
+            break
+        time.sleep(0.05)
+    assert not _alive(child), "the agent's own child ended with it"
+    assert connections.run_agent.__defaults__ is not None
+    assert connections.run_in_group in connections.run_agent.__defaults__
+
+
+# --- §1b: the brain's stderr reaches the bar cut, line by line ----------------------------------
+
+
+def test_a_line_on_the_brains_stderr_is_cut_before_the_bar_keeps_it() -> None:
+    import io
+
+    out = io.StringIO()
+    cut = brain.CutLines(out)
+    cut.write("x" * 10_000)
+    cut.write("y" * 10 + "\nshort\n" + "z" * 500)
+    lines = out.getvalue().split("\n")
+    assert [len(line) for line in lines] == [200, 5, 200]
+    assert lines[1] == "short"
+    source = (BRAIN / "shikigon_brain.py").read_text(encoding="utf-8")
+    assert "sys.stderr = CutLines(sys.stderr)" in source, "the running brain uses it"
+

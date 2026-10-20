@@ -4,6 +4,23 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+## 0.1.10 (unreleased)
+
+- **Nothing goes to a port another user took.** Whose a port on this machine is, is now read
+  right before every question, move, look back and model list, not only when the server was
+  found. Before, if your Ollama or LM Studio stopped and another user on the same machine took
+  its port, your next question and the conversation went to them (marketplace review of
+  0.1.9). The same check now covers an address you typed that leads to this machine and a
+  world on this machine. If the port is not yours, Shikigon sends nothing and says why.
+- **The world's key goes only to the world that gave it.** If the config names another world,
+  Shikigon sends nothing and asks you to register a new Shikigon there. A key from an earlier
+  version is bound to the world it goes to first.
+- A model's answer and the world's rules are read only up to 256 KiB and within the move's
+  time; an endless answer cannot fill the brain's memory.
+- When a coding agent does not answer in time, everything it started ends with it.
+- A model name that starts with `-` is refused, so it can never become an option of the
+  agent's command.
+
 ## 0.1.9 (2026-10-20)
 
 - **Your agent sees what each move did.** The world now answers every move with what the move
