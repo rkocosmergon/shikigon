@@ -483,9 +483,12 @@ def test_the_rules_come_from_the_server_and_an_unreachable_one_is_no_crash() -> 
                     # since cos20 #530 every action carries its forms: the head reads them
                     # (world_forms), a player's question does not need them
                     "place_cells": {"description": "Place cells", "use_case": "U1",
-                                    "forms": [{"params": ["field_id", "preset"]}]},
+                                    "forms": [{"params": ["field_id", "preset"]}],
+                                    "your_effect": "Writes cells onto a field you own."},
+                    # since cos20 #533 every action carries your_effect as well
                     "say": {"use_case": "U12", "requires": [], "effects": ["message_sent"],
-                            "forms": [{"params": ["message"]}]},
+                            "forms": [{"params": ["message"]}],
+                            "your_effect": "Posts a short message in a room."},
                 },
                 "products": {"x": 1},
                 "economy": {"e": 1},

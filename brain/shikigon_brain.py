@@ -724,8 +724,10 @@ NOTES = Path(__file__).resolve().parent / "advisor_notes.md"  # what only the pl
 RULE_PARTS = ("actions", "conway_rules", "economy", "tournaments", "player_tiers")
 # Per action, what a program needs and a player does not. Left out to keep the text small
 # enough for a model with a 4,000-token window. ``forms`` (cos20 #530, on every action) more
-# than doubled it; the head reads them on their own (``world_forms``).
-PROGRAM_ONLY = ("use_case", "requires", "effects", "forms")
+# than doubled it; the head reads them on their own (``world_forms``). ``your_effect`` (cos20 #533,
+# a sentence on every action) would grow it again and leave no action "other"; the head learns
+# what its moves did from each answer's ``energy_effect`` instead.
+PROGRAM_ONLY = ("use_case", "requires", "effects", "forms", "your_effect")
 
 
 def chat_path() -> Path:
