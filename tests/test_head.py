@@ -90,16 +90,8 @@ def test_it_is_offered_what_the_world_offers_and_never_an_operator_switch() -> N
     moves = head.offered(state, frozenset())
     assert "start_mission" in moves and "wait" in moves
     assert not {"pause", "resume"} & set(moves)
-    assert "create_field" not in head.offered(state, frozenset({"create_field"})), "paused"
+    assert "transfer_energy" not in head.offered(state, frozenset({"transfer_energy"})), "paused"
     assert "evolve" not in moves, "no field to evolve: the world says eligible_fields []"
-
-
-def test_the_head_is_never_offered_a_gift() -> None:
-    state = _state()
-    assert "transfer_energy" in (state.available_actions or {}), "the world offers it"
-    assert "transfer_energy" not in head.offered(state, frozenset())
-    allowed = {"transfer_energy", "place_cells"}
-    assert head.parse_move(_move("transfer_energy", {"amount": 5}), allowed)[0] is None
 
 
 def test_contract_answers_are_offered_only_when_a_contract_waits() -> None:
@@ -458,7 +450,7 @@ async def test_its_wrong_names_come_back_from_the_world_and_it_mends_them() -> N
 
 
 async def test_a_move_without_a_published_form_still_goes_out_only_as_the_rules_line() -> None:
-    model = Replies(_move("create_field", {"cube_id": "c9"}), _move("wait"))
+    model = Replies(_move("transfer_energy", {"to": "p2", "energy": 5}), _move("wait"))
     decider = head.HeadDecider(StubTree(), CONF, brain.state_dir(), send=model, forms=_forms)
     assert await decider.decide(_sell_state()) == ("wait", {})
     assert "rules' line" in model.asked[1][-1]["content"]

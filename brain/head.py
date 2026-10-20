@@ -43,10 +43,6 @@ HEAD_TOKENS = 220  # room for one move in JSON
 # the first move in head mode fell back with "did not answer". A move comes every ~70 s.
 HEAD_WAIT_S = 45.0
 OPERATOR_SWITCHES = frozenset({"pause", "resume"})  # the player's controls, never a game move
-# Moves the head is never offered. A contract's tribute the world books itself, so any transfer
-# the head chooses is a gift: on the device it gave away 214,612 energy in one move (cos20 #527,
-# 19.10.2026). The rule tree never transfers either, and the advisor only ranks its moves.
-NEVER_OFFERED = OPERATOR_SWITCHES | {"transfer_energy"}
 CONTRACT_ANSWERS = ("accept_contract", "reject_contract")
 # The moves whose form the world states, so the head may write their parameters itself: a
 # mission (its type and schema in the state), an answer to an offered contract, waiting. Any
@@ -112,7 +108,7 @@ def form_lines(forms: list[dict[str, Any]]) -> list[str]:
 def possible(action: str, facts: Any, state: Any) -> bool:
     """Whether the world says this move can work now; the same marks the SDK's ``turn`` reads
     (``cosmergon_agent.play_turn.possible``), on the brain's typed state."""
-    if action in NEVER_OFFERED:
+    if action in OPERATOR_SWITCHES:
         return False
     if not isinstance(facts, dict):
         return True
@@ -283,7 +279,7 @@ def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     if not isinstance(data, dict):
         return None, "the answer was not a JSON object"
     action = str(data.get("action") or "")
-    if action in NEVER_OFFERED or action not in allowed:
+    if action in OPERATOR_SWITCHES or action not in allowed:
         return None, f"'{_short(action, 40)}' is not among the moves offered now"
     params = data.get("params") or {}
     if not isinstance(params, dict):
