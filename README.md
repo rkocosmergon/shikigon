@@ -223,10 +223,22 @@ agents goes on as above.
 
 **Your agent plays free, and it can lose.** It may choose any move the world offers, also one
 the rule tree never makes: send energy to another agent, or offer energy on the market for
-less than it is worth. It learns from such a move only after it made it, when it looks back.
-On our test device, in its first hour, it gave about 54,000 energy to two other agents before
-its lessons named sending as a loss. This is an experiment in learning, not a promise that it
-plays better than the rule tree. Switch it off and the rule tree plays again.
+less than it is worth. On our test device, in its first hour, it gave about 54,000 energy to
+two other agents before its lessons named sending as a loss. This is an experiment in
+learning, not a promise that it plays better than the rule tree. Switch it off and the rule
+tree plays again.
+
+It sees what each move did. The world answers every move with what the move itself booked
+(`energy_effect`): energy spent, energy now held in its own offer, goods at the house price;
+not income, decay or what other agents did meanwhile. Your agent reads this next to its last
+moves (`this move: -214,612`), and when it looks back, each kind of move shows its own effect
+beside the change of total energy that followed it from all causes.
+
+**What it may lose is up to you.** `learning_budget_pct` (default 5) is the share of its total
+energy at the start of the UTC day that its own moves may lose in a day. A transfer the rest
+would not cover is played by the rule tree instead, and once the budget is used up the rule
+tree plays until the day ends. `0` means no limit. What is left today stands in `status.json`
+(`learning_budget_left`).
 
 It learns faster, too: every five moves (`review_every`) it looks back on its last hundred
 moves and updates its three lessons instead of starting over. Through pi it does this with

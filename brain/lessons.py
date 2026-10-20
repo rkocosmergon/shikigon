@@ -136,6 +136,28 @@ def _signed(value: float) -> str:
     return f"{value:+,.0f}"
 
 
+def own_effect(move: dict[str, Any]) -> float | None:
+    """What the move itself booked: free + held + items (cos20 #533); ``None`` without that word.
+
+    Exact and its own, unlike the change after it, which mixes in income, decay and the moves
+    of others. Buying from the house or listing an offer comes out at 0.
+    """
+    effect = move.get("effect")
+    if not isinstance(effect, dict):
+        return None
+    return sum(float(effect.get(k) or 0.0) for k in ("free", "held", "items"))
+
+
+def _kind_line(rows: list[tuple[dict[str, Any], float]]) -> str:
+    """``3 played, 1 refused, +1,200, own effect -500`` for one kind of move."""
+    changes = [change for move, change in rows if move.get("ok") is not False]
+    mean = _signed(sum(changes) / len(changes)) if changes else "-"
+    refused = len(rows) - len(changes)
+    line = f"{len(changes)} played, {refused} refused, {mean}"
+    own = [e for e in (own_effect(move) for move, _ in rows) if e is not None]
+    return line + (f", own effect {_signed(sum(own) / len(own))}" if own else "")
+
+
 def summary(moves: list[dict[str, Any]]) -> str:
     """The moves in numbers, for the advisor: per action, then the best and worst ones.
 
@@ -153,8 +175,10 @@ def summary(moves: list[dict[str, Any]]) -> str:
     lines = [
         (f"{len(moves)} moves, {said} {moves[0][key]:,.0f} -> {moves[-1][key]:,.0f}, "
          f"fields {moves[0].get('fields', '?')} -> {moves[-1].get('fields', '?')}."),
-        f"Change of {said} in the {HORIZON} moves after a played move: {overall} on average.",
-        "Per kind of move (played, refused, the same average for that kind):",
+        (f"Change of {said} in the {HORIZON} moves after a played move, all causes: "
+         f"{overall} on average."),
+        ("Per kind of move (played, refused, that change for the kind; and own effect: what "
+         "the move itself booked, as the world said it):"),
     ]
     from words import move_words  # the player's words, so the lesson comes back in them
 
@@ -162,10 +186,7 @@ def summary(moves: list[dict[str, Any]]) -> str:
     for move, change in judged:
         per_action.setdefault(move_words(move), []).append((move, change))
     for action, rows in sorted(per_action.items(), key=lambda item: -len(item[1])):
-        changes = [change for move, change in rows if move.get("ok") is not False]
-        mean = _signed(sum(changes) / len(changes)) if changes else "-"
-        refused = len(rows) - len(changes)
-        lines.append(f"- {action}: {len(changes)} played, {refused} refused, {mean}")
+        lines.append(f"- {action}: {_kind_line(rows)}")
     ordered = sorted(played, key=lambda row: row[1])
     shown = min(SHOWN, len(ordered) // 2)  # best and worst never share a move
     for title, rows in (("Best", ordered[::-1][:shown]), ("Worst", ordered[:shown])):
@@ -188,8 +209,9 @@ def lesson_messages(facts: str, numbers: str, before: str = "",
     over, so a rule changes only when the numbers say so (cos20 #527)."""
     text = f"The agent now:\n{facts}\n\nIts last moves:\n{numbers}"
     if before:
-        text += ("\n\nWhat you wrote last time. Keep what the numbers still show, change what "
-                 f"they contradict:\n{before}")
+        text += ("\n\nWhat you wrote last time. Keep every rule unless the numbers contradict "
+                 "it; a rule about a move that is not in these numbers stays "
+                 f"(cos20 #533):\n{before}")
     if files_note:
         text += f"\n\n{files_note}"
     return [{"role": "system", "content": LESSON_SYSTEM}, {"role": "user", "content": text}]

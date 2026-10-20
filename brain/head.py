@@ -160,8 +160,27 @@ def recent_moves(home: Path, count: int = RECENT) -> list[str]:
             continue
         why = _short(entry.get("why") or "", WHY_CHARS)
         said = "taken" if entry.get("ok") else f"refused: {why}"
-        lines.append(f"- tick {entry.get('tick')}: {entry['action']} — {said}")
+        lines.append(f"- tick {entry.get('tick')}: {entry['action']} — {said}{_effect(entry)}")
     return lines[-count:]
+
+
+def _effect(entry: dict[str, Any]) -> str:
+    """What the move itself booked, as the world said it (cos20 #533); empty without that word.
+
+    ``, this move: -214,612`` and ``, 100,403 held in an offer`` where energy now sits in its
+    own offer or escrow; goods at the house price where the inventory changed.
+    """
+    effect = entry.get("effect")
+    if not isinstance(effect, dict):
+        return ""
+    said = f", this move: {float(effect.get('free') or 0):+,.0f}"
+    held = float(effect.get("held") or 0)
+    if held:
+        said += f", {held:,.0f} held in an offer"
+    items = float(effect.get("items") or 0)
+    if items:
+        said += f", items {items:+,.0f} at house price"
+    return said
 
 
 def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str, Any]]],
@@ -290,6 +309,48 @@ def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     return (action, params, why), ""
 
 
+BUDGET_FILE = "budget.json"
+
+
+def _today() -> str:
+    return time.strftime("%Y-%m-%d", time.gmtime())
+
+
+def _budget_data(home: Path) -> dict[str, Any]:
+    try:
+        data = json.loads((home / BUDGET_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def budget_left(home: Path, conf: dict[str, Any], total: float | None) -> float | None:
+    """What its own moves may still lose today (cos20 #533); ``None`` = no budget set.
+
+    ``learning_budget_pct`` of the total energy at the start of the UTC day. It still learns from
+    its own mistakes, but no day costs more than you set aside for that: the rules play when the
+    rest would not cover a move.
+    """
+    pct = float(conf.get("learning_budget_pct", 0) or 0)
+    if pct <= 0:
+        return None
+    data = _budget_data(home)
+    if data.get("day") != _today():
+        if total is None:
+            return None
+        data = {"day": _today(), "start": float(total), "spent": 0.0}
+        files.write_json(home / BUDGET_FILE, data)
+    return max(0.0, float(data["start"]) * pct / 100 - float(data.get("spent") or 0.0))
+
+
+def budget_spend(home: Path, loss: float) -> None:
+    """Count what one of its own moves lost today (a positive number)."""
+    data = _budget_data(home)
+    if loss > 0 and data.get("day") == _today():
+        data["spent"] = float(data.get("spent") or 0.0) + loss
+        files.write_json(home / BUDGET_FILE, data)
+
+
 class HeadDecider:
     """The player's agent chooses every move; the rule tree is the fallback.
 
@@ -317,6 +378,7 @@ class HeadDecider:
         self._suggested: list[tuple[str, dict[str, Any]]] = []
         self._state: Any = None
         self._again = 0
+        self.budget_left: float | None = None  # what its own moves may still lose today (#533)
 
     def _limit_reached(self) -> bool:
         limit = int(self.conf.get("head_max_per_day", 0) or 0)
@@ -357,6 +419,9 @@ class HeadDecider:
         if self.last is not None:
             line = any(action == a and _same(params, p) for a, p in self._suggested)
             self.last.update({"choice": action, "why": why, "own": not line})
+        rest, amount = self.budget_left, float(params.get("amount") or 0)
+        if action == "transfer_energy" and rest is not None and amount > rest:
+            return self._rules_play("learning budget: the rest would not cover this")
         if not params or any(action == a and _same(params, p) for a, p in self._suggested):
             return action, params  # a rules' line goes out as the rules send it
         if action in self.forms:  # the world checks its names: a wrong one is refused, honestly
@@ -380,6 +445,10 @@ class HeadDecider:
         # choices against the tree's on the same situation (the goal: better than the tree).
         self.last = {"head": True, "model": advisor.who(self.conf), "ms": 0,
                      "rules": self._rules[0]}
+        total = getattr(getattr(state, "ranking", None), "gesamtenergie", None)
+        self.budget_left = budget_left(self.home, self.conf, total)
+        if self.budget_left == 0:  # used up: the rules play until the day ends, no call is made
+            return self._rules_play("learning budget used up today")
         situation = brief(state, moves, suggested, lessons.latest_text(self.home),
                           recent_moves(self.home), self.forms)
         self._talk = [{"role": "system", "content": HEAD_SYSTEM},

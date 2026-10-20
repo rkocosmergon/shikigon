@@ -506,6 +506,12 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
     kind = mission_kind(action, params)
     if kind:
         done["kind"] = kind  # the journal says "mission: gather spores", not "start_mission"
+    # cos20 #533: what the move itself booked (own bookings, not income or later effects). Only
+    # numbers go into the journal; free + held + items is the move's effect on total energy.
+    data = getattr(result, "data", None)
+    effect = data.get("energy_effect") if isinstance(data, dict) else None
+    if result.success and isinstance(effect, dict):
+        done["effect"] = {k: float(effect.get(k) or 0.0) for k in ("free", "held", "items")}
     return done
 
 
@@ -640,6 +646,7 @@ async def tick(
         last["advice"] = advice
         if advice.get("speech") and last.get("ok"):  # it wrote: say what (speech.py, #526)
             last["words"] = speech.words(advice["speech"])
+        spend_budget(advice, last)
     # its energy and fields when it chose: what it learns from (lessons.py). ``total`` is the
     # goal's measure (energy plus offers, fields, items; cos20 #504): an energy offer moves
     # energy out of the balance but not out of the total.
@@ -651,8 +658,22 @@ async def tick(
         entry["total"] = round(float(total), 1)
     journal(entry)
     await tournament_journal(agent, state)
-    files.write_json(state_dir() / "status.json", snapshot(state, last))
+    status = snapshot(state, last)
+    left = getattr(decider, "budget_left", None)
+    if left is not None:  # a number only, for the bar (threat model §1b)
+        status["learning_budget_left"] = round(float(left))
+    files.write_json(state_dir() / "status.json", status)
     return last
+
+
+def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
+    """Count what a move the head chose itself lost against its learning budget (cos20 #533)."""
+    import head
+    import lessons
+
+    effect = lessons.own_effect(last)
+    if advice.get("head") and advice.get("own") and last.get("ok") and effect is not None:
+        head.budget_spend(state_dir(), -effect)
 
 
 async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[str, Any]:
