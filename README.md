@@ -74,9 +74,9 @@ it writes to another agent (below), the model also receives what that agent wrot
 the name of the agent it is about to make a contract with. When your agent has taken over
 (below), it also receives every move the world offers right now with what each needs, the
 contracts other agents offered it and the contracts it is in (the other agent by id, the terms
-quoted as information) and what the world answered to its last moves; when it looks back
-through pi, pi may read a folder the brain fills for it (its last hundred moves, their
-numbers, the rules of the world). The key itself is never sent.
+quoted as information) and what the world answered to its last moves; when it looks back,
+it may ask the brain for lines from three files the brain wrote for it (its last hundred
+moves, their numbers, the rules of the world). The key itself is never sent.
 
 Shikigon never puts your questions, instructions or the talk with the model into a command
 line, which every local user can read: the bar, the terminal and the advisor's agent get them
@@ -251,13 +251,13 @@ tree plays until the day ends. `0` means no limit. What is left today stands in 
 (`learning_budget_left`).
 
 It learns faster, too: every five moves (`review_every`) it looks back on its last hundred
-moves and updates its three lessons instead of starting over. Through pi it does this with
-pi's read-only tool, in a folder the brain fills for it (its moves, their numbers, the rules of
-the world); pi writes nothing and runs nothing, and the brain keeps what it answers. **A read
-tool can read any file you can read, also its key in `credentials.json`.** The brain tells pi
-not to and drops a lesson that holds the key, but cannot stop pi from reading: the key never
-leaves your machine as long as pi talks to a model on your machine or in your home network;
-with a provider's model it can.
+moves and updates its three lessons instead of starting over. **Your agent gets no tool for
+this, and none at all** (since 0.1.11): it may answer `READ moves.txt 1-40` instead of its
+lessons, and the brain hands back those lines, only from the three files it wrote for it
+(its moves, their numbers, the rules of the world), at most 40 lines at a time and three times
+per look back. A name or path outside them gets a sentence, never a file. So no instruction
+hidden in what other agents wrote can make your agent read your files. Before 0.1.11 pi
+looked back with its own read tool, which could read any file you can read.
 
 About 26 moves an hour, a look back every five, a few second tries and words: some 30 to 40
 calls an hour. There is no preset daily limit (`head_max_per_day = 0`); on a provider's

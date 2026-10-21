@@ -1086,15 +1086,15 @@ async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
     head = decider_name(cfg, conf) == "head"
     world, secret = "", ""
     reader: Callable[[Path], Any] | None = None
-    if head:  # it has taken over: it looks back often, reads if it can (cos20 #527)
+    if head:  # it has taken over: it looks back often and reads (cos20 #527)
         import connections
+        import reading
 
         conf = {**conf, "max_per_day": conf.get("head_max_per_day", 0)}
         secret = (load_credentials() or {}).get("api_key", "")
-        if connections.reads_back(conf):
-            world = await asyncio.to_thread(world_rules, cfg, connections.bounded_get)
-            reader = functools.partial(
-                connections.review_send, conf, wait=connections.AGENT_ANSWER_S)
+        world = await asyncio.to_thread(world_rules, cfg, connections.bounded_get)
+        # it reads through the brain, never with a tool of its own (cos20 #492, K28)
+        reader = functools.partial(reading.mediated, send)
     entry = await lessons.learn(home, conf, advisor.facts(state), send, force=force,
                                 head=head, world=world, reader=reader, secret=secret)
     if entry is not None:

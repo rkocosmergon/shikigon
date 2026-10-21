@@ -257,7 +257,9 @@ def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to
     assert "shikigon-ask-" in kwargs["cwd"] and not Path(kwargs["cwd"]).exists()  # gone again
 
 
-@pytest.mark.parametrize("agent", sorted(connections.AGENTS))
+@pytest.mark.parametrize(  # an agent never tried on a device is not even started (#492, K28)
+    "agent", sorted(n for n, spec in connections.AGENTS.items() if spec.get("proven"))
+)
 def test_the_players_words_never_stand_in_the_agents_arguments(agent: str) -> None:
     """Arguments stand in /proc/<pid>/cmdline for every local user (#11550): stdin only."""
     commands = Commands(stdout=OPENCODE_SAMPLE if agent == "opencode" else "OK")
@@ -277,19 +279,19 @@ def test_what_opencode_answered_is_its_text_not_its_thinking() -> None:
 
 def test_an_agent_that_fails_says_so_in_its_own_last_line() -> None:
     refused = Commands(returncode=1, stderr="warming up\nERROR: unexpected status 401 Unauthorized")
-    with pytest.raises(connections.AgentError, match=r"^Codex is not signed in\.$"):
-        connections.run_agent({"agent": "codex"}, "x", 5.0, run=refused)
+    with pytest.raises(connections.AgentError, match=r"^pi is not signed in\.$"):
+        connections.run_agent({"agent": "pi"}, "x", 5.0, run=refused)
     broken = Commands(returncode=1, stderr="warming up\nError: model not found")
-    with pytest.raises(connections.AgentError, match="Codex: Error: model not found"):
-        connections.run_agent({"agent": "codex"}, "x", 5.0, run=broken)
+    with pytest.raises(connections.AgentError, match="pi: Error: model not found"):
+        connections.run_agent({"agent": "pi"}, "x", 5.0, run=broken)
     silent = Commands(returncode=0, stdout="")
-    with pytest.raises(connections.AgentError, match="Codex: exit 0"):
-        connections.run_agent({"agent": "codex"}, "x", 5.0, run=silent)
-    slow = Commands(fail=subprocess.TimeoutExpired(cmd="codex", timeout=5))
-    with pytest.raises(connections.AgentError, match="Codex did not answer within 5 s"):
-        connections.run_agent({"agent": "codex"}, "x", 5.0, run=slow)
+    with pytest.raises(connections.AgentError, match="pi: exit 0"):
+        connections.run_agent({"agent": "pi"}, "x", 5.0, run=silent)
+    slow = Commands(fail=subprocess.TimeoutExpired(cmd="pi", timeout=5))
+    with pytest.raises(connections.AgentError, match="pi did not answer within 5 s"):
+        connections.run_agent({"agent": "pi"}, "x", 5.0, run=slow)
     with pytest.raises(connections.AgentError, match="could not be started"):
-        connections.run_agent({"agent": "codex"}, "x", 5.0, run=Commands(fail=OSError("gone")))
+        connections.run_agent({"agent": "pi"}, "x", 5.0, run=Commands(fail=OSError("gone")))
 
 
 # --- An agent's allowance is the player's --------------------------------------------------------

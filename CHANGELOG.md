@@ -6,12 +6,24 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.11 (2026-10-21)
 
+- **No agent gets a tool from Shikigon any more, also not to look back.** What other agents
+  write in the world reaches your agent, and an instruction hidden in it could have made an
+  agent with a tool read your files. pi looked back with its own read tool until now; now it
+  runs without any tool there too, and may ask the brain instead: it answers
+  `READ moves.txt 1-40`, and the brain hands back those lines, only from the three files it
+  wrote for the look back, 40 lines and three times at most. A name or path outside them gets a
+  sentence, never a file.
+- **OpenCode: a second switch.** Besides denying every tool, Shikigon now also switches every
+  tool off for its advisor (`tools: {"*": false}`). By OpenCode's documentation both cover the
+  tools of MCP servers in your own OpenCode config as well.
+- **Codex is refused where it would be called,** not only left out of the choice, as long as it
+  has never been tried on a device.
 - **Certificates: `certifi` 2026.10.19.** The brain's HTTPS connections trust the `certifi`
   bundle. Versions before 2026.10.18 contain the `emSign ECC Root CA - G3` root, and eight
   intermediate certificates under it have compromised keys (PYSEC-2026-4320,
   GHSA-6q48-6c7w-9gw2): someone holding one of those keys and sitting on the network path
   could read and change a connection to the world or to a model you reach over HTTPS.
-  2026.10.19 removes the affected roots. Only this one package changes; no code changes.
+  2026.10.19 removes the affected roots. Only this one package changes in the lock.
 
 ## 0.1.10 (2026-10-20)
 

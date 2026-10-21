@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import files
+import reading
 
 Send = Callable[[list[dict[str, str]], int], Awaitable[str]]
 
@@ -198,11 +199,6 @@ def summary(moves: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-FILES_NOTE = ("In your working folder: moves.txt (its last moves, one per line, with what the "
-              "world answered), rated.txt (the numbers above), world.txt (the rules as the "
-              "world states them). Read what helps you.")
-
-
 def lesson_messages(facts: str, numbers: str, before: str = "",
                     files_note: str = "") -> list[dict[str, str]]:  # fmt: skip
     """``before``: the lesson it wrote last time. The head updates it instead of starting
@@ -329,8 +325,8 @@ async def learn(
 
     ``head``: the player's agent has taken over (cos20 #527). It looks back every
     ``review_every`` moves on the last ``HEAD_WINDOW`` and updates its last lesson. ``reader``
-    makes a sender for an agent that may read (``connections.review_send``), given the folder
-    with its moves, the numbers and ``world``; without one, the numbers go in the prompt.
+    makes a sender that lets it read, through the brain, the folder with its moves, the
+    numbers and ``world`` (``reading.mediated``); without one, the numbers go in the prompt.
     """
     import advisor
 
@@ -352,7 +348,8 @@ async def learn(
     before = latest_text(home) if head else ""
     note = ""
     if head and reader is not None:
-        send, note = reader(review_folder(home, moves, numbers, world)), FILES_NOTE
+        folder = review_folder(home, moves, numbers, world)
+        send, note = reader(folder), reading.note(folder)
     started = time.monotonic()
     try:
         text = await send(lesson_messages(facts, numbers, before, note), LESSON_TOKENS)
@@ -366,8 +363,8 @@ async def learn(
         entry["why"] = f"the answer did not fit: {unfit}"
         return entry
     if secret and any(secret in value for value in lesson.values()):
-        # an agent that may read can read the key file: a lesson with the key is never kept
-        # (it would stand in the bar and go back to the model, threat model G8)
+        # no agent can read the key file any more (cos20 #492, K28); a lesson with the key is
+        # still never kept: it would stand in the bar and go back to the model (G8)
         entry["why"] = "the answer held its key and was dropped"
         return entry
     keep(home, {"at": entry["at"], "tick": entry["tick"], "model": entry["model"],

@@ -327,18 +327,33 @@ async def test_an_agent_that_may_read_gets_a_folder_and_never_keeps_the_key() ->
     assert lessons.kept(home) == []
 
 
-def test_the_look_back_may_read_and_nothing_else() -> None:
-    argv = connections.agent_argv({"agent": "pi", "agent_model": "m"}, review=True)
-    assert argv[argv.index("--tools") + 1] == "read"
-    assert not {"write", "edit", "bash"} & set(argv)
-    assert "--append-system-prompt" in argv and "--system-prompt" not in argv, "keeps pi's tools"
-    assert "--no-tools" in connections.agent_argv({"agent": "pi"}), "the move stays without"
-    assert connections.reads_back({"via": "agent", "agent": "pi"})
-    assert not connections.reads_back({"via": "agent", "agent": "opencode"})
-    assert not connections.reads_back({"via": "http"})
+def test_no_agent_is_ever_given_a_tool() -> None:
+    """cos20 #492, K28 (marketplace review 20.10.2026: #6429 #12388 #12061): text other agents
+    chose reaches the model, so no agent command carries a tool. The head reads through the
+    brain (``reading``); before 0.1.11 pi looked back with ``--tools read``."""
+    for name, spec in connections.AGENTS.items():
+        argv = connections.agent_argv({"agent": name, "agent_model": "m"})
+        assert "--tools" not in argv, name
+        assert "review_argv" not in spec, name
+    pi = connections.agent_argv({"agent": "pi"})
+    assert {"--no-tools", "--no-mcp"} <= set(pi)
+    advisor_agent = connections.OPENCODE_ADVISOR["agent"]["shikigon-advisor"]
+    assert advisor_agent["tools"] == {"*": False}, "MCP tools of the player's config too"
+    assert advisor_agent["permission"] == {"*": "deny"}
 
 
-def test_the_look_back_runs_in_its_folder_and_the_prompt_goes_on_stdin(tmp_path: Path) -> None:
+def test_an_agent_never_tried_on_a_device_is_refused_where_it_is_sent() -> None:
+    """Threat model §0 rule 5: checked when sending, not only when offering (K28)."""
+    started: list[Any] = []
+
+    with pytest.raises(connections.AgentError, match="not offered"):
+        connections.run_agent({"agent": "codex"}, "question", 5, lambda *a, **k: started.append(a))
+    assert started == [], "the agent was never started"
+
+
+def test_the_look_back_runs_in_an_empty_folder_and_the_prompt_goes_on_stdin(
+    tmp_path: Path,
+) -> None:
     seen: dict[str, Any] = {}
 
     def run(argv: list[str], **kw: Any) -> Any:
@@ -347,11 +362,11 @@ def test_the_look_back_runs_in_its_folder_and_the_prompt_goes_on_stdin(tmp_path:
 
     import asyncio
 
-    send = connections.review_send({"agent": "pi"}, tmp_path, 5, run)
+    send = connections.agent_send({"agent": "pi"}, 5, run)
     asyncio.run(send([{"role": "user", "content": "MARKER-527"}], 10))
-    assert seen["cwd"] == str(tmp_path)
+    assert seen["cwd"] != str(tmp_path) and "shikigon-ask-" in seen["cwd"]
     assert "MARKER-527" in seen["input"] and "MARKER-527" not in " ".join(seen["argv"])
-    assert "You may read the files" in seen["input"]
+    assert "do not read or write files" in seen["input"]
 
 
 async def test_a_move_waits_long_enough_for_the_head_and_says_why_it_fell_back(
