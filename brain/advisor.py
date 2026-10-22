@@ -281,38 +281,26 @@ def http_send(
     """The call to the endpoint, over the HTTP client the SDK already brings.
 
     ``transport`` stands in for the network in tests; in use it is ``None``.
-    ``patience`` multiplies the time it waits. ``home`` is the state folder with a key the
-    player entered in the panel. Which key goes, and whose the port is, is read on every call,
-    where it is sent (``connections.secret_for``; H3, H9).
+    ``patience`` multiplies the time it waits, and that time holds the whole exchange, from the
+    request to the last byte of the answer (``connections.exchange``): a move waits that long
+    and then the rules play. ``home`` is the state folder with a key the player entered in the
+    panel. Which key goes is read on every call (``connections.secret_for``); whether it may go
+    there, and whose the port is, the door checks where it sends (H3, H9).
     """
 
     async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
         import connections
-        import httpx
 
-        headers = dict(connections.PLAIN)
         url = str(conf["base_url"]).rstrip("/") + "/chat/completions"
         secret = connections.secret_for(home, conf, url)
-        with_key = bool(secret) or connections.credentials_in(url)
-        if not connections.ours(url, with_key=with_key):
-            raise connections.NotOurs(connections.NOT_OURS)
-        if with_key and not connections.key_may_go_to(url):
-            raise connections.AgentError(connections.KEY_ONLY_SAFE)
-        if secret:
-            headers["Authorization"] = f"Bearer {secret}"
+        headers = {"Authorization": f"Bearer {secret}"} if secret else {}
         timeout = float(conf.get("timeout_s", 20)) * patience
-        local = connections.on_this_machine(url)
-        trace = {"trace": connections.async_peer_check(local, with_key)}
-        async with (
-            httpx.AsyncClient(timeout=timeout, transport=transport, trust_env=not local) as client,
-            client.stream(
-                "POST", url, json=request_body(conf, messages, max_tokens), headers=headers,
-                extensions=trace,
-            ) as resp,
-        ):
-            resp.raise_for_status()
-            body = await connections.bounded_body(resp, timeout)
-        return str(files.loads(body)["choices"][0]["message"].get("content") or "")
+        answer = await connections.exchange(
+            "POST", url, headers=headers, payload=request_body(conf, messages, max_tokens),
+            timeout=timeout, seconds=timeout, transport=transport,
+        )
+        answer.raise_for_status()
+        return str(answer.json()["choices"][0]["message"].get("content") or "")
 
     return send
 

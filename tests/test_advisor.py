@@ -23,7 +23,7 @@ from conftest import wire
 from test_brain import FakeAgent
 
 CONF = {
-    "base_url": "http://model.test/v1",
+    "base_url": "https://model.test/v1",
     "model": "test-model",
     "reasoning_effort": "none",
     "every": 1,
@@ -313,26 +313,30 @@ async def test_a_key_never_goes_over_plain_http_to_the_open_internet() -> None:
 
     plain = advisor.http_send({**CONF, "base_url": "http://model.test/v1"}, transport=transport,
                               home=kept("http://model.test/v1"))
-    with pytest.raises(connections.AgentError, match="only over https"):
+    with pytest.raises(connections.AgentError, match="goes only to this machine"):
         await plain([{"role": "user", "content": "hi"}], 10)
     assert asked == [], "nothing left the machine"
     # 0.1.4: a network that only looks like home gets no key in plain text (cos20 #492, #11798)
     lan = advisor.http_send({**CONF, "base_url": "http://10.20.30.40:11434/v1"},
                             transport=transport, home=kept("http://10.20.30.40:11434/v1"))
-    with pytest.raises(connections.AgentError, match="only over https"):
+    with pytest.raises(connections.AgentError, match="goes only to this machine"):
         await lan([{"role": "user", "content": "hi"}], 10)
     assert asked == []
     here = advisor.http_send({**CONF, "base_url": "http://127.0.0.1:11434/v1"},
                              transport=transport, home=kept("http://127.0.0.1:11434/v1"))
     assert await here([{"role": "user", "content": "hi"}], 10) == "ok"
+    # Since 0.1.13 also without a key (cos20 #492, third review, decision A): the talk is the
+    # player's, and plain http to another machine is read by anyone on the way.
     without = advisor.http_send({**CONF, "base_url": "http://model.test/v1"}, transport=transport)
-    assert await without([{"role": "user", "content": "hi"}], 10) == "ok"  # no key, no rule
+    with pytest.raises(connections.AgentError, match="goes only to this machine"):
+        await without([{"role": "user", "content": "hi"}], 10)
+    assert asked == ["http://127.0.0.1:11434/v1/chat/completions"], "only the one on this machine"
 
 
 async def test_an_endpoint_that_fails_is_a_fallback_not_a_crash() -> None:
     import httpx
 
-    down = httpx.MockTransport(lambda request: httpx.Response(503))
+    down = httpx.MockTransport(lambda request: wire(503))  # a body still on the wire
     state = _state()
     decider = advisor.AdvisedDecider(
         _tree(), CONF, brain.state_dir(), send=advisor.http_send(CONF, transport=down)

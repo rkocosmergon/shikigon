@@ -148,10 +148,11 @@ Item {
   }
 
   // Said once, to someone who has just installed it and sees two closed eyes.
+  // umask 077: what is made here, the state folder among it, is the player's alone (K2).
   Process {
     id: greeter
     command: ["sh", "-c",
-      'test -e "$1/greeted" && exit 0; mkdir -p "$1" && : > "$1/greeted" && '
+      'umask 077; test -e "$1/greeted" && exit 0; mkdir -p "$1" && : > "$1/greeted" && '
       + 'notify-send -a Shikigon "Shikigon moved into your bar" "Click its eyes to wake it."',
       "sh", root.stateDir]
   }
@@ -221,7 +222,7 @@ Item {
     property string body: ""
     property string saved: ""
     command: ["sh", "-c",
-      'mkdir -p "$4" && printf %s "$3" > "$4/tips.json.tmp" '
+      'umask 077; mkdir -p "$4" && printf %s "$3" > "$4/tips.json.tmp" '
       + '&& mv "$4/tips.json.tmp" "$4/tips.json" && '
       + 'notify-send -a Shikigon "$1" "$2"',
       "sh", title, body, saved, root.stateDir]

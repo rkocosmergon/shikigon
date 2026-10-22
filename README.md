@@ -76,7 +76,9 @@ the name of the agent it is about to make a contract with. When your agent has t
 contracts other agents offered it and the contracts it is in (the other agent by id, the terms
 quoted as information) and what the world answered to its last moves; when it looks back,
 it may ask the brain for lines from three files the brain wrote for it (its last hundred
-moves, their numbers, the rules of the world). The key itself is never sent.
+moves, their numbers, the rules of the world). The key itself is never sent. All of it goes
+over https, or stays on this machine: never in plain text over a network, where anyone on the
+way could read it (below, "an address of its own").
 
 Shikigon never puts your questions, instructions or the talk with the model into a command
 line, which every local user can read: the bar, the terminal and the advisor's agent get them
@@ -95,7 +97,8 @@ On your desktop, the bar runs inside the shell and touches only this:
   time something new happens; the hint's text is escaped, markup does not reach the notifier.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your
   model's agent (pi or OpenCode) or Omarchy's agent setup. When you let your agent take over,
-  the brain calls it on every move, and pi every five moves with its read-only tool (below).
+  the brain calls it on every move, and every five moves for a look back; it gets no tool, and
+  reads only lines the brain hands it (below).
 - **Files:** its folder above, and only small files the brain keeps small for it: the status,
   the last twelve journal lines, the last three exchanges of the talk and its lessons. The
   last three only while the panel is open (the talk also while an answer to your question is on
@@ -172,14 +175,20 @@ shows **WHO ANSWERS?**, one list:
   connection it really made, before a byte of the question leaves: a name that points elsewhere
   when connecting, or a proxy set in your environment, cannot lead past the check.
 - **set up an agent in Omarchy…** opens Omarchy's own chooser; signing in is the agent's part.
-- **an address of its own…**: type any OpenAI-compatible address and pick one of the models it
-  offers. It asks for a key only if the address wants one; the key is then kept in a file only
+- **an address of its own…**: type any OpenAI-compatible address over https, or one on this
+  machine (`localhost`), and pick one of the models it offers. Plain http to another machine is
+  refused: your question and the situation would cross the network readable for anyone on the
+  way, and in a café `192.168.1.50` or `macmini.local` can be someone else's machine, which the
+  advice and the moves would then reach on their own. For a model server elsewhere in your
+  home, give it https, or open a tunnel (`ssh -L 11434:localhost:11434 macmini`, then
+  `http://localhost:11434/v1`), or let your agent (pi, OpenCode) reach it. That connection is
+  then your agent's, set up in your agent, and Shikigon cannot see whether it is encrypted.
+  It asks for a key only if the address wants one; the key is then kept in a file only
   you can read, and it goes only to the address you typed it for, and only over https or to a
   server on this machine (localhost) that runs as you, not as a system service, and never
   through a proxy set in your environment: never in plain text over a network, also not one that looks like
   home — in a café `192.168.1.50` or `macmini.local` can be someone else. A name and a password
-  in the address (`https://me:pw@…`) are a key too and keep the same rule. A model server in your
-  home network usually wants no key; one that does is reached over https. The same holds for
+  in the address (`https://me:pw@…`) are a key too and keep the same rule. The same holds for
   the world: its key goes only to an `https` address (or this machine), and only to the world
   that gave it. If you point the config at another world, Shikigon says so and sends nothing;
   register a new Shikigon there. A model's answer is read uncompressed and only up to 256 KiB.

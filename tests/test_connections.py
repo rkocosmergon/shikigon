@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 
 import advisor
 import connections
+import files
 import shikigon_brain as brain
 
 OPENCODE_SAMPLE = """\
@@ -157,15 +158,15 @@ def test_nothing_found_is_an_empty_list_not_an_error() -> None:
 
 def test_an_address_says_its_models_or_that_it_wants_a_key_or_that_it_is_away() -> None:
     there = connections.models_at(
-        "http://x/v1/", lambda url, **_: _answer(200, {"data": [{"id": "a"}, {"id": "b"}]}))
+        "https://x/v1/", lambda url, **_: _answer(200, {"data": [{"id": "a"}, {"id": "b"}]}))
     assert there == {"ok": True, "models": ["a", "b"], "why": ""}
-    locked = connections.models_at("http://x/v1", lambda url, **_: _answer(401))
+    locked = connections.models_at("https://x/v1", lambda url, **_: _answer(401))
     assert locked["needs_key"] is True and locked["ok"] is False
 
     def away(url: str, **_: Any) -> Any:
         raise OSError("refused")
 
-    assert "no answer from x " in connections.models_at("http://x/v1", away)["why"]
+    assert "no answer from x " in connections.models_at("https://x/v1", away)["why"]
     sent: dict[str, Any] = {}
     connections.models_at("https://x/v1", lambda url, **kw: sent.update(kw) or _answer(200, {}),
                           key="sk-secret")
@@ -254,7 +255,8 @@ def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to
     assert text not in argv
     assert "shikigon-advisor" in kwargs["env"]["OPENCODE_CONFIG_CONTENT"]
     assert "PATH" in kwargs["env"], "the user's own environment stays"
-    assert "shikigon-run-" in kwargs["cwd"] and not Path(kwargs["cwd"]).exists()  # gone again
+    assert Path(kwargs["cwd"]).parent == files.state_dir() / "run"  # the player's own folder
+    assert not Path(kwargs["cwd"]).exists()  # gone again
 
 
 @pytest.mark.parametrize(  # an agent never tried on a device is not even started (#492, K28)

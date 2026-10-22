@@ -32,7 +32,9 @@ interval_s = 60
 # Only the advisor you picked is called. What it is told is listed in the README under
 # "What it sends". Never the key.
 [brain.advisor]
-# Any OpenAI-compatible endpoint. Ollama on this machine: "http://localhost:11434/v1"
+# Any OpenAI-compatible endpoint over https, or on this machine. Ollama here:
+# "http://localhost:11434/v1". Plain http to another machine is refused: the talk would cross
+# the network readable; for a model server elsewhere use https or an ssh tunnel (README).
 base_url = ""
 model = ""
 # "none" keeps a thinking model from spending its whole answer on thinking.

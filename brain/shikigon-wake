@@ -11,6 +11,8 @@
 # Not guarded against running twice at once, and an update rebuilds the environment under a
 # running brain: whoever calls it (the bar) starts it once and stops the brain first.
 set -uo pipefail
+# Everything made here is the player's alone: the state folder, the log, the environment (K2).
+umask 077
 
 here="$(dirname "$(readlink -f "$0")")"
 lock="$here/../requirements.lock"
@@ -19,7 +21,8 @@ state="${XDG_STATE_HOME:-$HOME/.local/state}/shikigon"
 log="$state/setup.log"
 mkdir -p "$state" "$(dirname "$venv")"
 # The talk, the journal and the lessons are the player's alone, also where the home is not
-# 0700 and in a folder an earlier version made with the default mode (#11550).
+# 0700 and in a folder an earlier version made with the default mode (#11550). A file an
+# earlier version left readable for others the brain renews at its start (files.keep_private).
 chmod 700 "$state"
 
 say() {  # stage [sentence]

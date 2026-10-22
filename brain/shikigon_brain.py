@@ -29,7 +29,9 @@ import asyncio
 import functools
 import json
 import os
+import re
 import shutil
+import signal
 import sys
 import time
 import tomllib
@@ -59,16 +61,15 @@ def config_path() -> Path:
 
 
 def state_dir() -> Path:
-    base = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
-    return base / "shikigon"
+    return files.state_dir()
 
 
 def private_state() -> Path:
     """The state folder, the player's alone (0700), also when a command by hand comes before
-    the first wake (cos20 #492 F8: it was made with the default mode then)."""
-    home = state_dir()
-    home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(home, 0o700)
+    the first wake (cos20 #492 F8: it was made with the default mode then), and every file in
+    it 0600, as a new file where an old one was readable for others (``files.keep_private``)."""
+    home = files.private_folder(state_dir())
+    files.keep_private(home)
     return home
 
 
@@ -182,7 +183,7 @@ def world_refusal(cfg: dict[str, Any]) -> str:
 def world_peer_check(cfg: dict[str, Any]) -> Callable[[str, int], str]:
     """Whom a new connection to the world really reached, asked by the SDK before a byte of the
     request goes over it (``peer_check``, cosmergon-agent >= 0.27.29): the same last word the
-    brain's own calls have (``connections.peer_check``). A name can resolve elsewhere after
+    brain's own calls have (``connections.async_peer_check``). A name can resolve elsewhere after
     ``world_send_check``, and a proxy from the environment connects to itself."""
     import connections
 
@@ -1349,10 +1350,17 @@ COMMANDS: dict[str, Callable[[argparse.Namespace, dict[str, Any]], int]] = {
 }
 
 
+# What a terminal reads as a command: C0 (ESC among them), DEL and the 8-bit C1 (CSI, OSC).
+CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
 class CutLines:
     """stderr as the bar reads it: each line at most ``limit`` characters (H5, §1b). The bar's
     ``SplitParser`` keeps a whole line before it cuts it, so a line from a traceback or a
-    server's message is cut here, before it can reach the shared shell."""
+    server's message is cut here, before it can reach the shared shell.
+
+    Without control characters (K37): a world's sentence on a refused registration goes on
+    stderr, and the wake script and ``register`` by hand show it in a terminal."""
 
     def __init__(self, stream: Any, limit: int = 200) -> None:
         self.stream, self.limit, self.used = stream, limit, 0
@@ -1362,7 +1370,7 @@ class CutLines:
             if index:
                 self.stream.write("\n")
                 self.used = 0
-            kept = part[: max(0, self.limit - self.used)]
+            kept = CONTROL.sub("", part)[: max(0, self.limit - self.used)]
             self.stream.write(kept)
             self.used += len(kept)
         return len(text)
@@ -1371,11 +1379,28 @@ class CutLines:
         return getattr(self.stream, name)
 
 
+def end_with_its_agents() -> None:
+    """The agents the brain started end with it (K14, cos20 #492): when the bar stops it
+    (SIGTERM, on every change of "advise on moves"), when its terminal closes (SIGHUP) or on
+    Ctrl+C. An agent runs in a session of its own (``connections.run_in_group``); until 0.1.13 it
+    went on to its own end then, outside every limit."""
+    import connections
+
+    def end(signum: int, _frame: Any) -> None:
+        connections.end_groups()
+        raise SystemExit(128 + signum)
+
+    for signum in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        signal.signal(signum, end)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     private_state()
     return COMMANDS[args.command](args, load_config())
 
 if __name__ == "__main__":
+    os.umask(0o077)  # every file and folder it makes is the player's alone (K2)
     sys.stderr = CutLines(sys.stderr)
+    end_with_its_agents()
     sys.exit(main())

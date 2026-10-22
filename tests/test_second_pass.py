@@ -97,11 +97,13 @@ def test_a_name_and_password_in_an_address_count_as_a_key() -> None:
 def test_a_password_in_an_address_never_goes_over_plain_http_to_another_machine() -> None:
     url = f"http://me:pw@{ELSEWHERE}:11434/v1"
     started = time.monotonic()
-    assert connections.models_at(url, connections.bounded_get)["why"] == connections.KEY_ONLY_SAFE
-    with pytest.raises(connections.AgentError, match="only over https"):
+    # Since 0.1.13 nothing goes over plain http to another machine (decision A), so the rule
+    # for the talk says no before the one for keys has to.
+    assert connections.models_at(url, connections.bounded_get)["why"] == connections.TALK_ONLY_SAFE
+    with pytest.raises(connections.AgentError, match="goes only to this machine"):
         connections.bounded_get(url + "/models")  # the same rule where it is sent
     send = advisor.http_send({"base_url": url, "model": "m", "timeout_s": 1})
-    with pytest.raises(connections.AgentError, match="only over https"):
+    with pytest.raises(connections.AgentError, match="goes only to this machine"):
         asyncio.run(send(ASK, 10))
     assert time.monotonic() - started < 1, "refused before any connection was tried"
 

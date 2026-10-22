@@ -15,6 +15,8 @@ Three rules this file keeps (cos20 #451, concept 10.5d):
 
 1. An agent is called without tools and approvals, in an empty folder; every other program
    started here (its model listing, ``mise``) runs in an empty folder too (``in_empty_folder``).
+   The folder lies in the player's own state folder, so none of the folders above it is
+   writable by another user: OpenCode reads its configuration from every folder up to ``/``.
 2. Looking at what is installed never starts a placeholder. On Omarchy the agents' commands
    are stubs that install the agent the first time they run.
 3. An agent's allowance is the player's: no advice on every move through an agent.
@@ -23,6 +25,7 @@ Three rules this file keeps (cos20 #451, concept 10.5d):
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
 import ipaddress
 import itertools
@@ -37,7 +40,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -132,7 +135,12 @@ AGENTS: dict[str, dict[str, Any]] = {
         "whose": "your own keys",
         "argv": ["opencode", "run", "--pure", "--thinking", "--agent", "shikigon-advisor",
                  "--format", "json"],
-        "env": {"OPENCODE_CONFIG_CONTENT": json.dumps(OPENCODE_ADVISOR)},
+        # No project configuration at all (cos20 #492, third review): outside a Git folder
+        # OpenCode 1.19 reads every opencode.json and .opencode/ from its working folder up to
+        # `/` (project.ts:217, config/paths.ts:10-41), and a configured MCP server starts on
+        # the first question whatever the agent may do (session/tools.ts:136).
+        "env": {"OPENCODE_CONFIG_CONTENT": json.dumps(OPENCODE_ADVISOR),
+                "OPENCODE_DISABLE_PROJECT_CONFIG": "1"},
         "model_flag": ["-m", "{model}"],
         "answer": "opencode-json",
         "sign_in": ["opencode", "auth", "login"],
@@ -200,9 +208,23 @@ def in_empty_folder(run: Callable[..., Any], argv: list[str], **kwargs: Any) -> 
     folder, and the brain's is wherever it was started: by hand that can be a folder someone
     else wrote (threat model K36). Until 0.1.12 only the question went to an empty folder, the
     listing and ``mise`` ran in the brain's (cos20 #492 B6).
+
+    The empty folder lies in the state folder (``run/``, 0700), not in ``/tmp``: a program that
+    looks for its configuration in the folders above its own (OpenCode, up to ``/``) found
+    ``/tmp``, where any local user may put a file. Until 0.1.13 it did (cos20 #492, third
+    review).
     """
-    with tempfile.TemporaryDirectory(prefix="shikigon-run-") as empty:
+    # Each level made private by itself: ``mkdir(parents=True)`` gives the folders it adds the
+    # default mode, whatever mode it is told.
+    parent = files.private_folder(files.private_folder(files.state_dir()) / "run")
+    with tempfile.TemporaryDirectory(prefix="run-", dir=parent) as empty:
         return run(argv, cwd=empty, **kwargs)
+
+
+def agent_env(agent: str) -> dict[str, str]:
+    """The environment an agent's command runs in: the player's own, and what Shikigon sets
+    for this agent (``AGENTS[...]["env"]``), for the question and for the model listing alike."""
+    return {**os.environ, **AGENTS.get(agent, {}).get("env", {})}
 
 
 # ---------- the choice ----------------------------------------------------------------------
@@ -368,8 +390,29 @@ PLAIN = {"Accept-Encoding": "identity"}  # every answer as it is (K29)
 
 
 class TooLong(ValueError):
-    """An answer past ``ANSWER_BYTES`` or ``ANSWER_SECONDS``, or one that came compressed (an
-    odd answer, like bad JSON)."""
+    """An answer past ``ANSWER_BYTES``, or one that came compressed (an odd answer, like bad
+    JSON). One past its time ends in ``TimeoutError`` (``exchange``)."""
+
+
+TALK_ONLY_SAFE = ("plain http goes only to this machine: for a model server elsewhere use "
+                  "https, an ssh tunnel (ssh -L 11434:localhost:11434 <host>, then "
+                  "http://localhost:11434/v1) or your agent")
+
+
+def talk_may_go_to(base_url: str) -> bool:
+    """Whatever the brain sends travels encrypted (https) or stays on this machine.
+
+    The question, the talk so far and the situation are the player's, and the café argument of
+    ``key_may_go_to`` holds for them word for word: at home ``192.168.178.20`` is the player's
+    model server, in a café the same address is someone else, and the head, the advice and the
+    speaking send there on their own, with no one to read a warning at that moment. Until 0.1.13
+    plain http went to any address that got no key (cos20 #492, third review; panel 22.10.2026,
+    decision A). Unlike for a key, a proxy in the environment does not count against this
+    machine here: the brain's own calls to it never use one (``trust_env``)."""
+    parts = urllib.parse.urlsplit(base_url)
+    if parts.scheme == "https":
+        return True
+    return parts.scheme == "http" and on_this_machine(base_url)
 
 
 def refuse_encoded(headers: Any) -> None:
@@ -384,59 +427,84 @@ def refuse_encoded(headers: Any) -> None:
         raise TooLong("the answer came compressed, though asked for as it is")
 
 
-async def bounded_body(resp: Any, seconds: float) -> bytes:
-    """A streamed answer, read raw only up to ``ANSWER_BYTES`` and ``seconds`` in all: a server
-    that sends without end, a byte at a time, or compressed cannot fill the brain's memory or
-    hold it (the class of marketplace reviews #12064, #12454; a model server can be plain http
-    in the LAN)."""
+async def bounded_body(resp: Any) -> bytes:
+    """A streamed answer, read raw only up to ``ANSWER_BYTES``: a server that sends without end
+    or compressed cannot fill the brain's memory (the class of marketplace reviews #12064,
+    #12454). Its time is the deadline of the whole exchange (``exchange``)."""
     refuse_encoded(resp.headers)
-    started = time.monotonic()
     body = bytearray()
     async for chunk in resp.aiter_raw():
         body += chunk
-        if len(body) > ANSWER_BYTES or time.monotonic() - started > seconds:
+        if len(body) > ANSWER_BYTES:
             raise TooLong("the answer was too long")
     return bytes(body)
 
 
-def bounded_call(method: str, url: str, *, headers: dict[str, str] | None = None,
-                 payload: Any = None, timeout: float = 4,
-                 seconds: float = ANSWER_SECONDS) -> Any:
-    """One HTTP call with a limit on the raw body and on the whole time, not only on each read.
+async def exchange(method: str, url: str, *, headers: dict[str, str] | None = None,
+                   payload: Any = None, timeout: float = 4, seconds: float = ANSWER_SECONDS,
+                   transport: Any = None) -> Any:
+    """The one door for every HTTP call of the brain: the request and its whole answer within
+    ``seconds``, the raw body at most ``ANSWER_BYTES``, nothing compressed.
 
-    Nothing goes to a port on this machine that is not the player's right now (H9): read
-    before connecting, and at the socket again once connected (``peer_check``). A call that
-    carries a key, in a header or as a name and password in the address, goes only over https
-    or to the player's own server, never to a system account's (H3, K33)."""
+    httpx bounds each read, not the whole. Until 0.1.13 the limit counted from the body on, and
+    httpcore 1.0.9 reads the headers in a loop that takes every ``1xx`` but ``101``
+    (``_async/http11.py:170-183``): a server sending ``100 Continue`` every few seconds, or its
+    headers a byte at a time, held a move, a question or a model list for ever (cos20 #492,
+    third review). The deadline now holds the whole exchange, as in the server's webhook
+    delivery (``webhook_dispatcher.py``, #553).
+
+    Before connecting: anything goes only over https or to this machine (``talk_may_go_to``),
+    and nothing to a port on this machine that is not the player's right now (H9); once
+    connected, the same at the socket (``async_peer_check``). A call that carries a key, in a
+    header or as a name and password in the address, goes only over https or to the player's
+    own server, never to a system account's (H3, K33). ``transport`` stands in for the network
+    in tests."""
     import httpx
 
     with_key = "Authorization" in (headers or {}) or credentials_in(url)
+    if not talk_may_go_to(url):
+        raise AgentError(TALK_ONLY_SAFE)
     if with_key and not key_may_go_to(url):
         raise AgentError(KEY_ONLY_SAFE)
     if not ours(url, with_key=with_key):
         raise NotOurs(NOT_OURS)
     local = on_this_machine(url)
-    started = time.monotonic()
-    body = bytearray()
     sent = {**(headers or {}), **PLAIN}
-    trace = {"trace": peer_check(local, with_key)}
-    with (
-        httpx.Client(timeout=timeout, trust_env=not local) as client,
+    trace = {"trace": async_peer_check(local, with_key)}
+    async with (
+        asyncio.timeout(seconds),
+        httpx.AsyncClient(timeout=timeout, transport=transport, trust_env=not local) as client,
         client.stream(method, url, headers=sent, json=payload, extensions=trace) as resp,
     ):
-        refuse_encoded(resp.headers)
-        for chunk in resp.iter_raw():
-            body += chunk
-            if len(body) > ANSWER_BYTES or time.monotonic() - started > seconds:
-                raise TooLong(short_host(url))
+        body = await bounded_body(resp)
     status = resp.status_code
 
     def raise_for_status() -> None:
         if status >= 400:
             raise httpx.HTTPStatusError(f"HTTP {status}", request=resp.request, response=resp)
 
-    return SimpleNamespace(status_code=status, json=lambda: files.loads(bytes(body)),
+    return SimpleNamespace(status_code=status, json=lambda: files.loads(body),
                            raise_for_status=raise_for_status)
+
+
+def bounded_call(method: str, url: str, *, headers: dict[str, str] | None = None,
+                 payload: Any = None, timeout: float = 4,
+                 seconds: float = ANSWER_SECONDS) -> Any:
+    """``exchange`` for a caller without an event loop: registration, forget, the rules of the
+    world, a model list."""
+    return alone(exchange(method, url, headers=headers, payload=payload, timeout=timeout,
+                          seconds=seconds))
+
+
+def alone(work: Coroutine[Any, Any, Any]) -> Any:
+    """``work`` run to its end from synchronous code; in a thread of its own where this thread
+    already runs an event loop (``asyncio.run`` would refuse there)."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(work)
+    with concurrent.futures.ThreadPoolExecutor(1) as pool:
+        return pool.submit(asyncio.run, work).result()
 
 
 def bounded_get(url: str, headers: dict[str, str] | None = None, timeout: float = 4) -> Any:
@@ -469,6 +537,8 @@ def clean_names(names: list[Any]) -> list[str]:
 def models_at(base_url: str, get: Callable[..., Any], key: str = "") -> dict[str, Any]:
     """The models an OpenAI-compatible address offers. ``needs_key`` if it wants one."""
     with_key = bool(key) or credentials_in(base_url)
+    if not talk_may_go_to(base_url):  # said here, before the address is taken (decision A)
+        return {"ok": False, "models": [], "why": TALK_ONLY_SAFE}
     if with_key and not key_may_go_to(base_url):
         return {"ok": False, "models": [], "why": KEY_ONLY_SAFE}
     if not ours(base_url, with_key=with_key):  # also an address typed by hand (H9)
@@ -478,6 +548,8 @@ def models_at(base_url: str, get: Callable[..., Any], key: str = "") -> dict[str
         resp = get(base_url.rstrip("/") + "/models", headers=headers, timeout=4)
     except TooLong:
         return {"ok": False, "models": [], "why": "its list of models is too long"}
+    except (AgentError, NotOurs) as exc:  # the door's own sentence (the rules above, again)
+        return {"ok": False, "models": [], "why": str(exc)}
     except Exception as exc:  # noqa: BLE001 — any failure is the same answer: not reachable
         # the host alone: an address can carry a name and a password (https://me:pw@…)
         why = f"no answer from {short_host(base_url)} ({type(exc).__name__})"
@@ -682,28 +754,14 @@ def _peer(stream: Any) -> tuple[str, int]:
     return str(addr[0]), int(addr[1])
 
 
-def peer_check(local: bool, with_key: bool) -> Callable[[str, dict[str, Any]], None]:
+def async_peer_check(local: bool, with_key: bool) -> Callable[[str, dict[str, Any]],
+                                                               Awaitable[None]]:
     """An httpx ``trace`` hook: whom the connection reached, checked before a byte of the
     request leaves.
 
     ``ours`` reads the address before connecting, and httpx resolves the name again when it
     connects (a name can point elsewhere by then), and a proxy from the environment connects to
     itself. So the last word is the socket's own peer (cos20 #492 S5, §0 rule 5)."""
-
-    def check(event: str, info: dict[str, Any]) -> None:
-        if event != "connection.connect_tcp.complete":
-            return
-        stream = info["return_value"]
-        if why := peer_refusal(*_peer(stream), local, with_key):
-            stream.close()
-            raise NotOurs(why)
-
-    return check
-
-
-def async_peer_check(local: bool, with_key: bool) -> Callable[[str, dict[str, Any]],
-                                                               Awaitable[None]]:
-    """``peer_check`` for an async client."""
 
     async def check(event: str, info: dict[str, Any]) -> None:
         if event != "connection.connect_tcp.complete":
@@ -770,21 +828,27 @@ def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str]
     with a limit (K29, cos20 #492 S9; until 0.1.11 ``communicate`` kept all of it). The group
     is ended while its leader is not yet reaped, so its number cannot belong to anyone else.
     A child that opens a session of its own (``setsid``) leaves the group; that stays named
-    (threat model K14)."""
+    (threat model K14). While it runs, the group stands in ``GROUPS``: when the brain itself is
+    stopped, ``end_groups`` ends it too (``shikigon_brain.end_with_its_agents``)."""
     del capture_output, check  # always captured, never raised on the exit code
     stdin = subprocess.PIPE if input is not None else subprocess.DEVNULL
     with subprocess.Popen(argv, cwd=cwd, env=env, stdin=stdin, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, start_new_session=True) as proc:
-        out, err, over = bytearray(), bytearray(), threading.Event()
-        threads = [threading.Thread(target=_drain, args=(pipe, into, over), daemon=True)
-                   for pipe, into in ((proc.stdout, out), (proc.stderr, err))]
-        if input is not None:
-            threads.append(threading.Thread(target=_feed, args=(proc.stdin, input), daemon=True))
-        for thread in threads:
-            thread.start()
-        ended = _wait_unreaped(proc.pid, timeout, over)
-        with contextlib.suppress(ProcessLookupError, PermissionError):
-            os.killpg(proc.pid, signal.SIGKILL)
+        GROUPS.add(proc.pid)
+        try:  # out of GROUPS before the leader is reaped: its number may then be anyone's
+            out, err, over = bytearray(), bytearray(), threading.Event()
+            threads = [threading.Thread(target=_drain, args=(pipe, into, over), daemon=True)
+                       for pipe, into in ((proc.stdout, out), (proc.stderr, err))]
+            if input is not None:
+                threads.append(threading.Thread(target=_feed, args=(proc.stdin, input),
+                                                daemon=True))
+            for thread in threads:
+                thread.start()
+            ended = _wait_unreaped(proc.pid, timeout, over)
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(proc.pid, signal.SIGKILL)
+        finally:
+            GROUPS.discard(proc.pid)
         proc.wait()
         for thread in threads:
             thread.join(timeout=2)  # a child that left the group may still hold a pipe
@@ -794,6 +858,17 @@ def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str]
         raise subprocess.TimeoutExpired(argv, timeout or 0)
     decode = (lambda b: bytes(b).decode("utf-8", "replace")) if text else bytes
     return subprocess.CompletedProcess(argv, proc.returncode, decode(out), decode(err))
+
+
+GROUPS: set[int] = set()  # process groups of agents still running (``run_in_group``)
+
+
+def end_groups() -> None:
+    """End every agent group still running: the brain is being stopped. Each leader is not
+    reaped yet (``_wait_unreaped``), so its number is still that group's."""
+    for group in list(GROUPS):
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(group, signal.SIGKILL)
 
 
 def _drain(pipe: Any, into: bytearray, over: threading.Event) -> None:
@@ -832,7 +907,8 @@ def agent_models(agent: str, run: Callable[..., Any] = run_in_group) -> list[str
     if not argv:
         return []
     try:
-        done = in_empty_folder(run, argv, capture_output=True, text=True, timeout=30, check=False)
+        done = in_empty_folder(run, argv, env=agent_env(agent), capture_output=True, text=True,
+                               timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return []
     if AGENTS[agent].get("models_listing") == "table":
@@ -926,7 +1002,7 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
     spec = AGENTS[str(conf["agent"])]
     if not spec.get("proven"):
         raise AgentError(f"{spec['name']} is not offered yet: it was never tried on a device")
-    env = {**os.environ, **spec.get("env", {})}
+    env = agent_env(str(conf["agent"]))
     argv = agent_argv(conf)
     try:
         done = in_empty_folder(run, argv, env=env, capture_output=True, text=True,

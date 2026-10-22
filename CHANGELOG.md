@@ -4,6 +4,31 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.13 (2026-10-22)
 
+- **Nothing goes over plain http to another machine,** also without a key. Your question, the
+  talk so far and the situation went in plain text to any http address that wanted no key; on a
+  network that only looks like home anyone could read them, and the advice and the moves would
+  reach a stranger by themselves. Now an address is https or on this machine (`localhost`). For
+  a model server elsewhere: https, an ssh tunnel, or your agent (README).
+- **Every call has one deadline, from the request to the last byte of the answer.** The limit
+  counted from the body of an answer on; a server that answered `100 Continue` again and again,
+  or sent its headers a byte at a time, held a move, a question or a model list for ever. Now a
+  move falls back to the rules in its time, whatever the server sends first. The same holds for
+  every answer of the world through `cosmergon-agent` 0.27.31.
+- **Programs it starts read no configuration from a folder someone else can write.** The empty
+  folder they run in lay in `/tmp`, and OpenCode reads its configuration from every folder above
+  its own, up to `/`: another user's `/tmp/opencode.json` could start a program of theirs as you.
+  Now the folder lies in Shikigon's own state folder, and OpenCode reads no project
+  configuration at all.
+- **Your agent ends when the brain does.** Stopped by the bar (a change of "advise on moves")
+  or a closed terminal, the brain now ends the agent it was asking, instead of leaving it to run
+  to its own end.
+- **Every file it keeps is yours alone (0600),** made so from the start. A file an earlier version
+  left readable for others is renewed once, so a program that opened it then reads nothing more.
+- **Smaller fixes:** a world's sentence on stderr comes without control characters, also in a
+  terminal; the echo check of a message compares no more than the message; the README no longer
+  says pi looks back with a tool. The terminal shows the server's advice and your partner code as
+  text (`cosmergon-agent` 0.27.31).
+
 - **Every key goes only to the address it was given for.** A key named by `api_key_env` went to
   any address you picked in the panel afterwards; now it goes only to the `base_url` of the same
   section of the config file. A key kept by 0.1.3 or earlier names no address and went to the

@@ -322,7 +322,9 @@ def sending_functions() -> dict[str, bool]:
 
 def test_every_place_that_sends_reads_the_port_first() -> None:
     found = sending_functions()
-    assert {"connections.py:bounded_call", "advisor.py:send", "shikigon_brain.py:register",
+    # One door for the brain's own calls since 0.1.13 (``exchange``): ``bounded_call`` and the
+    # advisor's ``send`` go through it, so it is the place that must read the port first.
+    assert {"connections.py:exchange", "shikigon_brain.py:register",
             "shikigon_brain.py:make_agent"} <= set(found), sorted(found)
     assert all(found.values()), [where for where, ok in found.items() if not ok]
 
@@ -333,8 +335,8 @@ def test_the_guard_turns_red_on_a_place_that_sends_unchecked(tmp_path: Path) -> 
         "    if not ours(url, with_key=with_key):\n        raise NotOurs(NOT_OURS)\n", "", 1)
     assert unchecked != source
     tree = ast.parse(unchecked)
-    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
-              and n.name == "bounded_call")
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
+              and n.name == "exchange")
     calls = [n for n in _own_body(fn) if isinstance(n, ast.Call)]
     assert any(_sends(c, set()) for c in calls) and not any(_name(c) in CHECKS for c in calls)
 

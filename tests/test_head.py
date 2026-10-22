@@ -19,6 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 
 import connections
+import files
 import head
 import lessons
 import shikigon_brain as brain
@@ -364,7 +365,8 @@ def test_the_look_back_runs_in_an_empty_folder_and_the_prompt_goes_on_stdin(
 
     send = connections.agent_send({"agent": "pi"}, 5, run)
     asyncio.run(send([{"role": "user", "content": "MARKER-527"}], 10))
-    assert seen["cwd"] != str(tmp_path) and "shikigon-run-" in seen["cwd"]
+    assert seen["cwd"] != str(tmp_path)
+    assert Path(seen["cwd"]).parent == files.state_dir() / "run", "the player's own folder"
     assert "MARKER-527" in seen["input"] and "MARKER-527" not in " ".join(seen["argv"])
     assert "do not read or write files" in seen["input"]
 

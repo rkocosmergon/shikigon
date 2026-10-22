@@ -172,12 +172,14 @@ def usable(text: str, quote: str, key: str) -> str | None:
     said = " ".join(str(text or "").split()).strip().strip('"').strip()
     if not said or said.upper().startswith("SKIP") or said.startswith(("{", "[")):
         return None
-    if key and key in said:
+    if key and key in said:  # in the whole answer: a cut could leave half a key
         return None
-    if quote and difflib.SequenceMatcher(None, said.lower(), quote.lower()).ratio() >= ECHO:
-        return None
+    # Cut before comparing: a model's answer can be 256 KiB, and the comparison costs the
+    # product of both lengths, in the brain's own loop (K35; until 0.1.13 it compared first).
     if len(said) > TEXT_CHARS:
         said = said[:TEXT_CHARS].rsplit(" ", 1)[0]
+    if quote and difflib.SequenceMatcher(None, said.lower(), quote.lower()).ratio() >= ECHO:
+        return None
     return said
 
 
