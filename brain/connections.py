@@ -403,7 +403,7 @@ def talk_may_go_to(base_url: str) -> bool:
     """Whatever the brain sends travels encrypted (https) or stays on this machine.
 
     The question, the talk so far and the situation are the player's, and the café argument of
-    ``key_may_go_to`` holds for them word for word: at home ``192.168.178.20`` is the player's
+    ``key_may_go_to`` holds for them word for word: at home ``192.168.1.50`` is the player's
     model server, in a café the same address is someone else, and the head, the advice and the
     speaking send there on their own, with no one to read a warning at that moment. Until 0.1.13
     plain http went to any address that got no key (cos20 #492, third review; panel 22.10.2026,

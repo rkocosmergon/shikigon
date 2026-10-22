@@ -5,6 +5,8 @@ description = "Shikigon's brain: a Cosmergon agent that wants to play."
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
+    # >=0.27.31: one deadline for every request, the head of its answer included, and the two
+    #   dialogs of the terminal show the server's words as text (cos20 #492, third review).
     # >=0.27.30: the terminal client takes the key on a file descriptor (--api-key-fd), and
     #   shows the server's words as text (cos20 #492 B4, B7).
     # >=0.27.10: the terminal client hands the brain the [M] question on stdin, never as an
@@ -12,7 +14,7 @@ dependencies = [
     # 0.26.0 brought mission_word / mission_outcome_text (cos20 #475).
     # [dashboard]: "open terminal" starts cosmergon-dashboard, which needs textual; without
     # the extra the client only prints how to install it (seen in a fresh container, 11.10.2026).
-    "cosmergon-agent[dashboard]>=0.27.30",
+    "cosmergon-agent[dashboard]>=0.27.31",
     # >=2.3.9: missions only on fields the server names ready, a contract it cannot accept is
     #   rejected (cos20 #529).
     "cosmergon-decider-tree>=2.3.9",
