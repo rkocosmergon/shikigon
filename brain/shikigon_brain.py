@@ -158,16 +158,61 @@ def world_is_safe(cfg: dict[str, Any]) -> bool:
     return connections.key_may_go_to(str(world))
 
 
+def world_send_check(url: str) -> str:
+    """Why nothing may be sent to this address of the world right now, or ``""``: the key
+    travels encrypted or stays on this machine (H3), and on this machine only to a port that is
+    the player's at this moment (H9).
+
+    The SDK asks it with the URL right before every request it sends, each retry included
+    (``send_check``, cosmergon-agent >= 0.27.27). Until 0.1.12 the running brain asked once per
+    move, before waiting for the model; the move and the SDK's retries came after that wait,
+    unchecked, and another local user could take a freed port in between (review #12584)."""
+    import connections
+
+    if not connections.key_may_go_to(url):
+        return WORLD_KEY_SAFE
+    return "" if connections.ours(url, with_key=True) else connections.NOT_OURS
+
+
 def world_refusal(cfg: dict[str, Any]) -> str:
-    """Why nothing may go to the world right now, or ``""``: its key travels encrypted or stays
-    on this machine (H3), and on this machine only to a port that is the player's at this
-    moment (H9) — read before every sending, also before each move of the running brain."""
+    """``world_send_check`` for the configured world: read before opening anything to it."""
+    return world_send_check(str(cfg.get("world", {}).get("base_url") or "https://cosmergon.com"))
+
+
+def world_peer_check(cfg: dict[str, Any]) -> Callable[[str, int], str]:
+    """Whom a new connection to the world really reached, asked by the SDK before a byte of the
+    request goes over it (``peer_check``, cosmergon-agent >= 0.27.29): the same last word the
+    brain's own calls have (``connections.peer_check``). A name can resolve elsewhere after
+    ``world_send_check``, and a proxy from the environment connects to itself."""
     import connections
 
     world = str(cfg.get("world", {}).get("base_url") or "https://cosmergon.com")
-    if not world_is_safe(cfg):
-        return WORLD_KEY_SAFE
-    return "" if connections.ours(world, with_key=True) else connections.NOT_OURS
+    local = connections.on_this_machine(world)
+
+    def check(host: str, port: int) -> str:
+        return connections.peer_refusal(host, port, local, True)
+
+    return check
+
+
+DASHBOARD_WORLD = "https://cosmergon.com"  # the terminal client's world (--base-url default)
+TERMINAL_ELSEWHERE = ("the terminal client talks only to cosmergon.com, and this Shikigon "
+                      "lives in another world: its key stays out of it")
+
+
+def terminal_refusal(cfg: dict[str, Any], creds: dict[str, str]) -> str:
+    """Why the terminal client may not open for this Shikigon, or ``""`` (H3, K9).
+
+    The dashboard runs in a process of its own, with its own world (``--base-url``; Shikigon
+    hands no address over as an argument, §1b) and without this brain's port check. Until 0.1.12
+    it got the key of a Shikigon from any world and sent it to cosmergon.com. It opens only for
+    a Shikigon of that world, so the key goes nowhere it was not given."""
+    import connections
+
+    home = connections.origin(DASHBOARD_WORLD)
+    world = connections.origin(str(cfg.get("world", {}).get("base_url") or DASHBOARD_WORLD))
+    given_by = connections.origin(creds.get("world") or world)
+    return "" if world == home and given_by == home else TERMINAL_ELSEWHERE
 
 
 def key_refusal(cfg: dict[str, Any], creds: dict[str, str]) -> str:
@@ -751,6 +796,8 @@ def make_agent(cfg: dict[str, Any]) -> Any:
         api_key=creds["api_key"],
         agent_id=creds["agent_id"],
         base_url=cfg["world"]["base_url"],
+        send_check=world_send_check,  # asked right before every request, retries included
+        peer_check=world_peer_check(cfg),  # and at the socket of every new connection
     )
 
 
@@ -1173,7 +1220,7 @@ async def with_agent(cfg: dict[str, Any], work: Callable[[Any], Awaitable[Any]])
     An expired key is not a crash: the Shikigon falls asleep and says why. Its world
     keeps it as a vagant that follows your last briefing (server side).
     """
-    from cosmergon_agent.exceptions import AuthenticationError
+    from cosmergon_agent.exceptions import AuthenticationError, SendRefusedError
 
     creds = load_credentials()
     if why := world_refusal(cfg) or (key_refusal(cfg, creds) if creds else ""):
@@ -1184,6 +1231,8 @@ async def with_agent(cfg: dict[str, Any], work: Callable[[Any], Awaitable[Any]])
             return await work(agent)
     except AuthenticationError:
         return fall_asleep(KEY_ENDED, "key expired: register a new Shikigon")
+    except SendRefusedError as exc:  # the world's port changed hands at the moment of sending
+        return fall_asleep(CONFIG, exc.message)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1193,6 +1242,7 @@ def _parser() -> argparse.ArgumentParser:
     reg.add_argument("--new", action="store_true", help="replace the Shikigon that lives here")
     for name in ("tick", "run", "status", "advise", "learn"):
         sub.add_parser(name)
+    sub.add_parser("terminal", help="may the terminal client open for this Shikigon?")
     gone = sub.add_parser("forget")
     gone.add_argument("--yes", action="store_true", help="yes, delete it on the server and here")
     for name in ("instruct", "ask", "coach"):
@@ -1206,7 +1256,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
-    """What needs no Shikigon of its own: the coach's task, the advisor, the snapshot."""
+    """What needs no Shikigon of its own: the coach's task, the advisor, the terminal's world,
+    the snapshot."""
     if args.command == "coach":
         if args.text:
             print(json.dumps({"ok": False, "why": WORDS_ON_STDIN}))
@@ -1221,6 +1272,11 @@ def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
             handle.write(coach_prompt(cfg, asked) + "\n")
         print(f"Read the task in {path} and follow it.")
         return 0
+    if args.command == "terminal":
+        why = terminal_refusal(cfg, load_credentials() or {})
+        if why:
+            print(why)
+        return 1 if why else 0
     if args.command == "advisor":
         result = advisor_command(cfg, args.what, args.rest)
         print(json.dumps(result))
@@ -1286,7 +1342,7 @@ def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
 
 
 COMMANDS: dict[str, Callable[[argparse.Namespace, dict[str, Any]], int]] = {
-    **dict.fromkeys(("coach", "advisor", "status"), _local),
+    **dict.fromkeys(("coach", "advisor", "status", "terminal"), _local),
     **dict.fromkeys(("register", "learn", "forget"), _account),
     **dict.fromkeys(("tick", "run", "advise"), _moves),
     **dict.fromkeys(("ask", "instruct"), _words),

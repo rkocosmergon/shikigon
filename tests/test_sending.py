@@ -196,6 +196,80 @@ async def test_the_running_brain_reads_the_worlds_port_before_every_move(
     assert status["mood"] == brain.ASLEEP and status["last"]["why"] == connections.NOT_OURS
 
 
+def _world_on_the_wire(monkeypatch: pytest.MonkeyPatch, seen: list[str]) -> None:
+    """The real SDK client, its transport replaced: what reaches the world is written down."""
+    from cosmergon_agent import _http
+
+    def world(request: httpx.Request) -> httpx.Response:
+        seen.append(f"{request.method} {request.url.path}")
+        return httpx.Response(200, json={"agent_id": "a", "tick": 5, "energy": 100.0})
+
+    real = _http.async_client
+    monkeypatch.setattr(
+        _http, "async_client", lambda **kw: real(transport=httpx.MockTransport(world), **kw)
+    )
+
+
+async def test_a_move_after_the_models_answer_never_reaches_a_port_that_changed_hands(
+    real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review of 0.1.12 (#12584): the port was read before the model's answer, and the move went
+    out after it. The SDK now asks ``world_send_check`` right before every request it sends.
+    Red against ``38a587a``: there the move reached the other user's port."""
+    kernel = Kernel(monkeypatch, 8080, ME)
+    seen: list[str] = []
+    _world_on_the_wire(monkeypatch, seen)
+
+    class Thinking:
+        async def decide(self, state: Any) -> tuple[str, dict[str, Any]]:
+            kernel.uid = STRANGER  # while the model thinks, another user takes the world's port
+            return ("place_cells", {"field_id": "f", "preset": "block"})
+
+    cfg = {"world": {"base_url": "http://127.0.0.1:8080"}, "brain": {"interval_s": 60}}
+    brain.write_private(brain.credentials_path(), {"agent_id": "a", "api_key": "AGENT-x:s"})
+    said = await brain.with_agent(cfg, lambda agent: brain.tick(agent, Thinking()))
+    assert seen == ["GET /api/v1/agents/a/state"], "only the look went out, the move did not"
+    assert said["why"] == connections.NOT_OURS
+
+
+def test_the_sdk_is_handed_the_check_of_the_moment_of_sending() -> None:
+    cfg = {"world": {"base_url": "http://127.0.0.1:8080"}}
+    brain.write_private(brain.credentials_path(), {"agent_id": "a", "api_key": "AGENT-x:s"})
+    agent = brain.make_agent(cfg)
+    assert agent._send_check is brain.world_send_check
+    assert agent._peer_check is not None
+
+
+def test_the_worlds_connection_is_judged_by_the_peer_it_really_reached(
+    real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same last word the brain's own calls have: a world on this machine is served only
+    by a peer on this machine whose port is the player's (cosmergon-agent ``peer_check``)."""
+    kernel = Kernel(monkeypatch, 8080, ME)
+    check = brain.world_peer_check({"world": {"base_url": "http://127.0.0.1:8080"}})
+    assert check("127.0.0.1", 8080) == ""
+    assert check("93.184.216.34", 8080) == connections.PEER_ELSEWHERE, "a proxy, another name"
+    kernel.uid = STRANGER
+    assert check("127.0.0.1", 8080) == connections.NOT_OURS
+
+
+@pytest.mark.parametrize(("world", "given_by", "opens"), [
+    ("https://cosmergon.com", "https://cosmergon.com", True),
+    ("https://cosmergon.com", "", True),  # a key from before 0.1.10 names no world
+    ("http://127.0.0.1:8082", "http://127.0.0.1:8082", False),  # the terminal would go elsewhere
+    ("https://cosmergon.com", "http://127.0.0.1:8082", False),  # a key of another world
+])
+def test_the_terminal_opens_only_for_a_shikigon_of_its_own_world(
+    world: str, given_by: str, opens: bool,
+) -> None:
+    """K9: the terminal client talks only to cosmergon.com; until 0.1.12 it got any key."""
+    creds = {"agent_id": "a", "api_key": "AGENT-x:s", **({"world": given_by} if given_by else {})}
+    why = brain.terminal_refusal({"world": {"base_url": world}}, creds)
+    assert (why == "") is opens
+    if not opens:
+        assert why == brain.TERMINAL_ELSEWHERE
+
+
 # --- the class guard: every place that sends reads the port first -------------------------------
 
 SENDERS = {"get", "post", "delete", "put", "patch", "stream", "request", "AsyncClient", "Client"}

@@ -10,13 +10,20 @@ if [ ! -f "$state/credentials.json" ]; then
     read -r -p "Press Enter to close." _
     exit 1
 fi
+brain="$(cd "$(dirname "$0")" && pwd)/shikigon_brain.py"
+# The dashboard talks only to cosmergon.com and has no port check of its own: a Shikigon of
+# another world keeps its key out of it (terminal_refusal in shikigon_brain.py; H3, K9).
+if ! why=$("$venv/bin/python" -I "$brain" terminal); then
+    echo "$why"
+    read -r -p "Press Enter to close." _
+    exit 1
+fi
 COSMERGON_API_KEY=$("$venv/bin/python" -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["api_key"])' "$state/credentials.json")
 export COSMERGON_API_KEY
 # [M] in the terminal asks the same advisor as "ask" in the bar: the dashboard runs this
 # command, gives it the question on stdin (cosmergon-agent >= 0.27.10; never as an argument,
 # which every local user could read) and shows what it prints. The dashboard does not hand
 # the key above to the command; the brain reads its own key file.
-brain="$(cd "$(dirname "$0")" && pwd)/shikigon_brain.py"
 COSMERGON_ADVISOR_CMD="$(printf '%q %q ask' "$venv/bin/python" "$brain")"
 export COSMERGON_ADVISOR_CMD
 # The talk so far: the brain writes every question and answer to this file (chat_path() in

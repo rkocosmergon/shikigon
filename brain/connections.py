@@ -603,7 +603,8 @@ def ours(base_url: str, tables: list[str] | None = None, me: int | None = None, 
     Over https the certificate already does it: whoever listens on the port cannot prove the
     name, the handshake fails before a byte of the request leaves, and nothing here turns
     verification off. So only plain http is looked at, and no name is resolved for an https
-    address (the running brain checks its world before every move).
+    address. For the world, the SDK asks this right before every request it sends, retries
+    included (``world_send_check`` in shikigon_brain.py, cosmergon-agent ``send_check``).
     """
     if urllib.parse.urlsplit(base_url).scheme == "https":
         return True
