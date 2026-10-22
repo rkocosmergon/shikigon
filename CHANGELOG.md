@@ -25,6 +25,12 @@ What changed for someone who uses Shikigon. Newest first.
   past it. A refused request is not sent, and the Shikigon falls asleep and says why.
 - **The terminal opens only for a Shikigon of cosmergon.com.** The terminal client talks to
   cosmergon.com only; until now it got the key of a Shikigon from any world and sent it there.
+- **The terminal gets its key over a pipe, and shows the world's words as text.** The key
+  stood in the terminal client's environment (`COSMERGON_API_KEY`), and `/proc/<pid>/environ`
+  kept it there for the client's whole life, readable for you and root. Now it goes over a file
+  descriptor (`--api-key-fd`, `cosmergon-agent` 0.27.30). A sentence the world sent with a
+  refusal went into the terminal's log as markup, with its control characters; now every
+  foreign text there is text.
 
 ## 0.1.12 (2026-10-22)
 
