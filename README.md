@@ -140,7 +140,8 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
   answer appears under the model's name; the last two exchanges stay in view. Esc turns the
   panel back. Without a model set, the answer says what is missing.
 - **open terminal** starts the terminal client for this agent with the same advisor: `M` there
-  asks it, `T` joins a tournament.
+  asks it, `T` joins a tournament. The terminal client talks to cosmergon.com only, so it opens
+  only for a Shikigon of that world; one of another world keeps its key out of it.
 - **The first hours:** a few short desktop notifications walk a new player through it: that it
   is awake and what its first move could be, a free tournament slot when one is open, the
   compass, **ask**, and its first field won. Each comes once, at least ten minutes apart.
@@ -166,7 +167,8 @@ shows **WHO ANSWERS?**, one list:
   was found: if your server stops and another user takes its port, nothing more is sent there,
   and the panel says so. The same holds for every address that leads to this machine, also one
   you typed (`localhost`, `127.0.0.1`, your machine's own name or address), and for a world on
-  this machine. Over https the certificate already makes sure of it. The brain also checks the
+  this machine: for the world the check runs inside `cosmergon-agent`, right before every
+  request it sends, each retry included. Over https the certificate already makes sure of it. The brain also checks the
   connection it really made, before a byte of the question leaves: a name that points elsewhere
   when connecting, or a proxy set in your environment, cannot lead past the check.
 - **set up an agent in Omarchy…** opens Omarchy's own chooser; signing in is the agent's part.

@@ -4,6 +4,17 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **A move goes out only while the world's port is yours at that moment** (marketplace review
+  #12584). With a world on this machine, the brain checked its port once per move, before
+  waiting for the model; the move after that wait and the retries of `cosmergon-agent` went out
+  unchecked, so another local user who took a freed port in between could get the agent's key.
+  Now `cosmergon-agent` 0.27.29 asks the brain's check right before every request it sends,
+  each retry included, and checks every new connection at its socket, the way the brain's own
+  calls already did: a name that resolves elsewhere or a proxy from your environment cannot lead
+  past it. A refused request is not sent, and the Shikigon falls asleep and says why.
+- **The terminal opens only for a Shikigon of cosmergon.com.** The terminal client talks to
+  cosmergon.com only; until now it got the key of a Shikigon from any world and sent it there.
+
 ## 0.1.12 (2026-10-22)
 
 - **Answers are read as they come, and only so much of them.** A model server or the world can
