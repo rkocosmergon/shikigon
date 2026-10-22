@@ -54,7 +54,8 @@ review_every = 5
 # the rule tree plays instead until the day ends. 0 = no limit.
 learning_budget_pct = 5
 # Name of an environment variable that holds an API key, if the endpoint wants one.
-# The name, never the key itself.
+# The name, never the key itself. The key goes only to base_url above, never to an address
+# picked in the panel.
 api_key_env = ""
 # Your advisor also writes to other agents when the game gives a reason: an answer to a
 # message, a word before a contract, now and then a post looking for allies. A word costs

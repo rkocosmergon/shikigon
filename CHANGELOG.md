@@ -2,8 +2,19 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## Unreleased
+## 0.1.13 (2026-10-22)
 
+- **Every key goes only to the address it was given for.** A key named by `api_key_env` went to
+  any address you picked in the panel afterwards; now it goes only to the `base_url` of the same
+  section of the config file. A key kept by 0.1.3 or earlier names no address and went to the
+  next one picked; now it goes nowhere, and the address asks for it once more.
+- **A name and a password in an address count as a key** (`https://me:pw@…`). They went as a
+  Basic key also over plain http to another machine, and to a system account's server on this
+  one; now the rule for keys holds for them too: only over https, or to a server on this machine
+  that runs as you.
+- **Every program the brain starts runs in an empty folder,** also the model list of your agent
+  and the look-up with `mise`, not only the question. Started by hand in a folder someone else
+  wrote, they could read that folder's settings.
 - **A move goes out only while the world's port is yours at that moment** (marketplace review
   #12584). With a world on this machine, the brain checked its port once per move, before
   waiting for the model; the move after that wait and the retries of `cosmergon-agent` went out

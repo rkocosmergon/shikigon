@@ -254,7 +254,7 @@ def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to
     assert text not in argv
     assert "shikigon-advisor" in kwargs["env"]["OPENCODE_CONFIG_CONTENT"]
     assert "PATH" in kwargs["env"], "the user's own environment stays"
-    assert "shikigon-ask-" in kwargs["cwd"] and not Path(kwargs["cwd"]).exists()  # gone again
+    assert "shikigon-run-" in kwargs["cwd"] and not Path(kwargs["cwd"]).exists()  # gone again
 
 
 @pytest.mark.parametrize(  # an agent never tried on a device is not even started (#492, K28)

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import datetime
 import json
-import os
 import time
 import tomllib
 from collections.abc import Awaitable, Callable
@@ -64,7 +63,11 @@ def settings(cfg: dict[str, Any], home: Path | None = None) -> dict[str, Any]:
     with DEFAULT_CONFIG.open("rb") as handle:
         shipped = tomllib.load(handle).get("brain", {}).get("advisor", {})
     picked = connections.chosen(home) if home is not None else {}
-    return {**shipped, **cfg.get("brain", {}).get("advisor", {}), **picked}
+    own = cfg.get("brain", {}).get("advisor", {})
+    # The key named by ``api_key_env`` belongs to the address of the same section, whatever the
+    # panel picks later (``connections.secret_for``, H3; cos20 #492 B1).
+    bound = connections.origin(str(own.get("base_url") or ""))
+    return {**shipped, **own, **picked, "api_key_env_for": bound}
 
 
 def configured(conf: dict[str, Any]) -> bool:
@@ -83,9 +86,7 @@ def sender(conf: dict[str, Any], home: Path | None = None, patience: int = 1) ->
         on_a_move = patience == 1
         wait = float(conf.get("timeout_s", 20)) if on_a_move else connections.AGENT_ANSWER_S
         return connections.agent_send(conf, wait)
-    where = str(conf.get("base_url") or "")
-    key = connections.kept_key(home, where) if home is not None else ""
-    return http_send(conf, patience=patience, key=key)
+    return http_send(conf, patience=patience, home=home)
 
 
 def who(conf: dict[str, Any]) -> str:
@@ -275,14 +276,14 @@ def request_body(
 
 
 def http_send(
-    conf: dict[str, Any], transport: Any = None, patience: int = 1, key: str = ""
+    conf: dict[str, Any], transport: Any = None, patience: int = 1, home: Path | None = None
 ) -> Send:
     """The call to the endpoint, over the HTTP client the SDK already brings.
 
     ``transport`` stands in for the network in tests; in use it is ``None``.
-    ``patience`` multiplies the time it waits. ``key`` is one the player entered in the
-    panel; a key named through ``api_key_env`` comes first. Whose the port is, is read on
-    every call, not once when the server was found (H9, review of 0.1.9).
+    ``patience`` multiplies the time it waits. ``home`` is the state folder with a key the
+    player entered in the panel. Which key goes, and whose the port is, is read on every call,
+    where it is sent (``connections.secret_for``; H3, H9).
     """
 
     async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
@@ -290,17 +291,18 @@ def http_send(
         import httpx
 
         headers = dict(connections.PLAIN)
-        secret = os.environ.get(str(conf.get("api_key_env") or ""), "") or key
         url = str(conf["base_url"]).rstrip("/") + "/chat/completions"
-        if not connections.ours(url, with_key=bool(secret)):
+        secret = connections.secret_for(home, conf, url)
+        with_key = bool(secret) or connections.credentials_in(url)
+        if not connections.ours(url, with_key=with_key):
             raise connections.NotOurs(connections.NOT_OURS)
+        if with_key and not connections.key_may_go_to(url):
+            raise connections.AgentError(connections.KEY_ONLY_SAFE)
         if secret:
-            if not connections.key_may_go_to(url):
-                raise connections.AgentError(connections.KEY_ONLY_SAFE)
             headers["Authorization"] = f"Bearer {secret}"
         timeout = float(conf.get("timeout_s", 20)) * patience
         local = connections.on_this_machine(url)
-        trace = {"trace": connections.async_peer_check(local, bool(secret))}
+        trace = {"trace": connections.async_peer_check(local, with_key)}
         async with (
             httpx.AsyncClient(timeout=timeout, transport=transport, trust_env=not local) as client,
             client.stream(

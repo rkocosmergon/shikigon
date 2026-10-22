@@ -13,7 +13,8 @@ in the config file, which stays the place for everything else.
 
 Three rules this file keeps (cos20 #451, concept 10.5d):
 
-1. An agent is called without tools and approvals, in an empty folder.
+1. An agent is called without tools and approvals, in an empty folder; every other program
+   started here (its model listing, ``mise``) runs in an empty folder too (``in_empty_folder``).
 2. Looking at what is installed never starts a placeholder. On Omarchy the agents' commands
    are stubs that install the agent the first time they run.
 3. An agent's allowance is the player's: no advice on every move through an agent.
@@ -185,10 +186,23 @@ def installed(agent: str, run: Callable[..., Any] = subprocess.run) -> bool:
     if shutil.which("mise") is None:
         return False
     try:
-        done = run(["mise", "where", agent], capture_output=True, timeout=10, check=False)
+        done = in_empty_folder(run, ["mise", "where", agent], capture_output=True, timeout=10,
+                               check=False)
     except (OSError, subprocess.SubprocessError):
         return False
     return int(done.returncode) == 0
+
+
+def in_empty_folder(run: Callable[..., Any], argv: list[str], **kwargs: Any) -> Any:
+    """``run(argv, …)`` in an empty folder of its own, for every program Shikigon starts.
+
+    An agent, its model listing and ``mise`` read a project's configuration from their working
+    folder, and the brain's is wherever it was started: by hand that can be a folder someone
+    else wrote (threat model K36). Until 0.1.12 only the question went to an empty folder, the
+    listing and ``mise`` ran in the brain's (cos20 #492 B6).
+    """
+    with tempfile.TemporaryDirectory(prefix="shikigon-run-") as empty:
+        return run(argv, cwd=empty, **kwargs)
 
 
 # ---------- the choice ----------------------------------------------------------------------
@@ -235,20 +249,53 @@ def keep_key(home: Path, key: str, where: str) -> None:
 def kept_key(home: Path, url: str) -> str:
     """The kept key if it was given for ``url``'s origin; empty for any other address.
 
-    A key kept by 0.1.3 or earlier is a bare line without an origin: it belongs to the address
-    picked then (``advisor.json``), the only one it was ever sent to.
+    A key kept by 0.1.3 or earlier is a bare line without an origin: it goes nowhere, and the
+    address asks for it again. Until 0.1.12 it was bound to whatever ``advisor.json`` named at
+    the moment of reading, so it went to the next address picked (cos20 #492 B3).
     """
     path = home / KEY_FILE
     if not path.exists() or not origin(url):
         return ""
-    text = path.read_text(encoding="utf-8").strip()
     try:
-        kept = files.loads(text)
+        kept = files.loads(path.read_text(encoding="utf-8").strip())
     except ValueError:
-        kept = None
+        return ""
     if not isinstance(kept, dict):
-        kept = {"origin": origin(str(chosen(home).get("base_url") or "")), "key": text}
+        return ""
     return str(kept.get("key") or "") if kept.get("origin") == origin(url) else ""
+
+
+def secret_for(home: Path | None, conf: dict[str, Any], url: str) -> str:
+    """The key for ``url``, or ``""``: the one place a key for an advisor's address comes from.
+
+    Each source is bound to the origin it was given for (H3, K9). The key named by
+    ``api_key_env`` belongs to the ``base_url`` of the same section of the config file
+    (``api_key_env_for``, set by ``advisor.settings``), the key typed in the panel to the address
+    it was typed for (``kept_key``). Until 0.1.12 the named key went to any address picked in
+    the panel (cos20 #492 B1).
+    """
+    where = origin(url)
+    if not where:
+        return ""
+    named = str(conf.get("api_key_env") or "")
+    if named and conf.get("api_key_env_for") == where and os.environ.get(named):
+        return os.environ[named]
+    return kept_key(home, url) if home is not None else ""
+
+
+def credentials_in(url: str) -> bool:
+    """True if an address carries a name or a password (``https://me:pw@…``).
+
+    httpx sends them as a Basic key (httpx 0.28.1 ``_client.py:469-471``), so they count as a key
+    wherever a key is checked: only over https or to the player's own server on this machine.
+    Until 0.1.12 only a key the brain put in a header counted (cos20 #492 B2).
+    """
+    import httpx
+
+    try:
+        return bool(httpx.URL(url).userinfo)
+    except httpx.InvalidURL:
+        return False  # httpx sends nothing there either
 
 
 def label(conf: dict[str, Any]) -> str:
@@ -359,10 +406,13 @@ def bounded_call(method: str, url: str, *, headers: dict[str, str] | None = None
 
     Nothing goes to a port on this machine that is not the player's right now (H9): read
     before connecting, and at the socket again once connected (``peer_check``). A call that
-    carries a key goes to the player's own server only, never to a system account's."""
+    carries a key, in a header or as a name and password in the address, goes only over https
+    or to the player's own server, never to a system account's (H3, K33)."""
     import httpx
 
-    with_key = "Authorization" in (headers or {})
+    with_key = "Authorization" in (headers or {}) or credentials_in(url)
+    if with_key and not key_may_go_to(url):
+        raise AgentError(KEY_ONLY_SAFE)
     if not ours(url, with_key=with_key):
         raise NotOurs(NOT_OURS)
     local = on_this_machine(url)
@@ -418,9 +468,10 @@ def clean_names(names: list[Any]) -> list[str]:
 
 def models_at(base_url: str, get: Callable[..., Any], key: str = "") -> dict[str, Any]:
     """The models an OpenAI-compatible address offers. ``needs_key`` if it wants one."""
-    if key and not key_may_go_to(base_url):
+    with_key = bool(key) or credentials_in(base_url)
+    if with_key and not key_may_go_to(base_url):
         return {"ok": False, "models": [], "why": KEY_ONLY_SAFE}
-    if not ours(base_url):  # also an address typed by hand, not only one found (H9)
+    if not ours(base_url, with_key=with_key):  # also an address typed by hand (H9)
         return {"ok": False, "models": [], "why": NOT_OURS}
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     try:
@@ -781,7 +832,7 @@ def agent_models(agent: str, run: Callable[..., Any] = run_in_group) -> list[str
     if not argv:
         return []
     try:
-        done = run(argv, capture_output=True, text=True, timeout=30, check=False)
+        done = in_empty_folder(run, argv, capture_output=True, text=True, timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return []
     if AGENTS[agent].get("models_listing") == "table":
@@ -877,17 +928,16 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
         raise AgentError(f"{spec['name']} is not offered yet: it was never tried on a device")
     env = {**os.environ, **spec.get("env", {})}
     argv = agent_argv(conf)
-    with tempfile.TemporaryDirectory(prefix="shikigon-ask-") as empty:
-        try:
-            done = run(argv, cwd=empty, env=env, capture_output=True,
-                       text=True, timeout=timeout, check=False, input=prompt)
-        except subprocess.TimeoutExpired:
-            raise AgentError(f"{spec['name']} did not answer within {int(timeout)} s") from None
-        except TooMuchOutput:
-            raise AgentError(f"{spec['name']} printed more than an answer") from None
-        except OSError as exc:
-            why = f"{spec['name']} could not be started ({type(exc).__name__})"
-            raise AgentError(why) from None
+    try:
+        done = in_empty_folder(run, argv, env=env, capture_output=True, text=True,
+                               timeout=timeout, check=False, input=prompt)
+    except subprocess.TimeoutExpired:
+        raise AgentError(f"{spec['name']} did not answer within {int(timeout)} s") from None
+    except TooMuchOutput:
+        raise AgentError(f"{spec['name']} printed more than an answer") from None
+    except OSError as exc:
+        why = f"{spec['name']} could not be started ({type(exc).__name__})"
+        raise AgentError(why) from None
     if spec["answer"] == "opencode-json":
         answer = opencode_text(done.stdout)
     else:

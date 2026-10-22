@@ -289,7 +289,8 @@ async def test_the_real_call_goes_to_the_endpoint_you_entered(
         )
 
     monkeypatch.setenv("MY_MODEL_KEY", "token-from-the-environment")
-    conf = {**CONF, "base_url": "https://model.test/v1/", "api_key_env": "MY_MODEL_KEY"}
+    own = {**CONF, "base_url": "https://model.test/v1/", "api_key_env": "MY_MODEL_KEY"}
+    conf = advisor.settings({"brain": {"advisor": own}})  # the key belongs to this base_url
     send = advisor.http_send(conf, transport=httpx.MockTransport(endpoint))
     assert await send([{"role": "user", "content": "hi"}], 40) == '{"choice": 2, "why": "ok"}'
     assert seen["url"] == "https://model.test/v1/chat/completions"
@@ -305,19 +306,24 @@ async def test_a_key_never_goes_over_plain_http_to_the_open_internet() -> None:
     answer = {"choices": [{"message": {"content": "ok"}}]}
     transport = httpx.MockTransport(
         lambda request: asked.append(str(request.url)) or wire(200, json=answer))
+    def kept(url: str) -> Path:  # the key the player typed for exactly this address
+        home = brain.private_state()
+        connections.keep_key(home, "sk-paid", url)
+        return home
+
     plain = advisor.http_send({**CONF, "base_url": "http://model.test/v1"}, transport=transport,
-                              key="sk-paid")
+                              home=kept("http://model.test/v1"))
     with pytest.raises(connections.AgentError, match="only over https"):
         await plain([{"role": "user", "content": "hi"}], 10)
     assert asked == [], "nothing left the machine"
     # 0.1.4: a network that only looks like home gets no key in plain text (cos20 #492, #11798)
     lan = advisor.http_send({**CONF, "base_url": "http://10.20.30.40:11434/v1"},
-                            transport=transport, key="sk-paid")
+                            transport=transport, home=kept("http://10.20.30.40:11434/v1"))
     with pytest.raises(connections.AgentError, match="only over https"):
         await lan([{"role": "user", "content": "hi"}], 10)
     assert asked == []
     here = advisor.http_send({**CONF, "base_url": "http://127.0.0.1:11434/v1"},
-                             transport=transport, key="sk-paid")
+                             transport=transport, home=kept("http://127.0.0.1:11434/v1"))
     assert await here([{"role": "user", "content": "hi"}], 10) == "ok"
     without = advisor.http_send({**CONF, "base_url": "http://model.test/v1"}, transport=transport)
     assert await without([{"role": "user", "content": "hi"}], 10) == "ok"  # no key, no rule

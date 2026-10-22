@@ -151,11 +151,13 @@ def test_a_key_without_its_address_is_not_kept(monkeypatch: pytest.MonkeyPatch) 
     assert not (brain.state_dir() / "advisor_key").exists()
 
 
-def test_a_key_kept_by_0_1_3_belongs_to_the_address_picked_then() -> None:
+def test_a_key_kept_by_0_1_3_names_no_address_and_goes_to_none() -> None:
+    """A bare line names no origin. Until 0.1.12 it was bound to whatever ``advisor.json``
+    named when it was read, so it followed the next pick (cos20 #492 B3)."""
     home = brain.private_state()
     (home / "advisor_key").write_text("sk-old")
     connections.choose(home, {"via": "http", "base_url": "https://a.example/v1", "model": "m"})
-    assert connections.kept_key(home, "https://a.example/v1") == "sk-old"
+    assert connections.kept_key(home, "https://a.example/v1") == ""
     assert connections.kept_key(home, "https://b.example/v1") == ""
 
 

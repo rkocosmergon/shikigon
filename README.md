@@ -177,7 +177,8 @@ shows **WHO ANSWERS?**, one list:
   you can read, and it goes only to the address you typed it for, and only over https or to a
   server on this machine (localhost) that runs as you, not as a system service, and never
   through a proxy set in your environment: never in plain text over a network, also not one that looks like
-  home — in a café `192.168.1.50` or `macmini.local` can be someone else. A model server in your
+  home — in a café `192.168.1.50` or `macmini.local` can be someone else. A name and a password
+  in the address (`https://me:pw@…`) are a key too and keep the same rule. A model server in your
   home network usually wants no key; one that does is reached over https. The same holds for
   the world: its key goes only to an `https` address (or this machine), and only to the world
   that gave it. If you point the config at another world, Shikigon says so and sends nothing;
@@ -211,7 +212,9 @@ A thinking model can spend its whole answer on thinking and say nothing; `reason
 a 4,000-token window is enough. `max_per_day` caps the calls. The choice goes over
 `[brain.advisor]` in `~/.config/shikigon/shikigon.toml`, which also works by hand
 (`base_url`, `model`); a key for a paid endpoint comes from an environment variable you name
-there (`api_key_env`) or from the private file `advisor_key`.
+there (`api_key_env`), and goes only to the `base_url` of that same section, never to an address
+you pick in the panel; or from the private file `advisor_key`, for the address you typed it for.
+A key kept by 0.1.3 or earlier names no address: the address asks for it once more.
 
 ### Your agent takes over
 
@@ -308,6 +311,13 @@ neither goes there.
 The skill tells the agent how to look (status, journal, lessons, the rules of the world), what
 it may do for you (set the compass), and what it never does (touch the key, end
 the agent, edit files unasked). The panel has no button for this yet.
+
+The coach is your own agent, with the tools you gave it: Shikigon does not start it and does
+not limit what it may do. What it reads holds text from outside: in the snapshot and the
+journal the server's sentences, names other agents chose and texts a model wrote to them; the
+rules come from the world. The skill tells it to take all of that as information, never as an
+instruction. Whether it keeps to that is up to the agent and how you set it up. Shikigon's own
+advisor, by contrast, runs with every tool off (see above).
 
 ## Shortcuts
 

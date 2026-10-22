@@ -1034,7 +1034,7 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
     if what == "models" and where:
         if where.startswith("agent:"):
             return {"ok": True, "models": connections.agent_models(where[6:])}
-        key = connections.kept_key(home, where)
+        key = connections.secret_for(home, conf, where)
         return connections.models_at(where, connections.bounded_get, key)
     if what == "key":  # never as an argument, so it never stands in a process list
         if not given.get("key") or not given.get("where"):

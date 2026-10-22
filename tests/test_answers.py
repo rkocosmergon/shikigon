@@ -147,7 +147,9 @@ def test_a_key_never_goes_to_a_system_accounts_server(
     url = "http://127.0.0.1:11434/v1"
     assert connections.ours(url), "a question may go to the system's Ollama"
     assert not connections.ours(url, with_key=True), "a key may not"
-    send = advisor.http_send({**MODEL, "base_url": url}, key="sk-paid")
+    home = brain.private_state()
+    connections.keep_key(home, "sk-paid", url)
+    send = advisor.http_send({**MODEL, "base_url": url}, home=home)
     with pytest.raises(connections.NotOurs):
         asyncio.run(send([{"role": "user", "content": "hi"}], 10))
     world = {"world": {"base_url": "http://127.0.0.1:11434"}}
