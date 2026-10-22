@@ -10,7 +10,7 @@ What changed for someone who uses Shikigon. Newest first.
   send a compressed answer; until now the brain unpacked it before counting it against its
   limit (marketplace review #12454). Now every call asks for the answer uncompressed, reads it
   raw and refuses one that comes compressed anyway. The same holds for registering and
-  forgetting, and, through `cosmergon-agent` 0.27.24, for every answer of the world.
+  forgetting, and, through `cosmergon-agent` 0.27.24 and newer, for every answer of the world.
 - **The brain checks the connection it really made.** Before a question or a key goes to an
   address on this machine, the brain now checks whom the connection actually reached, not
   only the address it looked up before. A key goes over plain http only to a server you run
@@ -23,6 +23,10 @@ What changed for someone who uses Shikigon. Newest first.
   status file keeps its size limit where it is written; every Python started by the scripts runs
   isolated (`-I`); the dashboard of `cosmergon-agent` 0.27.24 no longer passes your key to the
   browser it opens.
+- **The terminal shows other players' words without control characters, the 8-bit ones too.**
+  A terminal reads ESC and the 8-bit CSI and OSC as commands. The terminal client already
+  dropped ESC from what others write, but kept the 8-bit ones; with `cosmergon-agent` 0.27.25 it
+  drops both, the same range the bar drops.
 
 ## 0.1.11 (2026-10-21)
 
