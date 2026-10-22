@@ -14,9 +14,9 @@ certifi==2026.10.19 \
     # via
     #   httpcore
     #   httpx
-cosmergon-agent==0.27.19 \
-    --hash=sha256:b6732f9858077c117798d8d2b500fde5cb7d47496642b75fad5d4b0f06824e13 \
-    --hash=sha256:e6062ed85d99f5e08d758a4c733d53cae0a04e670c210655814a0bfcef2d0dbe
+cosmergon-agent==0.27.24 \
+    --hash=sha256:2c22e1f7db630960a2d280ea435290fb5e3b47ffda9c338f843b3ea2c9deed62 \
+    --hash=sha256:a8812e4b78164267570875b41307b7dac8909309cacd8826bb4abb1403e69d32
     # via
     #   -r requirements.in
     #   cosmergon-decider-tree
@@ -61,9 +61,9 @@ mdurl==0.1.2 \
     --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8 \
     --hash=sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba
     # via markdown-it-py
-platformdirs==4.13.3 \
-    --hash=sha256:5e567f664eb087ab8521c0179cd8d1bd60857d271136567a39719e28e2d383ce \
-    --hash=sha256:f6ad7f447f24f8a3b82cce5976387428bff894a0eca6c3488f4a17f153c130c4
+platformdirs==4.13.5 \
+    --hash=sha256:05831adf87d392760f4b5c3a0a95579ab5a10b18b9b9bd43680dcb47544788a0 \
+    --hash=sha256:53d3ec4280b815c1e0b02edad7f9ee8fda1ba9c0865dd9c2e6e63849ce82fc1e
     # via textual
 pygments==2.21.0 \
     --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9 \

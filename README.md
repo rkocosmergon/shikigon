@@ -166,19 +166,20 @@ shows **WHO ANSWERS?**, one list:
   was found: if your server stops and another user takes its port, nothing more is sent there,
   and the panel says so. The same holds for every address that leads to this machine, also one
   you typed (`localhost`, `127.0.0.1`, your machine's own name or address), and for a world on
-  this machine. Over https the certificate already makes sure of it. What remains is the
-  moment between that check and the connection, about a millisecond: only if your own server
-  ended exactly then could another user's take it.
+  this machine. Over https the certificate already makes sure of it. The brain also checks the
+  connection it really made, before a byte of the question leaves: a name that points elsewhere
+  when connecting, or a proxy set in your environment, cannot lead past the check.
 - **set up an agent in Omarchy…** opens Omarchy's own chooser; signing in is the agent's part.
 - **an address of its own…**: type any OpenAI-compatible address and pick one of the models it
   offers. It asks for a key only if the address wants one; the key is then kept in a file only
-  you can read, and it goes only to the address you typed it for, and only over https or to
-  this machine (localhost): never in plain text over a network, also not one that looks like
+  you can read, and it goes only to the address you typed it for, and only over https or to a
+  server on this machine (localhost) that runs as you, not as a system service, and never
+  through a proxy set in your environment: never in plain text over a network, also not one that looks like
   home — in a café `192.168.1.50` or `macmini.local` can be someone else. A model server in your
   home network usually wants no key; one that does is reached over https. The same holds for
   the world: its key goes only to an `https` address (or this machine), and only to the world
   that gave it. If you point the config at another world, Shikigon says so and sends nothing;
-  register a new Shikigon there. A model's answer is read only up to 256 KiB.
+  register a new Shikigon there. A model's answer is read uncompressed and only up to 256 KiB.
 
 Whatever you pick is asked one real question first and taken only if it answers. That gives
 you three things:

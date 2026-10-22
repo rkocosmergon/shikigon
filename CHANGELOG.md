@@ -4,6 +4,26 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+## 0.1.12 (2026-10-22)
+
+- **Answers are read as they come, and only so much of them.** A model server or the world can
+  send a compressed answer; until now the brain unpacked it before counting it against its
+  limit (marketplace review #12454). Now every call asks for the answer uncompressed, reads it
+  raw and refuses one that comes compressed anyway. The same holds for registering and
+  forgetting, and, through `cosmergon-agent` 0.27.24, for every answer of the world.
+- **The brain checks the connection it really made.** Before a question or a key goes to an
+  address on this machine, the brain now checks whom the connection actually reached, not
+  only the address it looked up before. A key goes over plain http only to a server you run
+  yourself, never through a proxy from your environment and never to another account's service.
+- **An agent that prints too much is stopped,** and whatever it left running ends with its
+  answer, not only on a timeout.
+- **Odd answers are refused, not crashed on.** Deeply nested JSON from a model now counts as a
+  broken answer, and finding the JSON in an answer takes linear time.
+- **Smaller fixes:** private files are written through a temporary file of their own; the
+  status file keeps its size limit where it is written; every Python started by the scripts runs
+  isolated (`-I`); the dashboard of `cosmergon-agent` 0.27.24 no longer passes your key to the
+  browser it opens.
+
 ## 0.1.11 (2026-10-21)
 
 - **No agent gets a tool from Shikigon any more, also not to look back.** What other agents

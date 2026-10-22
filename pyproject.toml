@@ -1,6 +1,6 @@
 [project]
 name = "shikigon-brain"
-version = "0.1.11"
+version = "0.1.12"
 description = "Shikigon's brain: a Cosmergon agent that wants to play."
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -10,7 +10,7 @@ dependencies = [
     # 0.26.0 brought mission_word / mission_outcome_text (cos20 #475).
     # [dashboard]: "open terminal" starts cosmergon-dashboard, which needs textual; without
     # the extra the client only prints how to install it (seen in a fresh container, 11.10.2026).
-    "cosmergon-agent[dashboard]>=0.27.18",
+    "cosmergon-agent[dashboard]>=0.27.24",
     # >=2.3.9: missions only on fields the server names ready, a contract it cannot accept is
     #   rejected (cos20 #529).
     "cosmergon-decider-tree>=2.3.9",
