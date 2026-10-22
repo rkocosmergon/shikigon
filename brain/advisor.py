@@ -17,7 +17,6 @@ from __future__ import annotations
 import datetime
 import json
 import os
-import re
 import time
 import tomllib
 from collections.abc import Awaitable, Callable
@@ -250,11 +249,8 @@ def answer_messages(
 
 def parse(text: str, count: int) -> tuple[int, str] | None:
     """The model's choice (1-based) and its reason, or ``None`` if there is no usable one."""
-    found = re.search(r"\{.*\}", text or "", re.DOTALL)
-    if found is None:
-        return None
     try:
-        data = json.loads(found.group(0))
+        data = files.json_in(text or "")
     except ValueError:
         return None
     choice = data.get("choice") if isinstance(data, dict) else None
@@ -293,25 +289,28 @@ def http_send(
         import connections
         import httpx
 
-        headers = {}
+        headers = dict(connections.PLAIN)
         secret = os.environ.get(str(conf.get("api_key_env") or ""), "") or key
         url = str(conf["base_url"]).rstrip("/") + "/chat/completions"
-        if not connections.ours(url):
+        if not connections.ours(url, with_key=bool(secret)):
             raise connections.NotOurs(connections.NOT_OURS)
         if secret:
             if not connections.key_may_go_to(url):
                 raise connections.AgentError(connections.KEY_ONLY_SAFE)
             headers["Authorization"] = f"Bearer {secret}"
         timeout = float(conf.get("timeout_s", 20)) * patience
+        local = connections.on_this_machine(url)
+        trace = {"trace": connections.async_peer_check(local, bool(secret))}
         async with (
-            httpx.AsyncClient(timeout=timeout, transport=transport) as client,
+            httpx.AsyncClient(timeout=timeout, transport=transport, trust_env=not local) as client,
             client.stream(
-                "POST", url, json=request_body(conf, messages, max_tokens), headers=headers
+                "POST", url, json=request_body(conf, messages, max_tokens), headers=headers,
+                extensions=trace,
             ) as resp,
         ):
             resp.raise_for_status()
             body = await connections.bounded_body(resp, timeout)
-        return str(json.loads(body)["choices"][0]["message"].get("content") or "")
+        return str(files.loads(body)["choices"][0]["message"].get("content") or "")
 
     return send
 
@@ -336,7 +335,7 @@ def _counts(home: Path) -> dict[str, Any]:
     path = home / "advisor_count.json"
     if not path.exists():
         return {}
-    return dict(json.loads(path.read_text(encoding="utf-8")))
+    return dict(files.loads(path.read_text(encoding="utf-8")))
 
 
 def _keep(home: Path, counts: dict[str, Any]) -> None:

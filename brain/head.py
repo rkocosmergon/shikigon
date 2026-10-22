@@ -319,7 +319,7 @@ def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     if start < 0 or end <= start:
         return None, "the answer was not JSON"
     try:
-        data = json.loads(text[start : end + 1])
+        data = files.loads(text[start : end + 1])
     except ValueError:
         return None, "the answer was not JSON"
     if not isinstance(data, dict):
@@ -345,7 +345,7 @@ def _today() -> str:
 
 def _budget_data(home: Path) -> dict[str, Any]:
     try:
-        data = json.loads((home / BUDGET_FILE).read_text(encoding="utf-8"))
+        data = files.loads((home / BUDGET_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}

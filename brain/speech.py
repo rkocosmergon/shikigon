@@ -77,10 +77,8 @@ def memo_path(home: Path) -> Path:
 
 def load(home: Path) -> dict[str, Any]:
     """Moves counted, the move it last talked on, the messages it has answered."""
-    import json
-
     try:
-        data = json.loads(memo_path(home).read_text(encoding="utf-8"))
+        data = files.loads(memo_path(home).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         data = {}
     return {

@@ -20,7 +20,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Self
+from typing import Any
 
 import httpx
 import pytest
@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 import advisor
 import connections
 import shikigon_brain as brain
+from conftest import endless, hostile, wire
 
 BRAIN = Path(__file__).resolve().parent.parent / "brain"
 ME = os.getuid()
@@ -78,7 +79,7 @@ def test_a_question_never_reaches_a_port_another_user_took_after_it_was_found(
 
     def server(request: httpx.Request) -> httpx.Response:
         seen.append(request.content)
-        return httpx.Response(200, content=_chat("ok"))
+        return wire(200, content=_chat("ok"))
 
     send = advisor.http_send(MODEL, transport=httpx.MockTransport(server))
     assert asyncio.run(send(ASK, 10)) == "ok", "the player's own server answers"
@@ -247,28 +248,31 @@ def sending_functions() -> dict[str, bool]:
 
 def test_every_place_that_sends_reads_the_port_first() -> None:
     found = sending_functions()
-    assert {"connections.py:bounded_get", "advisor.py:send", "shikigon_brain.py:register",
+    assert {"connections.py:bounded_call", "advisor.py:send", "shikigon_brain.py:register",
             "shikigon_brain.py:make_agent"} <= set(found), sorted(found)
     assert all(found.values()), [where for where, ok in found.items() if not ok]
 
 
 def test_the_guard_turns_red_on_a_place_that_sends_unchecked(tmp_path: Path) -> None:
     source = (BRAIN / "connections.py").read_text(encoding="utf-8")
-    unchecked = source.replace("    if not ours(url):\n        raise NotOurs(NOT_OURS)\n", "", 1)
+    unchecked = source.replace(
+        "    if not ours(url, with_key=with_key):\n        raise NotOurs(NOT_OURS)\n", "", 1)
     assert unchecked != source
     tree = ast.parse(unchecked)
     fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
-              and n.name == "bounded_get")
+              and n.name == "bounded_call")
     calls = [n for n in _own_body(fn) if isinstance(n, ast.Call)]
     assert any(_sends(c, set()) for c in calls) and not any(_name(c) in CHECKS for c in calls)
 
 
 def test_no_unbounded_reader_is_handed_on() -> None:
-    """``httpx.get`` reads a whole answer; the brain hands on ``bounded_get`` instead (K6)."""
+    """``httpx.get``/``post``/``delete`` read a whole answer, unpacked; the brain hands on
+    ``bounded_get``, ``bounded_post`` and ``bounded_delete`` instead (K6, K29)."""
+    whole = {"get", "post", "delete", "put", "patch", "request", "stream"}
     for path in BRAIN.glob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Attribute) and getattr(node.value, "id", "") == "httpx":
-                assert node.attr != "get", f"{path.name}:{node.lineno}"
+                assert node.attr not in whole, f"{path.name}:{node.lineno} httpx.{node.attr}"
 
 
 # --- K9: the world's key goes only to the world that gave it ------------------------------------
@@ -313,30 +317,17 @@ def test_a_key_from_before_names_no_world_and_is_bound_to_the_one_it_goes_to_fir
 def test_a_model_answer_is_read_only_up_to_its_limit() -> None:
     huge = _chat("x" * (connections.ANSWER_BYTES + 1))
     send = advisor.http_send(
-        MODEL, transport=httpx.MockTransport(lambda request: httpx.Response(200, content=huge)))
+        MODEL, transport=httpx.MockTransport(lambda request: wire(200, content=huge)))
     with pytest.raises(connections.TooLong):
         asyncio.run(send(ASK, 10))
     assert issubclass(connections.TooLong, advisor.call_errors()), "the rules play the move"
 
 
-def test_the_worlds_rules_are_read_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
-    class Endless:
-        status_code = 200
-        request = None
-
-        def __enter__(self) -> Self:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            return None
-
-        def iter_bytes(self) -> Any:
-            while True:
-                yield b"x" * 65536
-
-    monkeypatch.setattr(httpx, "stream", lambda *a, **k: Endless())
-    cfg = {"world": {"base_url": "https://world.test"}}
-    assert brain.world_rules(cfg, connections.bounded_get) == ""
+def test_the_worlds_rules_are_read_bounded() -> None:
+    # A real server that never ends its answer: the way over a socket (the stub of httpx.stream
+    # used before measured a body already in memory, cos20 #492).
+    with hostile(endless) as (address, _):
+        assert brain.world_rules({"world": {"base_url": address}}, connections.bounded_get) == ""
 
 
 # --- K12: a model name is a name, never an option ------------------------------------------------

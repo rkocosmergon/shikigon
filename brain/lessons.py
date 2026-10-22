@@ -250,11 +250,10 @@ def _labelled(text: str) -> tuple[dict[str, str] | None, str]:
 
 def _json_object(text: str) -> tuple[dict[str, Any] | None, str]:
     """An answer in JSON after all (the earlier form, and some models' habit)."""
-    found = re.search(r"\{.*\}", text or "", re.DOTALL)
-    if found is None:
+    if "{" not in (text or ""):
         return None, "no LESSON/LESS/MORE lines in the answer"
     try:
-        data = json.loads(found.group(0))
+        data = files.json_in(text or "")
     except ValueError:
         return None, "the JSON in the answer is broken"
     if not isinstance(data, dict):
@@ -292,7 +291,7 @@ def kept(home: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = files.loads(path.read_text(encoding="utf-8"))
     except ValueError:
         return []
     return [entry for entry in data if isinstance(entry, dict)] if isinstance(data, list) else []

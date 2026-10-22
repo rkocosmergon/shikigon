@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 import advisor
 import connections
 import shikigon_brain as brain
+from conftest import wire
 from test_brain import FakeAgent
 
 CONF = {
@@ -283,7 +284,7 @@ async def test_the_real_call_goes_to_the_endpoint_you_entered(
         seen["url"] = str(request.url)
         seen["auth"] = request.headers.get("authorization")
         seen["body"] = json.loads(request.content)
-        return httpx.Response(
+        return wire(
             200, json={"choices": [{"message": {"content": '{"choice": 2, "why": "ok"}'}}]}
         )
 
@@ -303,7 +304,7 @@ async def test_a_key_never_goes_over_plain_http_to_the_open_internet() -> None:
     asked: list[str] = []
     answer = {"choices": [{"message": {"content": "ok"}}]}
     transport = httpx.MockTransport(
-        lambda request: asked.append(str(request.url)) or httpx.Response(200, json=answer))
+        lambda request: asked.append(str(request.url)) or wire(200, json=answer))
     plain = advisor.http_send({**CONF, "base_url": "http://model.test/v1"}, transport=transport,
                               key="sk-paid")
     with pytest.raises(connections.AgentError, match="only over https"):

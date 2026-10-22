@@ -89,7 +89,7 @@ def said_on_stdin(asked: str = "") -> str:
 def json_on_stdin() -> dict[str, Any]:
     """One JSON object on stdin: how the bar sends an address or a model (never as arguments)."""
     try:
-        data = json.loads(said_on_stdin())
+        data = files.loads(said_on_stdin())
     except ValueError:
         return {}
     return data if isinstance(data, dict) else {}
@@ -106,13 +106,9 @@ def load_config() -> dict[str, Any]:
 
 
 def write_private(path: Path, data: dict[str, Any]) -> None:
-    """Write JSON readable by the owner only (0600), created that way, never widened."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        json.dump(data, handle)
-    os.replace(tmp, path)
+    """Write JSON readable by the owner only (0600), created that way, never widened: through
+    ``files.write_json``, whose temporary file is new and the brain's alone (cos20 #492 S12)."""
+    files.write_json(path, data)
 
 
 def credentials_path() -> Path:
@@ -123,7 +119,7 @@ def load_credentials() -> dict[str, str] | None:
     path = credentials_path()
     if not path.exists():
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = files.loads(path.read_text(encoding="utf-8"))
     return data if isinstance(data, dict) else None
 
 
@@ -171,7 +167,7 @@ def world_refusal(cfg: dict[str, Any]) -> str:
     world = str(cfg.get("world", {}).get("base_url") or "https://cosmergon.com")
     if not world_is_safe(cfg):
         return WORLD_KEY_SAFE
-    return "" if connections.ours(world) else connections.NOT_OURS
+    return "" if connections.ours(world, with_key=True) else connections.NOT_OURS
 
 
 def key_refusal(cfg: dict[str, Any], creds: dict[str, str]) -> str:
@@ -200,7 +196,7 @@ def register(
 
     An existing Shikigon is never overwritten by accident: its key is its life.
     A world that is away or refuses is said in one sentence, not in a traceback.
-    ``post`` is ``httpx.post`` in use and a stub in tests.
+    ``post`` is ``connections.bounded_post`` in use and a stub in tests.
     """
     import advisor
     import connections
@@ -236,7 +232,8 @@ def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
     The server deletes the agent. A key that has already ended can delete nothing: the
     world keeps that agent as a Vagant, and only the files here go.
     If the server does not answer or refuses, nothing here is removed, so you can try again.
-    Your configuration stays. ``delete`` is ``httpx.delete`` in use and a stub in tests.
+    Your configuration stays. ``delete`` is ``connections.bounded_delete`` in use and a stub in
+    tests.
     """
     import advisor
 
@@ -469,7 +466,7 @@ def load_seen() -> list[str] | None:
     path = seen_path()
     if not path.exists():
         return None
-    return [str(i) for i in json.loads(path.read_text(encoding="utf-8")).get("ids", [])]
+    return [str(i) for i in files.loads(path.read_text(encoding="utf-8")).get("ids", [])]
 
 
 async def tournament_journal(agent: Any, state: Any) -> int:
@@ -513,7 +510,7 @@ KEY_ENDED, WORLD_SILENT, CONFIG = "key_ended", "world_silent", "config"
 def fall_asleep(reason: str, why: str) -> dict[str, Any]:
     """Write the sleeping snapshot and return what is said about it."""
     last = {"action": "none", "ok": False, "why": why}
-    files.write_json(state_dir() / "status.json", {"mood": ASLEEP, "reason": reason, "last": last})
+    write_status({"mood": ASLEEP, "reason": reason, "last": last})
     return last
 
 
@@ -696,8 +693,21 @@ async def tick(
     left = getattr(decider, "budget_left", None)
     if left is not None:  # a number only, for the bar (threat model §1b)
         status["learning_budget_left"] = round(float(left))
-    files.write_json(state_dir() / "status.json", status)
+    write_status(status)
     return last
+
+
+def write_status(status: dict[str, Any]) -> None:
+    """``status.json`` for the bar, never past ``STATUS_BYTES``: the fields above are cut one by
+    one, and this is the one place that holds the bound for all of them, also for a field added
+    later (cos20 #492 S13). Past it, the bar gets the mood and the last move only."""
+    if len(json.dumps(status)) > STATUS_BYTES:
+        last = status.get("last")
+        if not isinstance(last, dict):
+            last = {}
+        kept = {"action": str(last.get("action") or "")[:64], "ok": bool(last.get("ok"))}
+        status = {"mood": str(status.get("mood") or "")[:32], "cut": True, "last": kept}
+    files.write_json(state_dir() / "status.json", status)
 
 
 def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
@@ -1222,10 +1232,10 @@ def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
 
 def _account(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     """Its life on the server: register, a lesson now, forget."""
-    if args.command == "register":
-        import httpx
+    import connections
 
-        print(json.dumps(register(cfg, httpx.post, replace=args.new)))
+    if args.command == "register":
+        print(json.dumps(register(cfg, connections.bounded_post, replace=args.new)))
         return 0
     if args.command == "learn":
         print(json.dumps(asyncio.run(with_agent(cfg, lambda a: learn_now(cfg, a)))))
@@ -1234,9 +1244,7 @@ def _account(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
         why = "this deletes your Shikigon on the server and its files here: add --yes"
         print(json.dumps({"ok": False, "why": why}))
         return 1
-    import httpx
-
-    result = forget(cfg, httpx.delete)
+    result = forget(cfg, connections.bounded_delete)
     print(json.dumps(result))
     return 0 if result["ok"] else 1
 

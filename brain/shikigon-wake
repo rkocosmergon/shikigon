@@ -23,7 +23,7 @@ mkdir -p "$state" "$(dirname "$venv")"
 chmod 700 "$state"
 
 say() {  # stage [sentence]
-    python3 -c 'import json, sys; print(json.dumps({"stage": sys.argv[1], "said": sys.argv[2]}))' \
+    python3 -I -c 'import json, sys; print(json.dumps({"stage": sys.argv[1], "said": sys.argv[2]}))' \
         "$1" "${2:-}" > "$state/setup.json.tmp"
     mv "$state/setup.json.tmp" "$state/setup.json"
     echo "$1${2:+: $2}"
@@ -35,7 +35,7 @@ fail() {
 }
 
 install_brain() {
-    python3 -m venv "$venv" > "$log" 2>&1 || return 1
+    python3 -I -m venv "$venv" > "$log" 2>&1 || return 1
     # Hashes for every package, and wheels only: a source package would run its own build
     # code, with build tools pip fetches without a hash (pip, "Secure installs"; cos20 #492 F9).
     "$venv/bin/pip" install --quiet --disable-pip-version-check --no-cache-dir --require-hashes \
@@ -47,7 +47,7 @@ want="$(sha256sum "$lock" | cut -d' ' -f1)"
 # Rebuilt when the lock changed, or when the brain can no longer load its packages. The second
 # happens without any change here: the environment points at the system's python3, and when
 # the system moves to a new Python (3.14 to 3.15), its packages sit in the old version's folder.
-healthy() { "$venv/bin/python" -c 'import cosmergon_agent, cosmergon_decider_tree' 2>/dev/null; }
+healthy() { "$venv/bin/python" -I -c 'import cosmergon_agent, cosmergon_decider_tree' 2>/dev/null; }
 if [ "$(cat "$venv/.lock-sha256" 2>/dev/null)" != "$want" ] || ! healthy; then
     say brain
     # An update that fails must not leave it without a brain: the old one steps aside and

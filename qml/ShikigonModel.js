@@ -54,6 +54,9 @@ function moveWords(entry) {
 // Newest first; the same entry several times in a row becomes one line with a count.
 function journalLines(entries, limit) {
   var lines = []
+  // Only a real array: an object from outside with "length": 1e300 would hold the shell's
+  // thread in this loop (class of marketplace reviews #12425, #12401; cos20 #492 S14).
+  if (!Array.isArray(entries)) return lines
   for (var i = 0; i < entries.length; i++) {
     var line = journalLine(entries[i])
     var previous = lines.length > 0 ? lines[lines.length - 1] : null

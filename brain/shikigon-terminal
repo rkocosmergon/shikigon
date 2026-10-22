@@ -10,7 +10,7 @@ if [ ! -f "$state/credentials.json" ]; then
     read -r -p "Press Enter to close." _
     exit 1
 fi
-COSMERGON_API_KEY=$("$venv/bin/python" -c 'import json,sys; print(json.load(open(sys.argv[1]))["api_key"])' "$state/credentials.json")
+COSMERGON_API_KEY=$("$venv/bin/python" -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["api_key"])' "$state/credentials.json")
 export COSMERGON_API_KEY
 # [M] in the terminal asks the same advisor as "ask" in the bar: the dashboard runs this
 # command, gives it the question on stdin (cosmergon-agent >= 0.27.10; never as an argument,

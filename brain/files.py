@@ -10,9 +10,11 @@ reader skips a line that broke instead of failing on it.
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -20,11 +22,45 @@ LINE_BYTES = 300  # a journal line is about 100 bytes, rarely 400; enough to rea
 
 
 def write_json(path: Path, data: Any) -> None:
-    """Write a whole JSON file atomically."""
+    """Write a whole JSON file atomically, readable by the owner only (0600).
+
+    The temporary file is new and the brain's alone (``mkstemp``: created with ``O_EXCL`` and
+    mode 0600). A fixed name like ``<name>.tmp`` kept the mode of a file already there and
+    followed a link standing in its place (cos20 #492 S12)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data), encoding="utf-8")
-    os.replace(tmp, path)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def loads(data: str | bytes) -> Any:
+    """``json.loads`` for text from outside: deep nesting is a ``ValueError`` like other bad JSON.
+
+    ``json.loads("[" * 100_000)`` raises ``RecursionError``, which no ``except ValueError``
+    catches: a model's answer of brackets ended a move with a traceback instead of a refusal
+    (cos20 #492 S8). Every JSON the brain reads goes through here (guard in ``test_files``)."""
+    try:
+        return json.loads(data)
+    except RecursionError as exc:
+        raise ValueError("the JSON is nested too deep") from exc
+
+
+def json_in(text: str) -> Any:
+    """The JSON between the first ``{`` and the last ``}`` of a model's answer.
+
+    Raises ``ValueError`` if there is none or it is broken. ``find``/``rfind`` are linear;
+    ``re.search(r"\\{.*\\}", text, re.DOTALL)`` before was quadratic in the number of ``{``
+    (32,000 took 0.3 s, a 256 KiB answer some 20 s; cos20 #492 S7)."""
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("no JSON object in the answer")
+    return loads(text[start : end + 1])
 
 
 def append(path: Path, entry: dict[str, Any], keep_bytes: int | None = None) -> None:
@@ -72,7 +108,7 @@ def tail(path: Path, count: int, line_bytes: int = LINE_BYTES) -> list[dict[str,
     entries: list[dict[str, Any]] = []
     for line in lines[-count:]:
         try:
-            entry = json.loads(line)
+            entry = loads(line)
         except ValueError:
             continue
         if isinstance(entry, dict):

@@ -32,8 +32,10 @@ import signal
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.parse
+import urllib.request
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -198,7 +200,7 @@ def chosen(home: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = files.loads(path.read_text(encoding="utf-8"))
     except ValueError:
         return {}
     return data if isinstance(data, dict) else {}
@@ -241,7 +243,7 @@ def kept_key(home: Path, url: str) -> str:
         return ""
     text = path.read_text(encoding="utf-8").strip()
     try:
-        kept = json.loads(text)
+        kept = files.loads(text)
     except ValueError:
         kept = None
     if not isinstance(kept, dict):
@@ -266,7 +268,7 @@ def usable(conf: dict[str, Any]) -> bool:
 # ---------- finding ---------------------------------------------------------------------------
 
 
-KEY_ONLY_SAFE = "a key goes only over https, or to this machine (localhost)"
+KEY_ONLY_SAFE = "a key goes only over https, or straight to this machine (localhost, no proxy)"
 
 
 def key_may_go_to(base_url: str) -> bool:
@@ -285,12 +287,25 @@ def key_may_go_to(base_url: str) -> bool:
     host = (parts.hostname or "").lower()
     if parts.scheme != "http" or not host:
         return False
-    if host == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
+    if host != "localhost":
+        try:
+            if not ipaddress.ip_address(host).is_loopback:
+                return False
+        except ValueError:
+            return False
+    return not http_proxy_set()
+
+
+def http_proxy_set() -> bool:
+    """True if the environment names a proxy for plain http (``http_proxy``, ``all_proxy``).
+
+    httpx sends through it, also to ``localhost``: a key meant to stay on this machine would
+    cross the network in the clear (cos20 #492 S5). ``no_proxy`` is not trusted here, because
+    httpx and the standard library read it differently; with a proxy set, no key goes over http.
+    The brain's own calls to this machine do not use the environment at all (``trust_env``).
+    """
+    proxies = urllib.request.getproxies()
+    return bool(proxies.get("http") or proxies.get("all"))
 
 
 # What a model list may bring into the shell (cos20 #492 F1): the list goes through the
@@ -302,46 +317,91 @@ MODELS_KEPT = 200
 NAME_CHARS = 120
 
 
+PLAIN = {"Accept-Encoding": "identity"}  # every answer as it is (K29)
+
+
 class TooLong(ValueError):
-    """An answer past ``ANSWER_BYTES`` or ``ANSWER_SECONDS`` (an odd answer, like bad JSON)."""
+    """An answer past ``ANSWER_BYTES`` or ``ANSWER_SECONDS``, or one that came compressed (an
+    odd answer, like bad JSON)."""
+
+
+def refuse_encoded(headers: Any) -> None:
+    """An answer comes as it is, or not at all.
+
+    httpx unpacks gzip while it reads, also stacked (``gzip, gzip, ...``), with no bound on what
+    comes out, and before any count of ours: the 256 KiB limit was passed with a few KB on the
+    wire (marketplace review #12454, cos20 #492). So every call asks for ``identity``, reads the
+    raw bytes, and an answer that comes encoded anyway is refused before a byte is unpacked."""
+    coding = str(headers.get("content-encoding", "")).strip().lower()
+    if coding not in ("", "identity"):
+        raise TooLong("the answer came compressed, though asked for as it is")
 
 
 async def bounded_body(resp: Any, seconds: float) -> bytes:
-    """A streamed answer, read only up to ``ANSWER_BYTES`` and ``seconds`` in all: a server
-    that sends without end, or a byte at a time, cannot fill the brain's memory or hold it
-    (the class of marketplace review #12064; a model server can be plain http in the LAN)."""
+    """A streamed answer, read raw only up to ``ANSWER_BYTES`` and ``seconds`` in all: a server
+    that sends without end, a byte at a time, or compressed cannot fill the brain's memory or
+    hold it (the class of marketplace reviews #12064, #12454; a model server can be plain http
+    in the LAN)."""
+    refuse_encoded(resp.headers)
     started = time.monotonic()
     body = bytearray()
-    async for chunk in resp.aiter_bytes():
+    async for chunk in resp.aiter_raw():
         body += chunk
         if len(body) > ANSWER_BYTES or time.monotonic() - started > seconds:
             raise TooLong("the answer was too long")
     return bytes(body)
 
 
-def bounded_get(url: str, headers: dict[str, str] | None = None, timeout: float = 4) -> Any:
-    """``httpx.get`` with a limit on the body and on the whole time, not only on each read.
+def bounded_call(method: str, url: str, *, headers: dict[str, str] | None = None,
+                 payload: Any = None, timeout: float = 4,
+                 seconds: float = ANSWER_SECONDS) -> Any:
+    """One HTTP call with a limit on the raw body and on the whole time, not only on each read.
 
-    Nothing goes to a port on this machine that is not the player's right now (H9)."""
+    Nothing goes to a port on this machine that is not the player's right now (H9): read
+    before connecting, and at the socket again once connected (``peer_check``). A call that
+    carries a key goes to the player's own server only, never to a system account's."""
     import httpx
 
-    if not ours(url):
+    with_key = "Authorization" in (headers or {})
+    if not ours(url, with_key=with_key):
         raise NotOurs(NOT_OURS)
+    local = on_this_machine(url)
     started = time.monotonic()
     body = bytearray()
-    with httpx.stream("GET", url, headers=headers or {}, timeout=timeout) as resp:
-        for chunk in resp.iter_bytes():
+    sent = {**(headers or {}), **PLAIN}
+    trace = {"trace": peer_check(local, with_key)}
+    with (
+        httpx.Client(timeout=timeout, trust_env=not local) as client,
+        client.stream(method, url, headers=sent, json=payload, extensions=trace) as resp,
+    ):
+        refuse_encoded(resp.headers)
+        for chunk in resp.iter_raw():
             body += chunk
-            if len(body) > ANSWER_BYTES or time.monotonic() - started > ANSWER_SECONDS:
-                raise TooLong(url)
+            if len(body) > ANSWER_BYTES or time.monotonic() - started > seconds:
+                raise TooLong(short_host(url))
     status = resp.status_code
 
     def raise_for_status() -> None:
         if status >= 400:
             raise httpx.HTTPStatusError(f"HTTP {status}", request=resp.request, response=resp)
 
-    return SimpleNamespace(status_code=status, json=lambda: json.loads(bytes(body)),
+    return SimpleNamespace(status_code=status, json=lambda: files.loads(bytes(body)),
                            raise_for_status=raise_for_status)
+
+
+def bounded_get(url: str, headers: dict[str, str] | None = None, timeout: float = 4) -> Any:
+    """``httpx.get`` with the bounds of ``bounded_call``."""
+    return bounded_call("GET", url, headers=headers, timeout=timeout)
+
+
+def bounded_post(url: str, json: Any = None, timeout: float = 30) -> Any:
+    """``httpx.post`` with the bounds of ``bounded_call`` (registration, cos20 #492 S2)."""
+    return bounded_call("POST", url, payload=json, timeout=timeout, seconds=timeout)
+
+
+def bounded_delete(url: str, headers: dict[str, str] | None = None, timeout: float = 30) -> Any:
+    """``httpx.delete`` with the bounds of ``bounded_call`` (forget, cos20 #492 S2)."""
+    return bounded_call("DELETE", url, headers=headers, timeout=timeout, seconds=timeout)
 
 
 def clean_names(names: list[Any]) -> list[str]:
@@ -412,19 +472,27 @@ def system_accounts_below() -> int:
     return 1000
 
 
-def own_server(base_url: str, tables: list[str] | None = None, me: int | None = None) -> bool:
-    """True if the server at a local port runs as the player or as a system service.
+def own_server(base_url: str, tables: list[str] | None = None, me: int | None = None, *,
+               system_ok: bool = True) -> bool:
+    """True if the server at a local port runs as the player or (``system_ok``) as a system
+    service.
 
     Any local user can listen on a free port; a server another person runs there is not
     "on this machine" for the player, and their question would go to that person
-    (cos20 #492 F2). Ollama on Arch runs as the system user ``ollama``.
+    (cos20 #492 F2). Ollama on Arch runs as the system user ``ollama``. A call that carries a
+    key passes ``system_ok=False``: a system account is another account (marketplace review
+    #12543, cos20 #492 S6), and a key there would leave the player.
     """
     port = port_of(base_url)
-    if port is None:
-        return False
+    return port is not None and own_port(port, tables, me, system_ok=system_ok)
+
+
+def own_port(port: int, tables: list[str] | None = None, me: int | None = None, *,
+             system_ok: bool = True) -> bool:
+    """True if every listener on this port is the player (or a system service, ``system_ok``)."""
     owners = listeners(port, proc_tables() if tables is None else tables)
     me = os.getuid() if me is None else me
-    below = system_accounts_below()
+    below = system_accounts_below() if system_ok else 0
     return bool(owners) and all(uid == me or uid < below for uid in owners)
 
 
@@ -521,7 +589,8 @@ def on_this_machine(
     return any(_here(str(answer[4][0]), mine) for answer in answers)
 
 
-def ours(base_url: str, tables: list[str] | None = None, me: int | None = None) -> bool:
+def ours(base_url: str, tables: list[str] | None = None, me: int | None = None, *,
+         with_key: bool = False) -> bool:
     """May anything be sent to this address now?
 
     An address that leads to this machine is used only while every listener on its port runs
@@ -538,7 +607,61 @@ def ours(base_url: str, tables: list[str] | None = None, me: int | None = None) 
     """
     if urllib.parse.urlsplit(base_url).scheme == "https":
         return True
-    return not on_this_machine(base_url) or own_server(base_url, tables, me)
+    return not on_this_machine(base_url) or own_server(base_url, tables, me,
+                                                       system_ok=not with_key)
+
+
+PEER_ELSEWHERE = ("that address is on this machine, but the connection reached another one "
+                  "(a proxy?): nothing was sent")
+
+
+def peer_refusal(host: str, port: int, local: bool, with_key: bool) -> str:
+    """Why the connection just made may not carry the request, or ``""``."""
+    here = _here(host, own_addresses())
+    if local and not here:
+        return PEER_ELSEWHERE
+    if here and not own_port(port, system_ok=not with_key):
+        return NOT_OURS
+    return ""
+
+
+def _peer(stream: Any) -> tuple[str, int]:
+    addr = stream.get_extra_info("server_addr") or ("", 0)
+    return str(addr[0]), int(addr[1])
+
+
+def peer_check(local: bool, with_key: bool) -> Callable[[str, dict[str, Any]], None]:
+    """An httpx ``trace`` hook: whom the connection reached, checked before a byte of the
+    request leaves.
+
+    ``ours`` reads the address before connecting, and httpx resolves the name again when it
+    connects (a name can point elsewhere by then), and a proxy from the environment connects to
+    itself. So the last word is the socket's own peer (cos20 #492 S5, §0 rule 5)."""
+
+    def check(event: str, info: dict[str, Any]) -> None:
+        if event != "connection.connect_tcp.complete":
+            return
+        stream = info["return_value"]
+        if why := peer_refusal(*_peer(stream), local, with_key):
+            stream.close()
+            raise NotOurs(why)
+
+    return check
+
+
+def async_peer_check(local: bool, with_key: bool) -> Callable[[str, dict[str, Any]],
+                                                               Awaitable[None]]:
+    """``peer_check`` for an async client."""
+
+    async def check(event: str, info: dict[str, Any]) -> None:
+        if event != "connection.connect_tcp.complete":
+            return
+        stream = info["return_value"]
+        if why := peer_refusal(*_peer(stream), local, with_key):
+            await stream.aclose()
+            raise NotOurs(why)
+
+    return check
 
 
 def found(
@@ -575,25 +698,80 @@ def short_host(base_url: str) -> str:
     return urllib.parse.urlsplit(base_url).hostname or ""
 
 
+AGENT_OUTPUT_BYTES = 1024 * 1024  # what an agent may print; an answer is a few KB
+_POLL_S = 0.05
+
+
+class TooMuchOutput(subprocess.SubprocessError):
+    """An agent that printed past ``AGENT_OUTPUT_BYTES``."""
+
+
 def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str] | None = None,
                  input: str | None = None, timeout: float | None = None,
                  capture_output: bool = True, text: bool = True, check: bool = False) -> Any:
-    """``subprocess.run`` in a process group of its own. On a timeout the whole group ends,
-    also what the agent started itself: an agent is a program around the model, and a
-    child left running would go on after its answer was given up (class of review #12242)."""
+    """``subprocess.run`` in a process group of its own, with a bound on what it prints.
+
+    The whole group ends when the agent is done, on a timeout, or once it printed past
+    ``AGENT_OUTPUT_BYTES``: an agent is a program around the model, and a child left running
+    would go on after its answer was given (class of review #12242; until 0.1.11 only on a
+    timeout). What it prints is the model's answer passed on, so it is read like any answer,
+    with a limit (K29, cos20 #492 S9; until 0.1.11 ``communicate`` kept all of it). The group
+    is ended while its leader is not yet reaped, so its number cannot belong to anyone else.
+    A child that opens a session of its own (``setsid``) leaves the group; that stays named
+    (threat model K14)."""
     del capture_output, check  # always captured, never raised on the exit code
     stdin = subprocess.PIPE if input is not None else subprocess.DEVNULL
-    with subprocess.Popen(argv, cwd=cwd, env=env, text=text, stdin=stdin, stdout=subprocess.PIPE,
+    with subprocess.Popen(argv, cwd=cwd, env=env, stdin=stdin, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, start_new_session=True) as proc:
-        try:
-            out, err = proc.communicate(input, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(proc.pid, signal.SIGKILL)
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                proc.communicate(timeout=2)  # a child that left the group keeps no pipe open
-            raise
-    return subprocess.CompletedProcess(argv, proc.returncode, out, err)
+        out, err, over = bytearray(), bytearray(), threading.Event()
+        threads = [threading.Thread(target=_drain, args=(pipe, into, over), daemon=True)
+                   for pipe, into in ((proc.stdout, out), (proc.stderr, err))]
+        if input is not None:
+            threads.append(threading.Thread(target=_feed, args=(proc.stdin, input), daemon=True))
+        for thread in threads:
+            thread.start()
+        ended = _wait_unreaped(proc.pid, timeout, over)
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+        for thread in threads:
+            thread.join(timeout=2)  # a child that left the group may still hold a pipe
+    if over.is_set():
+        raise TooMuchOutput(f"the agent printed more than {AGENT_OUTPUT_BYTES} bytes")
+    if not ended:
+        raise subprocess.TimeoutExpired(argv, timeout or 0)
+    decode = (lambda b: bytes(b).decode("utf-8", "replace")) if text else bytes
+    return subprocess.CompletedProcess(argv, proc.returncode, decode(out), decode(err))
+
+
+def _drain(pipe: Any, into: bytearray, over: threading.Event) -> None:
+    """Read a pipe into ``into`` until it ends or the agent has printed too much in all."""
+    for chunk in iter(lambda: pipe.read1(64 * 1024), b""):
+        into += chunk
+        if len(into) > AGENT_OUTPUT_BYTES:
+            over.set()
+            return
+
+
+def _feed(pipe: Any, text: str) -> None:
+    """Give the agent its prompt on stdin; an agent that stops reading ends the writing."""
+    with contextlib.suppress(OSError):
+        pipe.write(text.encode("utf-8"))
+    with contextlib.suppress(OSError):
+        pipe.close()
+
+
+def _wait_unreaped(pid: int, timeout: float | None, over: threading.Event) -> bool:
+    """Wait for the leader to end without reaping it (``WNOWAIT``); False on a timeout or too
+    much output. A leader not reaped keeps its number, so the group can be ended safely."""
+    deadline = None if timeout is None else time.monotonic() + timeout
+    while not over.is_set():
+        if os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is not None:
+            return True
+        if deadline is not None and time.monotonic() > deadline:
+            return False
+        time.sleep(_POLL_S)
+    return False
 
 
 def agent_models(agent: str, run: Callable[..., Any] = run_in_group) -> list[str]:
@@ -671,7 +849,7 @@ def opencode_text(output: str) -> str:
     texts: list[str] = []
     for line in output.splitlines():
         try:
-            event = json.loads(line)
+            event = files.loads(line)
         except ValueError:
             continue
         part = event.get("part") if isinstance(event, dict) else None
@@ -704,6 +882,8 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
                        text=True, timeout=timeout, check=False, input=prompt)
         except subprocess.TimeoutExpired:
             raise AgentError(f"{spec['name']} did not answer within {int(timeout)} s") from None
+        except TooMuchOutput:
+            raise AgentError(f"{spec['name']} printed more than an answer") from None
         except OSError as exc:
             why = f"{spec['name']} could not be started ({type(exc).__name__})"
             raise AgentError(why) from None

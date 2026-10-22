@@ -12,7 +12,7 @@ import stat
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Self
+from typing import Any
 
 import pytest
 
@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 import advisor
 import connections
 import shikigon_brain as brain
+from conftest import endless, hostile
 
 
 @pytest.fixture(autouse=True)
@@ -55,26 +56,11 @@ def test_a_list_past_the_limit_is_said_not_read() -> None:
     assert found == {"ok": False, "models": [], "why": "its list of models is too long"}
 
 
-def test_the_bounded_read_stops_at_its_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    class Stream:
-        status_code = 200
-        request = None
-
-        def __enter__(self) -> Self:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            return None
-
-        def iter_bytes(self) -> Any:
-            while True:  # a server that never stops
-                yield b"x" * 65536
-
-    import httpx
-
-    monkeypatch.setattr(httpx, "stream", lambda *a, **k: Stream())
-    with pytest.raises(connections.TooLong):
-        connections.bounded_get("http://localhost:1234/v1/models")
+def test_the_bounded_read_stops_at_its_limit() -> None:
+    # A real server that never stops (until 0.1.11 a stub of httpx.stream: it measured a body
+    # already in memory, cos20 #492).
+    with hostile(endless) as (address, _), pytest.raises(connections.TooLong):
+        connections.bounded_get(f"{address}/v1/models")
 
 
 def test_a_failure_names_the_host_never_a_password_in_the_address() -> None:
