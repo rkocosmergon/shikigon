@@ -3,8 +3,11 @@
 A fresh session read the whole plugin at ``22802ba`` the way the marketplace reviewer does, the
 pinned wheels included. Each test here is red against ``22802ba``: keys bound to no origin
 (B1, B3), a name and password in an address sent as a key where no key may go (B2), programs
-started in the brain's working folder (B6), a version without its changelog heading (B8).
-The tests take the real way: a server on a socket, the brain's own commands.
+started in the brain's working folder (B6), the terminal's key in its environment (B7), a
+version without its changelog heading (B8). Building B7 showed the terminal did not open at
+all at ``22802ba``: its world check ran the brain with ``python -I``, which leaves the brain's
+own folder off ``sys.path``. The tests take the real way: a server on a socket, the brain's own
+commands, the terminal script itself.
 """
 
 from __future__ import annotations
@@ -13,6 +16,8 @@ import ast
 import asyncio
 import io
 import json
+import os
+import subprocess
 import sys
 import time
 from collections.abc import Callable
@@ -177,6 +182,55 @@ def _starts(function: ast.FunctionDef) -> list[tuple[int, str]]:
             if module in ("subprocess", "os"):
                 starts.append((call.lineno, f"{module}.{func.attr}"))
     return starts
+
+
+# --- B7: the terminal gets the key over a pipe, never in its environment -------------------------
+
+KEY = "AGENT-term0001:geheim000000000000000000"
+
+# Stands in for cosmergon-dashboard: writes down what it got, then ends.
+DASHBOARD = """#!{python}
+import json, os, pathlib, sys
+fd = sys.argv[sys.argv.index("--api-key-fd") + 1] if "--api-key-fd" in sys.argv else ""
+seen = {{"argv": sys.argv, "fd": os.read(int(fd), 4096).decode().strip() if fd else "",
+        "environ": pathlib.Path("/proc/self/environ").read_bytes().decode(errors="replace"),
+        "advisor": os.environ.get("COSMERGON_ADVISOR_CMD", "")}}
+pathlib.Path(os.environ["SEEN"]).write_text(json.dumps(seen))
+"""
+
+
+def _terminal(tmp_path: Path, world: str) -> tuple[int, dict[str, Any] | None]:
+    """Run ``brain/shikigon-terminal`` as the bar does, with a stand-in dashboard."""
+    home = tmp_path / "home"
+    bin_ = home / ".local" / "share" / "shikigon" / "venv" / "bin"
+    bin_.mkdir(parents=True)
+    (bin_ / "python").symlink_to(sys.executable)
+    (bin_ / "cosmergon-dashboard").write_text(DASHBOARD.format(python=sys.executable))
+    (bin_ / "cosmergon-dashboard").chmod(0o755)
+    state = tmp_path / "state" / "shikigon"
+    state.mkdir(parents=True)
+    creds = {"agent_id": "a-1", "api_key": KEY, "world": world}
+    (state / "credentials.json").write_text(json.dumps(creds))
+    seen = tmp_path / "seen.json"
+    env = {**os.environ, "HOME": str(home), "XDG_STATE_HOME": str(tmp_path / "state"),
+           "XDG_CONFIG_HOME": str(tmp_path / "config"), "SEEN": str(seen)}
+    done = subprocess.run([str(ROOT / "brain" / "shikigon-terminal")], env=env, input="\n",
+                          capture_output=True, text=True, timeout=60, check=False)
+    return done.returncode, json.loads(seen.read_text()) if seen.exists() else None
+
+
+def test_the_terminal_opens_and_gets_the_key_over_a_pipe_only(tmp_path: Path) -> None:
+    code, seen = _terminal(tmp_path, "https://cosmergon.com:443")
+    assert code == 0 and seen is not None, "the terminal opened (at 22802ba the check broke)"
+    assert KEY not in seen["environ"], "not in /proc/<pid>/environ"
+    assert KEY not in " ".join(seen["argv"])
+    assert seen["fd"] == KEY and "--api-key-fd" in seen["argv"]
+    assert seen["advisor"].endswith(" ask"), "the advisor command is there, without a key"
+
+
+def test_the_terminal_stays_closed_for_a_shikigon_of_another_world(tmp_path: Path) -> None:
+    code, seen = _terminal(tmp_path, "https://other.example:443")
+    assert code == 1 and seen is None, "no dashboard, and no key handed anywhere"
 
 
 # --- B8: the version the manifest ships has its changelog heading -------------------------------

@@ -5,6 +5,8 @@ description = "Shikigon's brain: a Cosmergon agent that wants to play."
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
+    # >=0.27.30: the terminal client takes the key on a file descriptor (--api-key-fd), and
+    #   shows the server's words as text (cos20 #492 B4, B7).
     # >=0.27.10: the terminal client hands the brain the [M] question on stdin, never as an
     #   argument (marketplace review); >=0.27.0 brought [M] itself (COSMERGON_ADVISOR_CMD);
     # 0.26.0 brought mission_word / mission_outcome_text (cos20 #475).
