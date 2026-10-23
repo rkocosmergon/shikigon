@@ -178,8 +178,9 @@ def test_a_reason_is_cut_to_twelve_words() -> None:
 
 async def test_the_rule_tree_alone_never_calls_a_model() -> None:
     decider = brain.make_decider({"brain": {"decider": "tree"}})
-    assert type(decider).__name__ == "TreeDecider"
-    assert not hasattr(decider, "send")
+    # the rule tree inside the brain's careful shell (contracts.Careful, cos20 #492 ninth review)
+    assert type(decider.tree).__name__ == "TreeDecider"
+    assert not hasattr(decider, "send") and not hasattr(decider.tree, "send")
 
 
 async def test_advised_without_an_endpoint_plays_the_rules_and_says_so() -> None:
@@ -386,7 +387,7 @@ def test_settings_come_from_the_shipped_file_and_the_users_win() -> None:
 def test_the_shipped_config_plays_the_rule_tree() -> None:
     cfg = brain.load_config()
     assert cfg["brain"]["decider"] == "tree"
-    assert type(brain.make_decider(cfg)).__name__ == "TreeDecider"
+    assert type(brain.make_decider(cfg).tree).__name__ == "TreeDecider"  # inside Careful
     assert type(brain.make_decider({"brain": {"decider": "advised"}})).__name__ == "AdvisedDecider"
 
 

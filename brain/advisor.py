@@ -282,8 +282,8 @@ def time_left(until: str) -> str:
     try:
         end = datetime.datetime.fromisoformat(until)
         minutes = int((end - datetime.datetime.now(datetime.UTC)).total_seconds() // 60)
-    except (ValueError, TypeError):  # not a time with a zone: say it as it came
-        return f"until {until}"
+    except (ValueError, TypeError):  # not a time with a zone: say it as it came, cut like a fact
+        return f"until {cut(until, 64)}"  # uncut until 0.1.13: up to 8 MiB of the world's (P5)
     if minutes <= 0:
         return "no longer (it has ended)"
     return f"for another {minutes // 60} h {minutes % 60} min"

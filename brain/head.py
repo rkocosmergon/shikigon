@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import advisor
+import contracts
 import files
 
 HEAD_RETRIES = 2  # new choices after the world said no, in one tick
@@ -336,8 +337,10 @@ GIVES_NOTHING = frozenset({
 })  # fmt: skip
 # Gives a number: energy by its amount, goods by their count at the world's reference price.
 TRANSFERS = frozenset({"transfer_energy", "transfer_inventory", "remit_to_owner"})
-# Gives nothing as long as there is no escrow and this agent is not the one who pays.
-CONTRACTS = frozenset({"propose_contract", "accept_contract"})
+# A contract move gives nothing where ``contracts.costs_me`` says it costs nothing; else what it
+# gives cannot be said. Until 0.1.13 only its escrow and a payer written like the agent's own id
+# were read: an alliance with costs per tick, a mercenary it hires and its own id in upper case
+# went past (cos20 #492, ninth review).
 # Names the brain's own call takes for itself (``agent.act(self, action, **params)``): until
 # 0.1.13 ``{"action": …}`` in a model's params ended the brain with a ``TypeError`` (finding 2).
 # ``action`` is also the world's word for the move itself. Its other switches (``strict``,
@@ -372,37 +375,17 @@ def given_value(action: str, params: dict[str, Any], state: Any) -> float | None
     return count * price
 
 
-def _pays_or_pledges(action: str, params: dict[str, Any], state: Any) -> bool:
-    """True if a contract move pledges escrow, or makes this agent the one who pays (tribute); a
-    contract it accepts is read from the offers the world lists, never from the model's words."""
-    fields = _inner(params)
-    escrow = files.finite(fields.get("escrow_amount") or 0)
-    if escrow is None or escrow > 0:
-        return True
-    me = str(getattr(state, "agent_id", "") or "")
-    terms: Any = fields.get("terms")
-    if action == "accept_contract":
-        wanted = str(fields.get("contract_id") or "")
-        offers = [c for c in getattr(state, "pending_contracts", ()) or ()
-                  if isinstance(c, dict) and str(c.get("contract_id")) == wanted]  # fmt: skip
-        if not offers:
-            return True
-        terms = offers[0].get("terms")
-    payer = terms.get("payer_id") if isinstance(terms, dict) else None
-    return payer is not None and (not me or str(payer) == me)
-
-
 def gives_away(action: str, params: dict[str, Any], state: Any) -> float | None:
     """What a move gives to another agent, in energy: ``0`` for a move the world says gives
     nothing, a number for a transfer, ``None`` when it cannot be said beforehand (buying another
-    agent's offer, a contract with escrow or with this agent as payer, a breach, any move not
-    named here). The one place the learning budget asks (``HeadDecider._take``)."""
+    agent's offer, a contract that costs this agent anything, a breach, any move not named here).
+    The one place the learning budget asks (``HeadDecider._take``)."""
     if action in GIVES_NOTHING:
         return 0.0
     if action in TRANSFERS:
         return given_value(action, params, state)
-    if action in CONTRACTS:
-        return None if _pays_or_pledges(action, params, state) else 0.0
+    if action in contracts.CONTRACT_MOVES:
+        return None if contracts.costs_me(action, params, state) else 0.0
     if action == "start_mission":  # a reward or a contract behind it may pay another agent
         fields = _inner(params)
         reward = files.finite(fields.get("reward_energy") or 0)

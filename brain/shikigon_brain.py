@@ -955,10 +955,11 @@ async def right_now(state: Any) -> str:
 
     lines = [advisor.facts(state)]
     if state is not None:
+        import contracts
         from cosmergon_decider_tree import TreeDecider
         from words import move_words
 
-        options = await advisor.proposals(TreeDecider(), state)
+        options = await advisor.proposals(contracts.Careful(TreeDecider()), state)
         said = [move_words({"action": a, "kind": mission_kind(a, p)}) for a, p in options]
         lines.append("Its rules would play next: " + " or ".join(said))
     done = recent_moves(MOVES_TOLD)
@@ -1131,9 +1132,11 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
     conf = advisor.settings(cfg, state_dir())
     name = "advised" if advised else decider_name(cfg, conf)
     if name in BUILT_IN:
+        import contracts
         from cosmergon_decider_tree import TreeDecider
 
-        inner: Any = TreeDecider()
+        # the rules say no to a contract that would cost it (contracts.py, cos20 #492)
+        inner: Any = contracts.Careful(TreeDecider())
         if name == "advised":
             inner = advisor.AdvisedDecider(inner, conf, state_dir(), dry=advised)
         elif name == "head":  # the player's agent chooses every move (cos20 #527)

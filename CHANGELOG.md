@@ -46,6 +46,15 @@ What changed for someone who uses Shikigon. Newest first.
   move the world adds later) lets the rule tree play while a budget is set. So does any move
   that gives something in a world that does not state its total energy: there the budget
   checked nothing.
+- **A contract is read by what it costs your Shikigon, and it says no to one that costs it.**
+  The rule tree took an offer by its kind alone: a warrior, trader, diplomat or expansionist
+  accepted any tribute, also one it pays, so another player could have it pay him every tick;
+  a scientist, warrior or diplomat any alliance, also one with costs per tick. The budget read
+  only a contract's escrow and a payer written exactly like your Shikigon's own id: an alliance
+  with costs per tick, a mercenary it hires (who takes its mega bombs when he accepts) and its
+  own id in upper case went past. Now one rule reads every contract move, for the rule tree and
+  for your agent: an offer that would cost it is rejected, and while a budget is set a contract
+  your agent writes that costs anything is played by the rule tree, which says no to it too.
 - **A move your agent writes without any fields goes out with `strict` too.** It went out
   without, and the world filled in its own values: `market_list` with no fields offered the whole
   surplus at the median price. Now the world answers which fields it needs.
@@ -106,8 +115,9 @@ What changed for someone who uses Shikigon. Newest first.
   Now `<` and `>` in such a text become `‹` and `›`, and the names of other players stand inside
   the quote too.
 - **What the world sends fills a prompt only so far:** each of its sentences a line, its rules
-  12,000 characters, a message 280. A configured world could put up to 8 MiB into every question
-  on your model's allowance.
+  12,000 characters, a message 280, the time its key ends 64. A configured world could put up to
+  8 MiB into every question on your model's allowance (the time its key ends, in a form that is
+  no time, still could until the ninth review).
 - **Every file it keeps is yours alone (0600),** made so from the start. A file an earlier version
   left readable for others is renewed once, so a program that opened it then reads nothing more.
 - **Smaller fixes:** a world's sentence on stderr comes without control characters, also in a

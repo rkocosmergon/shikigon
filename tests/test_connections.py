@@ -360,8 +360,10 @@ def test_a_connection_is_taken_only_after_it_answered(monkeypatch: pytest.Monkey
 
 
 def _plays(decider: Any) -> str:
-    """Who chooses the move: the decider itself, or the one inside the talking wrapper."""
-    return type(getattr(decider, "inner", decider)).__name__
+    """Who chooses the move: the decider itself, or the one inside the talking wrapper; the rule
+    tree inside the brain's careful shell (``contracts.Careful``) counts as the tree."""
+    plays = getattr(decider, "inner", decider)
+    return type(plays.tree if type(plays).__name__ == "Careful" else plays).__name__
 
 
 def test_advice_on_moves_is_a_switch_of_its_own_and_forget_drops_the_choice() -> None:

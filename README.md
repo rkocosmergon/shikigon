@@ -144,6 +144,9 @@ be brought back. **wake a new one** gives you a new Shikigon.
   the world says are possible right now, one move per tick of the world (about a minute). Or
   you let your coding agent take over (below).
   A move the world refuses three times in a row is left alone for the next 30 moves.
+- **It says no to a contract that costs it.** Offered a tribute it would pay or an alliance with
+  costs per tick, it rejects it, whatever its character; other contracts it takes or leaves as
+  its character does.
 - **It listens.** A word from you (`be careful`, `trade more`, `expand`) sets its *compass*.
   The compass tilts its choices; it does not override its character. A warrior told to be
   careful is still a warrior.
@@ -310,9 +313,9 @@ writes itself is checked before it goes out for what it gives to another agent. 
 the world's own word for it says it gives nothing (placing cells, a field, a mission without a
 reward, a pact without escrow), or if what it gives has a number the rest covers: energy by
 its amount, goods by their count at the reference price the world names for them. Anything
-else is played by the rule tree instead: buying another agent's offer, a contract with escrow
-or one that has your Shikigon pay, a breach, and any move the world adds later, until Shikigon
-knows it. An offer on the market below its worth is not counted: the move itself loses
+else is played by the rule tree instead: buying another agent's offer, a contract that costs
+your Shikigon anything (an escrow, a tribute it pays, an alliance with costs per tick, a
+mercenary it hires), a breach, and any move the world adds later, until Shikigon knows it. An offer on the market below its worth is not counted: the move itself loses
 nothing, what it costs comes later, when someone buys. A world that does not state its total
 energy (one that ranks by something else) leaves nothing to measure a gift against: then every
 move of its own that gives something is played by the rule tree, and moves that give nothing
