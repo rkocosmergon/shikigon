@@ -352,9 +352,20 @@ async def learn(
     numbers = summary([m for m in map(advisor.move_for_model, moves) if "energy" in m])
     before = latest_text(home) if head else ""
     note = ""
+    stopped: list[bool] = []  # set when the day's limit ended its reading
     if head and reader is not None:
         folder = review_folder(home, moves, numbers, world)
-        send, note = reader(folder), reading.note(folder)
+
+        def one_more() -> bool:
+            """Each round of reading is a call of its own, against the same limit (cos20 #492,
+            eighth review, finding 5)."""
+            if advisor.limit_reached(conf, home):
+                stopped.append(True)
+                return False
+            advisor.count_call(home)
+            return True
+
+        send, note = reader(folder, more=one_more), reading.note(folder)
     started = time.monotonic()
     try:
         text = await send(lesson_messages(facts, numbers, before, note), LESSON_TOKENS)
@@ -365,7 +376,7 @@ async def learn(
         entry["ms"] = int((time.monotonic() - started) * 1000)
     lesson, unfit = read_lesson(text)
     if lesson is None:
-        entry["why"] = f"the answer did not fit: {unfit}"
+        entry["why"] = "daily limit reached" if stopped else f"the answer did not fit: {unfit}"
         return entry
     if secret and any(secret in value for value in lesson.values()):
         # no agent can read the key file any more (cos20 #492, K28); a lesson with the key is

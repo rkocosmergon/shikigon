@@ -84,15 +84,17 @@ the name of the agent it is about to make a contract with. When your agent has t
 contracts other agents offered it and the contracts it is in (the other agent by id, the terms
 quoted as information) and what the world answered to its last moves; when it looks back,
 it may ask the brain for lines from three files the brain wrote for it (its last hundred
-moves, their numbers, the rules of the world). The key itself is never sent. All of it goes
-over https, or stays on this machine: never in plain text over a network, where anyone on the
-way could read it (below, "an address of its own"). When your agent (pi) answers, the brain
-hands it all of this over stdin on this machine, and your agent sends it on over its own
-connection to its model: Shikigon lets the agent connect only to port 443, the port of https
-(below, "A coding agent you already use"). pi adds none of your files to it: Shikigon starts it
-with a system prompt of its own and an appended line of its own, so pi's `SYSTEM.md` and
-`APPEND_SYSTEM.md`, its context files (`AGENTS.md`, `CLAUDE.md`), skills, prompt templates,
-extensions, MCP servers and sessions stay out.
+moves, their numbers, the rules of the world). The key itself is never sent. What the brain
+sends goes over https, or stays on this machine: never in plain text over a network, where
+anyone on the way could read it (below, "an address of its own"). When your agent (pi) answers,
+the brain hands it all of this over stdin on this machine, and your agent sends it on over its
+own connection to its model: Shikigon lets the agent connect only to port 443, the port of
+https. The kernel sees the port, not the encryption: an address your agent's own setup writes as
+`http://…:443` would still go in plain text (below, "A coding agent you already use"). pi adds
+none of your files to it: Shikigon starts it with a system prompt of its own and an appended
+line of its own, so pi's `SYSTEM.md` and `APPEND_SYSTEM.md`, its context files (`AGENTS.md`,
+`CLAUDE.md`), skills, prompt templates, extensions, MCP servers and sessions stay out. pi also
+tells its model the folder it runs in; Shikigon starts it in `/`, which names nobody.
 
 Shikigon never puts your questions, instructions or the talk with the model into a command
 line, which every local user can read: the bar, the terminal and the advisor's agent get them
@@ -180,16 +182,20 @@ Optional, and off until you pick who answers. Press **ask** in the panel: the fi
 shows **WHO ANSWERS?**, one list:
 
 - **A coding agent you already use:** pi, if it is installed. Shikigon calls the agent's own
-  command without a terminal, in an empty folder, with every tool off, and takes its answer. It never reads the agent's credentials; it runs your program as you. Starting
+  command without a terminal, in `/`, with every tool off, and takes its answer: only the
+  system can write `/`, so your agent reads no settings someone else left in its folder, and the
+  name `/` tells its model nothing of you. It never reads the agent's credentials; it runs your
+  program as you. Starting
   the agent adds a few seconds to each answer. Your agent, and everything it starts, may
   connect only to port 443, the port of https: before the agent starts, Shikigon asks the
   kernel to hold it to that (Landlock, Linux 6.7 or later), and on a kernel without it no
   question goes to an agent. The kernel sees the port, not the encryption: an address your
   agent's own setup writes as `http://…:443` would still go in plain text. A model server on
   this machine or in your home is not reached through your agent; pick it here directly (the
-  next two points). Shikigon asks only the versions of pi it was tried with (1.2 to 1.4), read
-  from pi before each question: after an update to another version this list and the panel say
-  so, and the rule tree plays on. OpenCode is not asked from here (since 0.1.13): it puts your
+  next two points). Shikigon asks only the versions of pi it was tried with (1.2.0, 1.3.0 and
+  1.4.0; a later release, a patch release too, only once it is read), read from pi before each
+  question: after an update to another version this list and the panel say so, and the rule
+  tree plays on. OpenCode is not asked from here (since 0.1.13): it puts your
   own instruction files (`~/.config/opencode/AGENTS.md`, else `~/.claude/CLAUDE.md`, and the
   `instructions` of your `opencode.json`) into every prompt, with no switch to turn that off, and
   what the model writes can go on to another agent (below, "It writes to other agents"). Any
@@ -254,7 +260,9 @@ you three things:
 
 A thinking model can spend its whole answer on thinking and say nothing; `reasoning_effort =
 "none"` (the default) keeps it from that. A question needs about 2,500 tokens of context, so
-a 4,000-token window is enough. `max_per_day` caps the calls. The choice goes over
+a 4,000-token window is enough. `max_per_day` caps the calls, each round of a look back
+included; only the one question that tries a connection when you pick it is not counted. The
+choice goes over
 `[brain.advisor]` in `~/.config/shikigon/shikigon.toml`, which also works by hand
 (`base_url`, `model`); a key for a paid endpoint comes from an environment variable you name
 there (`api_key_env`), and goes only to the `base_url` of that same section, never to an address
@@ -269,8 +277,9 @@ the situation, its newest lesson, what the world answered to its last moves, eve
 world offers right now with what that move needs, and what the rule tree would play, and it
 chooses one move itself. It writes its own parameters where the world states their form: the
 world publishes the fields of every move (`GET /api/v1/game/info`, `actions.<name>.forms`), and
-a move your agent writes goes out with `strict`, so a field the world does not know comes back
-as a refusal that names the right fields, never as the world's own default values. Against a
+a move your agent writes goes out with `strict`, also one without any fields, so a field the
+world does not know or misses comes back as a refusal that names the right fields, never as the
+world's own default values. Against a
 world that publishes no forms it writes only a mission, an answer to a contract it was offered,
 or waiting, and takes any other move only as the rule tree would play it, unchanged.
 
@@ -304,9 +313,11 @@ its amount, goods by their count at the reference price the world names for them
 else is played by the rule tree instead: buying another agent's offer, a contract with escrow
 or one that has your Shikigon pay, a breach, and any move the world adds later, until Shikigon
 knows it. An offer on the market below its worth is not counted: the move itself loses
-nothing, what it costs comes later, when someone buys. Once the budget is used up the rule tree
-plays until the day ends. `0` means no limit. What is left today stands in `status.json`
-(`learning_budget_left`).
+nothing, what it costs comes later, when someone buys. A world that does not state its total
+energy (one that ranks by something else) leaves nothing to measure a gift against: then every
+move of its own that gives something is played by the rule tree, and moves that give nothing
+still go out. Once the budget is used up the rule tree plays until the day ends. `0` means no
+limit. What is left today stands in `status.json` (`learning_budget_left`).
 
 It learns faster, too: every five moves (`review_every`) it looks back on its last hundred
 moves and updates its three lessons instead of starting over. **Your agent gets no tool for

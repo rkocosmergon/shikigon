@@ -21,7 +21,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 
 import advisor
 import connections
-import files
 import shikigon_brain as brain
 from conftest import version_answer
 
@@ -191,7 +190,7 @@ def test_listing_models_with_a_key_over_plain_http_asks_nothing() -> None:
     assert "https" in found["why"]
 
 
-# --- Asking an agent: narrow, in an empty folder, its own words on failure ----------------------
+# --- Asking an agent: narrow, in the neutral folder, its own words on failure --------------------
 
 
 def test_each_agent_is_called_in_its_narrowest_setting() -> None:
@@ -211,7 +210,7 @@ def test_each_agent_is_called_in_its_narrowest_setting() -> None:
     assert pi[pi.index("--model") + 1] == "ollama-macmini/qwen3.5:9b-64k"
 
 
-def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to_act() -> None:
+def test_the_agent_runs_in_the_neutral_folder_without_a_terminal_and_is_told_not_to_act() -> None:
     commands = Commands(stdout="OK")
     text = connections.prompt_text([
         {"role": "system", "content": "You advise."},
@@ -229,8 +228,7 @@ def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to
     assert kwargs["input"] == text and kwargs["timeout"] == 30.0
     assert text not in argv
     assert "PATH" in kwargs["env"], "the user's own environment stays"
-    assert Path(kwargs["cwd"]).parent == files.state_dir() / "run"  # the player's own folder
-    assert not Path(kwargs["cwd"]).exists()  # gone again
+    assert kwargs["cwd"] == "/", "only the system writes there, and it names nobody"
 
 
 @pytest.mark.parametrize(  # an agent never tried on a device is not even started (#492, K28)

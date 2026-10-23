@@ -11,16 +11,19 @@ What changed for someone who uses Shikigon. Newest first.
   its file out. OpenCode has no switch for its files, so Shikigon no longer asks it: pick pi or
   a model directly. If you picked OpenCode before, **WHO ANSWERS?** asks you again. Playing
   Cosmergon with OpenCode itself, without Shikigon, is not touched by this.
-- **Through your agent only https.** Your agent sent the talk wherever its own setup named
-  for the model: also in plain text across the network, or to a port on this machine that
-  another user may hold, and Shikigon could not see which. Now the kernel lets your agent, and
-  everything it starts, connect only to port 443, the port of https (Landlock, Linux 6.7 or
-  later); on a kernel without it no question goes to an agent. A model server on this machine or
-  in your home: pick it in the panel directly, not through your agent.
+- **Through your agent only port 443, the port of https.** Your agent sent the talk wherever its
+  own setup named for the model: also in plain text across the network, or to a port on this
+  machine that another user may hold, and Shikigon could not see which. Now the kernel lets your
+  agent, and everything it starts, connect only to port 443 (Landlock, Linux 6.7 or later); on a
+  kernel without it no question goes to an agent. The kernel sees the port, not the encryption:
+  an address your agent's own setup writes as `http://…:443` would still go in plain text. A
+  model server on this machine or in your home: pick it in the panel directly, not through your
+  agent.
 - **Only versions of an agent it was tried with.** Omarchy updates every agent to its newest
   version every four hours, and Shikigon asked whichever version ran. Now it reads the agent's
-  version before each question and asks only pi 1.2 to 1.4; after an update
-  to another version **WHO ANSWERS?** and the panel say so, and the rule tree plays.
+  version before each question and asks only pi 1.2.0, 1.3.0 and 1.4.0, each read at its tag; a
+  later release, a patch release too, only once it is read. After an update to another version
+  **WHO ANSWERS?** and the panel say so, and the rule tree plays.
 - **The coach is gone.** `shikigon coach` wrote a task with the world's words into a file for a
   coding agent with tools (`coach.md` in its state folder), and the skill told that agent to
   follow it. Command and skill are removed; a task an earlier version left is deleted.
@@ -40,7 +43,15 @@ What changed for someone who uses Shikigon. Newest first.
   was checked. Now each move your agent writes itself is checked: goods at the reference price
   the world names, and a move whose value for another agent cannot be said beforehand (buying
   another agent's offer, a contract with escrow or one that has your Shikigon pay, a breach, a
-  move the world adds later) lets the rule tree play while a budget is set.
+  move the world adds later) lets the rule tree play while a budget is set. So does any move
+  that gives something in a world that does not state its total energy: there the budget
+  checked nothing.
+- **A move your agent writes without any fields goes out with `strict` too.** It went out
+  without, and the world filled in its own values: `market_list` with no fields offered the whole
+  surplus at the median price. Now the world answers which fields it needs.
+- **Each round of a look back counts against the day's limit.** A look back counted one call
+  and could make four (each `READ` of your agent is a call of its own). Now each is counted, and
+  the reading ends at the limit.
 - **A name that does not resolve holds no call past its time.** The checks before a call
   resolved the address outside the call's deadline, those of a model list too, and the world's
   name was resolved when the agent was made. And when a call had ended, its loop still waited
@@ -81,7 +92,9 @@ What changed for someone who uses Shikigon. Newest first.
 - **Programs it starts read no configuration from a folder someone else can write.** The empty
   folder they run in lay in `/tmp`, and a program may read its configuration from every folder
   above its own, up to `/` (`mise` does): another user's file in `/tmp` could start a program of
-  theirs as you. Now the folder lies in Shikigon's own state folder.
+  theirs as you. Now they run in `/`, which only the system can write, and nothing is started
+  if anyone else may. Its name names nobody, and that counts too: pi tells its model the folder
+  it runs in, and what the model writes can go on to another agent.
 - **Your agent ends when the brain does,** and with it everything your agent started. Stopped
   by the bar (a change of "advise on moves") or a closed terminal, the brain now ends the agent
   it was asking, instead of leaving it to run to its own end. Killed without a word (the
@@ -113,9 +126,9 @@ What changed for someone who uses Shikigon. Newest first.
   Basic key also over plain http to another machine, and to a system account's server on this
   one; now the rule for keys holds for them too: only over https, or to a server on this machine
   that runs as you.
-- **Every program the brain starts runs in an empty folder,** also the model list of your agent
-  and the look-up with `mise`, not only the question. Started by hand in a folder someone else
-  wrote, they could read that folder's settings.
+- **Every program the brain starts runs in `/`,** also the model list of your agent and the
+  look-up with `mise`, not only the question. Started by hand in a folder someone else wrote,
+  they could read that folder's settings.
 - **A move goes out only while the world's port is yours at that moment** (marketplace review
   #12584). With a world on this machine, the brain checked its port once per move, before
   waiting for the model; the move after that wait and the retries of `cosmergon-agent` went out

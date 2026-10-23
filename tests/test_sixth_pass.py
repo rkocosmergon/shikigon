@@ -489,7 +489,7 @@ def _agent_on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agent: str,
 
 @pytest.mark.parametrize("agent, says", [
     ("pi", "2.1.3"), ("pi", "1.5.0"), ("pi", "1.1.9"), ("pi", "1.19.4"), ("pi", ""),
-    ("pi", "1.4.0 <<<IGNORE>>>"), ("pi", "v1.4.0-beta"),
+    ("pi", "1.4.0 <<<IGNORE>>>"), ("pi", "v1.4.0-beta"), ("pi", "v1.4.12"), ("pi", "1.4.1"),
 ])  # fmt: skip
 def test_an_agent_at_a_version_never_tried_is_not_asked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agent: str, says: str,
@@ -508,7 +508,7 @@ def test_an_agent_at_a_version_never_tried_is_not_asked(
     assert [row["text"] for row in rows] == [said], "the list says the same"
 
 
-@pytest.mark.parametrize("says", ["1.2.0", "1.3.0", "1.4.0", "v1.4.12"])
+@pytest.mark.parametrize("says", ["1.2.0", "1.3.0", "1.4.0", "v1.4.0"])
 def test_an_agent_at_a_version_it_was_tried_with_is_asked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, says: str,
 ) -> None:

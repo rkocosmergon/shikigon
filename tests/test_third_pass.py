@@ -103,7 +103,7 @@ def _record(seen: list[dict[str, Any]], stdout: str = "") -> Callable[..., Any]:
     return run
 
 
-def test_every_program_runs_in_a_folder_of_the_players_own(
+def test_every_program_runs_in_a_folder_no_other_user_writes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     shared = tmp_path / "shared"  # where /tmp would be: anyone may write there
@@ -111,12 +111,12 @@ def test_every_program_runs_in_a_folder_of_the_players_own(
     shared.chmod(0o1777)
     monkeypatch.setattr(tempfile, "tempdir", str(shared))
     seen: list[dict[str, Any]] = []
-    connections.in_empty_folder(_record(seen), ["mise", "where", "pi"])
+    connections.in_neutral_folder(_record(seen), ["mise", "where", "pi"])
     cwd = Path(seen[0]["cwd"])
-    assert shared not in cwd.parents, "not below the shared temporary folder"
-    assert cwd.parent == files.state_dir() / "run"
-    for folder in (cwd.parent, files.state_dir()):  # what Shikigon makes for it
-        assert stat.S_IMODE(folder.stat().st_mode) == 0o700, folder
+    assert shared not in cwd.parents and cwd != shared, "not below the shared temporary folder"
+    assert cwd == Path("/"), "since the eighth review: ``/``, which names nobody"
+    root = cwd.stat()
+    assert root.st_uid == 0 and not stat.S_IMODE(root.st_mode) & 0o022, "only the system writes"
 
 
 # --- 2: one deadline for the whole exchange, also before the head of the answer ----------------

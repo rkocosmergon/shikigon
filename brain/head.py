@@ -454,12 +454,21 @@ def _budget_data(home: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+NO_TOTAL = "learning budget: the world states no total energy, so nothing may be given away"
+
+
 def budget_left(home: Path, conf: dict[str, Any], total: float | None) -> float | None:
     """What its own moves may still lose today (cos20 #533); ``None`` = no budget set.
 
     ``learning_budget_pct`` of the total energy at the start of the UTC day. It still learns from
     its own mistakes, but no day costs more than you set aside for that: the rules play when the
     rest would not cover a move.
+
+    With a budget set and no total energy from the world (a world that ranks by something else,
+    cos20 #504) the rest is 0: nothing a move gives away can be set against it, so such a move
+    is played by the rules, and a move that gives nothing still goes out. Until 0.1.13 it was
+    ``None`` then, as if no budget were set, and nothing was checked (cos20 #492, eighth review,
+    finding 3).
     """
     pct = float(conf.get("learning_budget_pct", 0) or 0)
     if pct <= 0:
@@ -467,10 +476,15 @@ def budget_left(home: Path, conf: dict[str, Any], total: float | None) -> float 
     data = _budget_data(home)
     if data.get("day") != _today():
         if total is None:
-            return None
+            return 0.0
         data = {"day": _today(), "start": float(total), "spent": 0.0}
         files.write_json(home / BUDGET_FILE, data)
     return max(0.0, float(data["start"]) * pct / 100 - float(data.get("spent") or 0.0))
+
+
+def budget_started(home: Path) -> bool:
+    """True once today's budget was measured against a total energy of the world."""
+    return _budget_data(home).get("day") == _today()
 
 
 def budget_spend(home: Path, loss: float) -> None:
@@ -554,10 +568,18 @@ class HeadDecider:
             if value is None:  # what it gives cannot be said: none to check against the rest
                 return self._rules_play("learning budget: what this move gives cannot be said")
             if value > rest:
-                return self._rules_play("learning budget: the rest would not cover this")
-        if not params or any(action == a and _same(params, p) for a, p in self._suggested):
+                return self._rules_play("learning budget: the rest would not cover this"
+                                        if budget_started(self.home) else NO_TOTAL)
+        if action == "wait":
+            return action, {}
+        if line:
             return action, params  # a rules' line goes out as the rules send it
-        if action in self.forms:  # the world checks its names: a wrong one is refused, honestly
+        # A move it wrote itself goes out with ``strict`` wherever the world states its form, also
+        # with no parameters: the world names the fields it needs instead of filling in its own
+        # (``market_list`` with none offered the whole surplus at the median price). Until 0.1.13
+        # a move without parameters went out as a rules' line (cos20 #492, eighth review,
+        # finding 2).
+        if action in self.forms:
             return action, {**shaped(params), "strict": True}
         return action, shaped(params)
 
@@ -580,7 +602,8 @@ class HeadDecider:
                      "rules": self._rules[0]}
         total = getattr(getattr(state, "ranking", None), "gesamtenergie", None)
         self.budget_left = budget_left(self.home, self.conf, total)
-        if self.budget_left == 0:  # used up: the rules play until the day ends, no call is made
+        if self.budget_left == 0 and budget_started(self.home):
+            # used up: the rules play until the day ends, no call is made
             return self._rules_play("learning budget used up today")
         situation = brief(state, moves, suggested, lessons.latest_text(self.home),
                           recent_moves(self.home), self.forms)

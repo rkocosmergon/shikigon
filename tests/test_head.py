@@ -19,7 +19,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 
 import connections
-import files
 import head
 import lessons
 import shikigon_brain as brain
@@ -316,7 +315,7 @@ async def test_an_agent_that_may_read_gets_a_folder_and_never_keeps_the_key() ->
     _played(home, 40)
     folders: list[Path] = []
 
-    def reader(folder: Path) -> Replies:
+    def reader(folder: Path, **_: Any) -> Replies:
         folders.append(folder)
         return Replies(LESSON.replace("missions it started", f"missions {KEY} it started"))
 
@@ -351,7 +350,7 @@ def test_an_agent_never_tried_on_a_device_is_refused_where_it_is_sent() -> None:
     assert started == [], "the agent was never started"
 
 
-def test_the_look_back_runs_in_an_empty_folder_and_the_prompt_goes_on_stdin(
+def test_the_look_back_runs_in_the_neutral_folder_and_the_prompt_goes_on_stdin(
     tmp_path: Path,
 ) -> None:
     seen: dict[str, Any] = {}
@@ -367,7 +366,7 @@ def test_the_look_back_runs_in_an_empty_folder_and_the_prompt_goes_on_stdin(
     send = connections.agent_send({"agent": "pi"}, 5, run)
     asyncio.run(send([{"role": "user", "content": "MARKER-527"}], 10))
     assert seen["cwd"] != str(tmp_path)
-    assert Path(seen["cwd"]).parent == files.state_dir() / "run", "the player's own folder"
+    assert seen["cwd"] == "/", "only the system writes there, and it names nobody"
     assert "MARKER-527" in seen["input"] and "MARKER-527" not in " ".join(seen["argv"])
     assert "do not read or write files" in seen["input"]
 

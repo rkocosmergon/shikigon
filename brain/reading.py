@@ -81,8 +81,13 @@ def serve(folder: Path, name: str, first: int, last: int) -> str:
     return f"{name}, lines {first}-{last} of {len(lines)}:\n{text}"
 
 
-def mediated(send: Send, folder: Path) -> Send:
-    """A sender that lets the model read through the brain before it answers."""
+def mediated(send: Send, folder: Path, more: Callable[[], bool] | None = None) -> Send:
+    """A sender that lets the model read through the brain before it answers.
+
+    The first call is the caller's, counted where it starts the look back. Each further round
+    is a call of its own: ``more`` counts it and says ``False`` past the day's limit, and then
+    the answer so far stands. Until 0.1.13 a look back counted one call and made up to four
+    (cos20 #492, eighth review, finding 5)."""
 
     async def ask(messages: list[dict[str, str]], max_tokens: int) -> str:
         *before, question = messages
@@ -92,7 +97,7 @@ def mediated(send: Send, folder: Path) -> Send:
             talk = [*before, {**question, "content": _with(question["content"], read, left)}]
             answer = await send(talk, max_tokens)
             wanted = asked(answer)
-            if wanted is None or left == 0:
+            if wanted is None or left == 0 or (more is not None and not more()):
                 return answer
             read.append(serve(folder, *wanted))
 

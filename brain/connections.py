@@ -16,11 +16,11 @@ in the config file, which stays the place for everything else.
 
 Three rules this file keeps (cos20 #451, concept 10.5d):
 
-1. An agent is called without tools and approvals, in an empty folder; every other program
-   started here (its model listing, ``mise``) runs in an empty folder too (``in_empty_folder``).
-   The folder lies in the player's own state folder, so none of the folders above it is
-   writable by another user: a program may read its configuration from every folder up to ``/``
-   (OpenCode did, ``mise`` does).
+1. An agent is called without tools and approvals, in ``/``; every other program started here
+   (its model listing, ``mise``) runs in ``/`` too (``in_neutral_folder``). Only the system can
+   write there, so a program that reads its configuration from its working folder and those
+   above it (``mise`` does) reads none of another user; and the folder's name names nobody, so
+   an agent that tells its model where it runs (pi does) tells it nothing of the player.
 2. Looking at what is installed never starts a placeholder. On Omarchy the agents' commands
    are stubs that install the agent the first time they run.
 3. An agent's allowance is the player's: no advice on every move through an agent.
@@ -41,7 +41,6 @@ import signal
 import socket
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import urllib.parse
@@ -94,7 +93,11 @@ LOCAL_SERVERS = (
 #     1.2 to 1.4 appends ~/.pi/agent/APPEND_SYSTEM.md unless --append-system-prompt is given
 #     (core/resource-loader.ts:663-667, 1227-1238), and --system-prompt and --no-context-files
 #     do not cover it. The text given is read as a file only where a file of that name exists
-#     (:167-182); it runs in an empty folder, and this sentence names none.
+#     (:167-182); it runs in ``/``, and this sentence names none there.
+#     pi also puts its working folder into every system prompt, with --system-prompt too
+#     (core/system-prompt.ts:183, ``<cwd>``): until 0.1.13 that was a folder in the player's
+#     state folder, ``/home/<login>/…``, and a message of another player could ask for it
+#     (cos20 #492, eighth review, finding 1). It runs in ``/`` (``in_neutral_folder``).
 # ~~OpenCode~~ (0.1.11 to 0.1.12): no longer asked from here (0.1.13, founder 23.10.2026). It puts
 # ~/.config/opencode/AGENTS.md (else ~/.claude/CLAUDE.md) and the ``instructions`` of the
 # player's opencode.json into every system prompt (1.19.0 session/instruction.ts:60-63, 135-168,
@@ -119,10 +122,12 @@ AGENTS: dict[str, dict[str, Any]] = {
                  "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve",
                  "--offline", "--thinking", "off", "--system-prompt", PI_SYSTEM,
                  "--append-system-prompt", NO_TOOLS],
-        # 1.2 to 1.4: the options above read the same in all three (``cli/args.ts``), and
-        # ``--version`` answers before any session, extension or network (``main.ts``).
+        # 1.2.0, 1.3.0, 1.4.0: the options above read the same in all three (``cli/args.ts``),
+        # and ``--version`` answers before any session, extension or network (``main.ts``).
+        # Each read at its tag; a later release, a patch one too, is asked only once it is
+        # read and named here (cos20 #492, eighth review, finding 4).
         "version": ["pi", "--offline", "--version"],
-        "versions": ("1.2", "1.3", "1.4"),
+        "versions": ("1.2.0", "1.3.0", "1.4.0"),
         "model_flag": ["--model", "{model}"],
         "sign_in": ["pi"],  # its sign-in is "/login" inside pi
         "models": ["pi", "--offline", "--list-models"],
@@ -162,31 +167,35 @@ def installed(agent: str, run: Callable[..., Any] | None = None) -> bool:
     if shutil.which("mise") is None:
         return False
     try:  # in a group of its own: a timeout ends mise and what it started (K14)
-        done = in_empty_folder(run or run_in_group, ["mise", "where", agent],
-                               capture_output=True, timeout=10, check=False)
+        done = in_neutral_folder(run or run_in_group, ["mise", "where", agent],
+                                 capture_output=True, timeout=10, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
     return int(done.returncode) == 0
 
 
-def in_empty_folder(run: Callable[..., Any], argv: list[str], **kwargs: Any) -> Any:
-    """``run(argv, …)`` in an empty folder of its own, for every program Shikigon starts.
+NEUTRAL_FOLDER = "/"
+
+
+def in_neutral_folder(run: Callable[..., Any], argv: list[str], **kwargs: Any) -> Any:
+    """``run(argv, …)`` in ``/``, for every program Shikigon starts.
 
     An agent, its model listing and ``mise`` read a project's configuration from their working
-    folder, and the brain's is wherever it was started: by hand that can be a folder someone
-    else wrote (threat model K36). Until 0.1.12 only the question went to an empty folder, the
-    listing and ``mise`` ran in the brain's (cos20 #492 B6).
+    folder and the folders above it, and the brain's is wherever it was started: by hand that
+    can be a folder someone else wrote (threat model K36; cos20 #492 B6). ``/tmp`` was such a
+    folder above (third review). Only the system writes ``/``, and nothing is started if
+    anyone else may.
 
-    The empty folder lies in the state folder (``run/``, 0700), not in ``/tmp``: a program that
-    looks for its configuration in the folders above its own (OpenCode, up to ``/``) found
-    ``/tmp``, where any local user may put a file. Until 0.1.13 it did (cos20 #492, third
-    review).
+    And the folder's name reaches the model: pi puts its working folder into every system prompt
+    (``core/system-prompt.ts:183``), and what the model writes can go on to another player
+    (``speech.py``, the head's own moves). Until 0.1.13 the folder lay in the state folder,
+    ``/home/<login>/.local/state/shikigon/run/…`` (cos20 #492, eighth review, finding 1). ``/``
+    names nobody.
     """
-    # Each level made private by itself: ``mkdir(parents=True)`` gives the folders it adds the
-    # default mode, whatever mode it is told.
-    parent = files.private_folder(files.private_folder(files.state_dir()) / "run")
-    with tempfile.TemporaryDirectory(prefix="run-", dir=parent) as empty:
-        return run(argv, cwd=empty, **kwargs)
+    root = os.stat(NEUTRAL_FOLDER)
+    if root.st_uid != 0 or root.st_mode & 0o022:
+        raise PermissionError(f"{NEUTRAL_FOLDER} is writable by someone other than the system")
+    return run(argv, cwd=NEUTRAL_FOLDER, **kwargs)
 
 
 def agent_env(agent: str) -> dict[str, str]:
@@ -203,10 +212,10 @@ def agent_env(agent: str) -> dict[str, str]:
 # ``latest`` and updates it every four hours (``omarchy-tools.toml``). A later version may read
 # other files, keep other sessions or take options apart differently, and its options are what
 # keeps the talk to itself. So before each start of an agent's program for a listing or a
-# question its version is read, in the same kind of empty folder and environment, and only a
-# version Shikigon was tried with goes on. Read again for each question: it can change between
-# two. The session delete that follows a question runs on the version read for it.
-VERSION = re.compile(r"v?(\d{1,4})\.(\d{1,4})\.\d{1,6}")
+# question its version is read, in the same folder and environment, and only a version Shikigon
+# was tried with goes on, the whole of it: until 0.1.13 any 1.4.x passed for 1.4.0 (eighth
+# review, finding 4). Read again for each question: it can change between two.
+VERSION = re.compile(r"v?(\d{1,4})\.(\d{1,4})\.(\d{1,6})")
 VERSION_S = 10
 
 
@@ -216,8 +225,8 @@ def agent_version(agent: str, run: Callable[..., Any] | None = None) -> str:
     if not argv:
         return ""
     try:
-        done = in_empty_folder(run or run_in_group, argv, env=agent_env(agent),
-                               capture_output=True, text=True, timeout=VERSION_S, check=False)
+        done = in_neutral_folder(run or run_in_group, argv, env=agent_env(agent),
+                                 capture_output=True, text=True, timeout=VERSION_S, check=False)
     except (OSError, subprocess.SubprocessError):
         return ""
     said = str(done.stdout or "").strip()
@@ -231,10 +240,10 @@ def untried(agent: str, run: Callable[..., Any] | None = None) -> str:
     tried = spec.get("versions", ())
     version = agent_version(agent, run)
     match = VERSION.fullmatch(version)
-    if match and f"{int(match[1])}.{int(match[2])}" in tried:
+    if match and f"{int(match[1])}.{int(match[2])}.{int(match[3])}" in tried:
         return ""
     said = f"says {version}" if version else "names no version"
-    versions = ", ".join(f"{v}.x" for v in tried) or "no version of it"
+    versions = ", ".join(tried) or "no version of it"
     return f"{spec['name']} is not asked: it {said}, Shikigon was tried with {versions}"
 
 
@@ -1124,8 +1133,8 @@ def agent_models(agent: str, run: Callable[..., Any] = run_in_group) -> list[str
     if not argv or untried(agent, run):
         return []
     try:
-        done = in_empty_folder(run, argv, env=agent_env(agent), capture_output=True, text=True,
-                               timeout=30, check=False)
+        done = in_neutral_folder(run, argv, env=agent_env(agent), capture_output=True,
+                                 text=True, timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return []
     names = table_models(done.stdout)  # pi's listing, the one agent that has one
@@ -1171,7 +1180,12 @@ def prompt_text(messages: list[dict[str, str]]) -> str:
 
 
 def agent_argv(conf: dict[str, Any]) -> list[str]:
-    """The agent's command; the prompt is not in it (it goes in on stdin)."""
+    """The agent's command; the prompt is not in it (it goes in on stdin).
+
+    The model stands in it: pi takes one only as ``--model`` or from its own settings
+    (``cli/args.ts:117``), and without it the player's pick in the panel would not count. It is a
+    name from the agent's own list (``agent_models``), never words the player wrote (threat
+    model H1, cos20 #492, eighth review, finding 7)."""
     spec = AGENTS[str(conf["agent"])]
     argv = list(spec["argv"])
     model = str(conf.get("agent_model") or "")
@@ -1189,7 +1203,7 @@ def last_line(text: str) -> str:
 
 def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
               run: Callable[..., Any] = run_in_group) -> str:
-    """Call the agent once, in an empty folder, and return what it answered.
+    """Call the agent once, in ``/`` (``in_neutral_folder``), and return what it answered.
 
     Only an agent proven on a device is called, checked here where it is sent and not only
     where it is offered (threat model §0 rule 5): one never probed may keep tools or MCP
@@ -1206,8 +1220,8 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
     env = agent_env(str(conf["agent"]))
     argv = agent_argv(conf)
     try:
-        done = in_empty_folder(run, argv, env=env, capture_output=True, text=True,
-                               timeout=timeout, check=False, input=prompt)
+        done = in_neutral_folder(run, argv, env=env, capture_output=True, text=True,
+                                 timeout=timeout, check=False, input=prompt)
     except subprocess.TimeoutExpired:
         raise AgentError(f"{spec['name']} did not answer within {int(timeout)} s") from None
     except TooMuchOutput:

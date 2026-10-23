@@ -125,10 +125,10 @@ def test_a_password_in_an_address_never_goes_to_a_system_accounts_server(
     assert len(seen) == 1 and seen[0]["authorization"].startswith("Basic ")
 
 
-# --- B6: every program the brain starts runs in an empty folder ---------------------------------
+# --- B6: every program the brain starts runs in the neutral folder ``/`` (eighth review) ------
 
 
-def test_every_program_the_brain_starts_runs_in_an_empty_folder(
+def test_every_program_the_brain_starts_runs_in_the_neutral_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = tmp_path / "bin" / "pi"
@@ -141,8 +141,8 @@ def test_every_program_the_brain_starts_runs_in_an_empty_folder(
 
     def run(argv: list[str], **kwargs: Any) -> Any:
         folder = Path(kwargs.get("cwd") or ".").resolve()
-        empty = folder.is_dir() and not any(folder.iterdir()) and folder != tmp_path
-        started.append((argv[0], empty))
+        neutral = folder == Path("/") and folder != tmp_path
+        started.append((argv[0], neutral))
         listing = SimpleNamespace(returncode=0, stdout="provider  model\nollama  m\n", stderr="")
         return version_answer(argv) or listing
 
@@ -153,11 +153,11 @@ def test_every_program_the_brain_starts_runs_in_an_empty_folder(
     assert started == [("mise", True), ("pi", True), ("pi", True), ("pi", True), ("pi", True)]
 
 
-def test_no_program_is_started_but_through_the_empty_folder() -> None:
+def test_no_program_is_started_but_through_the_neutral_folder() -> None:
     """The guard against a new start beside it: in the brain, an injected runner (a parameter
-    named ``run``) is called only by ``in_empty_folder``, and a process is created only by
-    ``run_in_group``, which ``in_empty_folder`` is given."""
-    allowed = {"in_empty_folder": {"run"}, "run_in_group": {"subprocess.Popen"}}
+    named ``run``) is called only by ``in_neutral_folder``, and a process is created only by
+    ``run_in_group``, which ``in_neutral_folder`` is given."""
+    allowed = {"in_neutral_folder": {"run"}, "run_in_group": {"subprocess.Popen"}}
     found = []
     for path in sorted((ROOT / "brain").glob("*.py")):
         for function in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
