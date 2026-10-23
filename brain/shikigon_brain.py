@@ -804,13 +804,24 @@ def write_status(status: dict[str, Any]) -> None:
 
 
 def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
-    """Count what a move the head chose itself lost against its learning budget (cos20 #533)."""
+    """Count what a move the head chose itself lost against its learning budget (cos20 #533).
+
+    The larger of what the world booked for a move it wrote itself (``energy_effect``) and what
+    the head's check put on the move before it went out (``gives``, ``HeadDecider._take``, also a
+    transfer as the rules' line), the latter only for the move it chose: a word written in its
+    place gives nothing. Until 0.1.13 only the world's booking counted, and a world that sends
+    none left the rest whole all day, for every transfer up to it (cos20 #492, eleventh review,
+    K45)."""
     import head
     import lessons
 
-    effect = lessons.own_effect(last)
-    if advice.get("head") and advice.get("own") and last.get("ok") and effect is not None:
-        head.budget_spend(state_dir(), -effect)
+    if not (advice.get("head") and last.get("ok")):
+        return
+    effect = lessons.own_effect(last) if advice.get("own") else None
+    loss = -effect if effect is not None else 0.0
+    if last.get("action") == advice.get("choice"):
+        loss = max(loss, files.finite(advice.get("gives")) or 0.0)
+    head.budget_spend(state_dir(), loss)
 
 
 async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[str, Any]:

@@ -92,6 +92,15 @@ function tournamentOffer(status) {
                  /^you qualify for a free tournament slot/)
 }
 
+// Text for a component of the shell (its Button, its PanelSectionHeader), the one way there
+// (cos20 #492, eleventh review). Those components set no text format in Omarchy 4.0.0 and 4.0.1
+// (PlainText only from 4.0.2 on), and Qt reads a text with a tag in its first line as styled
+// text: a model named `<img src="https://…">` made the shell load that image. Without `<` there
+// is no tag; `‹` reads the same.
+function hostText(text) {
+  return String(text === undefined || text === null ? "" : text).replace(/</g, "‹")
+}
+
 // The words the IPC target takes (cos20 #492): the compass presets, nothing else. A command's
 // arguments are readable by every local user, so free words and questions never come this way.
 var COMPASS_WORDS = ["grow", "defend", "attack", "trade", "cooperate", "explore", "free"]
@@ -492,6 +501,7 @@ if (typeof module !== "undefined") {
     moveWords: moveWords,
     nextTip: nextTip,
     typedText: typedText,
+    hostText: hostText,
     pastedLine: pastedLine,
     lineInsert: lineInsert,
     lineKey: lineKey,

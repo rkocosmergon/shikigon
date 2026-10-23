@@ -312,11 +312,15 @@ energy at the start of the UTC day that its own moves may lose in a day. Each mo
 writes itself is checked before it goes out for what it gives to another agent. It goes out if
 the world's own word for it says it gives nothing (placing cells, a field, a mission without a
 reward, a pact without escrow), or if what it gives has a number the rest covers: energy by
-its amount, goods by their count at the reference price the world names for them. Anything
-else is played by the rule tree instead: buying another agent's offer, a contract that costs
+its amount. Anything else is played by the rule tree instead: giving goods away (the world
+values them at the house price, which it does not name; the price it names is the cheapest
+offer of any other agent), buying another agent's offer, a contract that costs
 your Shikigon anything (an escrow, a tribute it pays, an alliance with costs per tick, a
-mercenary it hires), a breach, and any move the world adds later, until Shikigon knows it. An offer on the market below its worth is not counted: the move itself loses
-nothing, what it costs comes later, when someone buys. A world that does not state its total
+mercenary it hires), a breach, and any move the world adds later, until Shikigon knows it. An
+offer on the market below its worth is not counted: the move itself loses nothing, what it
+costs comes later, when someone buys. What a move that goes out gives counts against the
+budget as checked, or as the world books it if that is more, also where the world books
+nothing. A world that does not state its total
 energy (one that ranks by something else) leaves nothing to measure a gift against: then every
 move of its own that gives something is played by the rule tree, and moves that give nothing
 still go out. Once the budget is used up the rule tree plays until the day ends. `0` means no

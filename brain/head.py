@@ -335,7 +335,8 @@ GIVES_NOTHING = frozenset({
     "burn_plague", "place_deployable", "pickup_drop", "terminal_query", "set_compass",
     "set_tournament_compass", "abandon_field", "message", "say",
 })  # fmt: skip
-# Gives a number: energy by its amount, goods by their count at the world's reference price.
+# Transfers: checked against the rest also as a rules' line. Energy gives a number, its amount;
+# goods give none the brain could stand behind (``given_value``).
 TRANSFERS = frozenset({"transfer_energy", "transfer_inventory", "remit_to_owner"})
 # A contract move gives nothing where ``contracts.costs_me`` says it costs nothing; else what it
 # gives cannot be said. Until 0.1.13 only its escrow and a payer written like the agent's own id
@@ -355,24 +356,20 @@ def _inner(params: dict[str, Any]) -> dict[str, Any]:
     return inner if isinstance(inner, dict) else {}
 
 
-def given_value(action: str, params: dict[str, Any], state: Any) -> float | None:
+def given_value(action: str, params: dict[str, Any]) -> float | None:
     """What a transfer gives away, in energy; ``None`` when it cannot be said.
 
-    ``transfer_energy`` and ``remit_to_owner`` by their amount, ``transfer_inventory`` by its
-    count at the reference price the world names for that item (``market_list.reference_prices``).
-    Read like every value of a model's answer: by its type (``files.finite``), never with a bare
-    ``float()``. A value that cannot be said lets the rules play while a budget is set."""
-    fields = _inner(params)
-    if action in ("transfer_energy", "remit_to_owner"):
-        amount = files.finite(fields.get("amount") or 0)
-        return amount if amount is not None and amount >= 0 else None
-    count = files.finite(fields.get("count"))
-    prices = advisor.facts_of(state, "market_list").get("reference_prices")
-    price = files.finite(prices.get(str(fields.get("item_type")))) if isinstance(prices, dict) \
-        else None
-    if count is None or price is None or count <= 0 or price < 0:
+    ``transfer_energy`` and ``remit_to_owner`` by their amount, read like every value of a model's
+    answer: by its type (``files.finite``), never with a bare ``float()``. ``transfer_inventory``
+    has no value the brain can say: the world books goods and ranks the total energy at the house
+    price, which the state does not name, and its ``market_list.reference_prices`` is the cheapest
+    offer of any other agent. Until 0.1.13 goods counted at that price, so an offer of one item at
+    1 let the whole stock pass a budget that was a fraction of its worth (cos20 #492, eleventh
+    review, K46). A value that cannot be said lets the rules play while a budget is set."""
+    if action not in ("transfer_energy", "remit_to_owner"):
         return None
-    return count * price
+    amount = files.finite(_inner(params).get("amount") or 0)
+    return amount if amount is not None and amount >= 0 else None
 
 
 def gives_away(action: str, params: dict[str, Any], state: Any) -> float | None:
@@ -383,7 +380,7 @@ def gives_away(action: str, params: dict[str, Any], state: Any) -> float | None:
     if action in GIVES_NOTHING:
         return 0.0
     if action in TRANSFERS:
-        return given_value(action, params, state)
+        return given_value(action, params)
     if action in contracts.CONTRACT_MOVES:
         return None if contracts.costs_me(action, params, state) else 0.0
     if action == "start_mission":  # a reward or a contract behind it may pay another agent
@@ -538,6 +535,7 @@ class HeadDecider:
     def _rules_play(self, why: str) -> tuple[str, dict[str, Any]]:
         if self.last is not None:
             self.last["fallback"] = why[:WHY_CHARS]
+            self.last.pop("gives", None)  # the move it would have given with does not go out
         return self._rules
 
     def _take(self, move: Move) -> tuple[str, dict[str, Any]]:
@@ -545,6 +543,7 @@ class HeadDecider:
         line = any(action == a and _same(params, p) for a, p in self._suggested)
         if self.last is not None:
             self.last.update({"choice": action, "why": why, "own": not line})
+            self.last.pop("gives", None)
         rest = self.budget_left
         if rest is not None and (not line or action in TRANSFERS):
             value = gives_away(action, params, self._state)
@@ -553,6 +552,8 @@ class HeadDecider:
             if value > rest:
                 return self._rules_play("learning budget: the rest would not cover this"
                                         if budget_started(self.home) else NO_TOTAL)
+            if self.last is not None:  # counted when the world takes it (``spend_budget``)
+                self.last["gives"] = value
         if action == "wait":
             return action, {}
         if line:

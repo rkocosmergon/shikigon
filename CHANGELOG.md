@@ -40,12 +40,14 @@ What changed for someone who uses Shikigon. Newest first.
   the journal kept them: whom it wrote to, what it wrote, what the model advised. Now each move
   goes as its numbers and its move word, the world's reason for a refusal quoted.
 - **What your agent gives away counts against the budget before it goes.** Only energy sent
-  was checked. Now each move your agent writes itself is checked: goods at the reference price
-  the world names, and a move whose value for another agent cannot be said beforehand (buying
-  another agent's offer, a contract with escrow or one that has your Shikigon pay, a breach, a
-  move the world adds later) lets the rule tree play while a budget is set. So does any move
-  that gives something in a world that does not state its total energy: there the budget
-  checked nothing.
+  was checked. Now each move your agent writes itself is checked, and a move whose value for
+  another agent cannot be said beforehand lets the rule tree play while a budget is set: giving
+  goods away (the price the world names for them is the cheapest offer of any other agent, it
+  books them at the house price), buying another agent's offer, a contract with escrow or one
+  that has your Shikigon pay, a breach, a move the world adds later. So does any move that
+  gives something in a world that does not state its total energy: there the budget checked
+  nothing. What goes out counts as it was checked, or as the world books it if that is more:
+  a world that books nothing no longer leaves the rest whole.
 - **A contract is read by what it costs your Shikigon, and it says no to one that costs it.**
   The rule tree took an offer by its kind alone: a warrior, trader, diplomat or expansionist
   accepted any tribute, also one it pays, so another player could have it pay him every tick;
@@ -75,6 +77,10 @@ What changed for someone who uses Shikigon. Newest first.
 - **No answer of your agent ends the brain.** An answer with a word where a number belongs
   (`"amount": "half"`) ended the brain on every move it chose itself; now such an answer counts
   as unusable, and the rule tree plays.
+- **Names of a model server and the world's words reach the shell's own buttons as text
+  only.** Omarchy 4.0.0 and 4.0.1 read markup in their buttons and section headers, and the
+  panel gave them model names and the tournament's number: a model named `<img src=…>` made
+  the shell load that image. Now no text reaches one of them with a tag in it.
 - **A hint holds fixed words only, in its title too.** The title carried its name, which the
   world gives it. The tournament hint carried the server's sentence, and
   Omarchy's notifier from 4.5 on decodes a body before it cleans it, so the escaping was undone:

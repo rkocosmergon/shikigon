@@ -63,6 +63,29 @@ def rich_texts(source: str) -> list[str]:
     return [b for b in _blocks(source, "Text") if "textFormat: Text.PlainText" not in b]
 
 
+# H4 (cos20 #492, eleventh review): the shell's own components that show a text. They set no
+# text format in Omarchy 4.0.0 and 4.0.1 (PlainText from 4.0.2 on), so there they read markup.
+HOST_TEXT = ("Button", "PanelSectionHeader")
+_OURS = re.compile(rf"component\s+(\w+)\s*:\s*({'|'.join(HOST_TEXT)})\s*\{{")
+_SETS_TEXT = re.compile(r"(?:^|[{;])\s*text\s*:", re.MULTILINE)
+
+
+def host_texts(source: str) -> list[str]:
+    """H4: a text that can reach a component of the shell without ``Model.hostText``.
+
+    Such a component is used only as the base of one of ours that binds
+    ``text: Model.hostText(label)``, and no use of one of ours sets ``text`` itself."""
+    bad = []
+    for kind in HOST_TEXT:  # used directly, not as the base of one of ours
+        bad += [m.group(0) for m in re.finditer(rf"^\s*{kind}\s*\{{", source, re.MULTILINE)]
+    for m in _OURS.finditer(source):
+        block = _blocks(source[m.start():], m.group(2))[0]
+        if not re.search(r"^\s*text:\s*Model\.hostText\(label\)\s*$", block, re.MULTILINE):
+            bad.append(m.group(0))
+        bad += [use for use in _blocks(source, m.group(1)) if _SETS_TEXT.search(use)]
+    return bad
+
+
 def blocking_calls(source: str) -> list[str]:
     """H5: loads or writes that stop the shared shell until they finish."""
     patterns = (
@@ -167,6 +190,11 @@ def test_every_text_is_plain_text() -> None:
         assert not rich_texts(source), f"{name}: {rich_texts(source)}"
 
 
+def test_the_shells_own_components_get_no_markup() -> None:
+    for name, source in _sources():
+        assert not host_texts(source), f"{name}: {host_texts(source)}"
+
+
 def test_nothing_blocks_the_shell() -> None:
     for name, source in _sources():
         assert not blocking_calls(source), f"{name}: {blocking_calls(source)}"
@@ -202,6 +230,12 @@ def test_the_guards_see_what_they_guard() -> None:
     assert clipboard_reads('command: ["sh", "-c", "timeout 2 wl-paste -n"]')
     assert not clipboard_reads('command: ["sh", "-c", "timeout 2 wl-paste -n | head -c 4096"]')
     assert rich_texts("component Line: Text {\n  color: red\n}")
+    assert host_texts('PanelSectionHeader {\n  text: "x"\n}')
+    assert host_texts('component B: Button {\n  property string label: ""\n}')
+    ours = 'component B: Button {\n  property string label: ""\n  text: Model.hostText(label)\n}\n'
+    assert not host_texts(ours + 'B { at: 0; label: name }')
+    assert host_texts(ours + 'B { at: 0; text: name }')
+    assert host_texts(ours + 'B {\n  label: "x"\n  text: name\n}')
     ipc = "IpcHandler {\n  function ask(text: string): string { return root.ask(text) }\n}"
     assert ipc_free_text(ipc) == ["ask"]
     assert not ipc_free_text(
@@ -220,6 +254,8 @@ def test_the_guards_see_what_they_guard() -> None:
     assert panel_files_read_while_closed(fixed % "journal_recent.json")
     assert not panel_files_read_while_closed(fixed % "status.json")
     bar = (QML / "BarWidget.qml").read_text(encoding="utf-8")
+    assert [m.group(1) for m in _OURS.finditer(bar)] == ["Header", "PanelButton", "PickButton"]
+    assert sum(len(_blocks(bar, n)) for n in ("Header", "PanelButton", "PickButton")) >= 14
     assert len(_blocks(bar, "TextField")) == 1  # the QuietLine component
     assert len(_blocks(bar, "QuietLine")) == 3  # address, key, question
     assert "wl-paste" in bar

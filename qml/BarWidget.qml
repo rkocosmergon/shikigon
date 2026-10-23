@@ -607,11 +607,7 @@ BarWidget {
           spacing: Style.space(8)
 
           PanelSeparator { foreground: root.ink }
-          PanelSectionHeader {
-            text: root.step === "talk" ? "ASK ITS ADVISOR" : "WHO ANSWERS?"
-            foreground: root.ink
-            fontFamily: root.font
-          }
+          Header { label: root.step === "talk" ? "ASK ITS ADVISOR" : "WHO ANSWERS?" }
 
           // --- who: what was found, then the two ways to get one ---
           Column {
@@ -621,7 +617,7 @@ BarWidget {
             Repeater {
               model: root.step === "who" ? root.whoList : []
               PickButton { required property var modelData; required property int index
-                           at: index; text: String(modelData.text) }
+                           at: index; label: String(modelData.text) }
             }
             Line { color: root.dim; text: Model.WHO_DATA }
           }
@@ -667,7 +663,7 @@ BarWidget {
             Repeater {
               model: root.step === "models" ? root.modelList.shown : []
               PickButton { required property var modelData; required property int index
-                           at: index; text: String(modelData) }
+                           at: index; label: String(modelData) }
             }
             Line { visible: root.modelList.more > 0; color: root.dim
                    text: "and " + root.modelList.more + " more: name one in the config file" }
@@ -687,13 +683,13 @@ BarWidget {
             Row {
               width: parent.width
               spacing: Style.space(6)
-              PickButton { at: 0; width: (parent.width - parent.spacing) / 2; text: "back" }
+              PickButton { at: 0; width: (parent.width - parent.spacing) / 2; label: "back" }
               PickButton {
                 visible: !!(root.pickedRow && root.pickedRow.sign_in)
                 at: 1
                 width: (parent.width - parent.spacing) / 2
-                text: "open " + (root.pickedRow ? (root.pickedRow.name || "it") : "it")
-                      + " to sign in"
+                label: "open " + (root.pickedRow ? (root.pickedRow.name || "it") : "it")
+                       + " to sign in"
               }
             }
           }
@@ -705,8 +701,9 @@ BarWidget {
             spacing: Style.space(8)
             // Two rows, one under the other: side by side their texts ran into each other
             // (seen on the device, 1440x900).
-            PickButton { at: 0; text: "answers: " + (root.advisorNow ? root.advisorNow.label : "") }
-            PickButton { at: 1; text: Model.adviseText(root.advisorNow) }
+            PickButton { at: 0
+                         label: "answers: " + (root.advisorNow ? root.advisorNow.label : "") }
+            PickButton { at: 1; label: Model.adviseText(root.advisorNow) }
             Line { visible: text !== ""; color: root.dim; text: Model.callsText(root.advisorNow) }
           }
         }
@@ -751,11 +748,9 @@ BarWidget {
             spacing: Style.space(4)
 
             PanelSeparator { foreground: root.ink }
-            PanelSectionHeader {
-              text: root.inTournament ? "TOURNAMENT #" + root.tournament.number
+            Header {
+              label: root.inTournament ? "TOURNAMENT #" + root.tournament.number
                 + " · ENDS " + Model.endsText(root.tournament.ends_at) : ""
-              foreground: root.ink
-              fontFamily: root.font
             }
             Repeater {
               model: root.inTournament ? Model.tournamentRows(root.tournament) : []
@@ -782,7 +777,7 @@ BarWidget {
             spacing: Style.space(4)
 
             PanelSeparator { foreground: root.ink }
-            PanelSectionHeader { text: "NOW"; foreground: root.ink; fontFamily: root.font }
+            Header { label: "NOW" }
             Repeater {
               id: nowLines
               model: root.view.full && root.status.situation ? root.status.situation : []
@@ -813,10 +808,7 @@ BarWidget {
 
             PanelSeparator { foreground: root.ink }
             // What it rests on rides in the header: one line less, and it stays in view.
-            PanelSectionHeader {
-              text: "LEARNED" + (parent.lesson ? " · " + parent.lesson.basis : "")
-              foreground: root.ink; fontFamily: root.font
-            }
+            Header { label: "LEARNED" + (parent.lesson ? " · " + parent.lesson.basis : "") }
             // Two lines each: in a tournament the panel is full, and the whole block has to stay
             // in view (device 14.10.: a 200-character part took five lines and hid "less").
             Line { maximumLineCount: 2; elide: Text.ElideRight
@@ -831,7 +823,7 @@ BarWidget {
             spacing: Style.space(4)
 
             PanelSeparator { foreground: root.ink }
-            PanelSectionHeader { text: "JOURNAL"; foreground: root.ink; fontFamily: root.font }
+            Header { label: "JOURNAL" }
             Repeater {
               model: Model.journalLines(root.journal)
               Line {
@@ -882,11 +874,7 @@ BarWidget {
 
           PanelSeparator { foreground: root.ink }
           // In a tournament these buttons set the world's compass, not the tournament's: say so.
-          PanelSectionHeader {
-            text: root.inTournament ? "COMPASS (WORLD)" : "COMPASS"
-            foreground: root.ink
-            fontFamily: root.font
-          }
+          Header { label: root.inTournament ? "COMPASS (WORLD)" : "COMPASS" }
           Line { color: root.dim; text: "Tell it what matters. It stays itself." }
           Grid {
             id: presetGrid
@@ -901,7 +889,7 @@ BarWidget {
                 required property int index
                 width: presetGrid.cell
                 slot: index
-                text: String(modelData)
+                label: String(modelData)
                 active: root.isCurrentPreset(String(modelData))
               }
             }
@@ -922,7 +910,7 @@ BarWidget {
               required property int index
               width: actionRow.cell
               slot: root.presetCount + index
-              text: String(modelData)
+              label: String(modelData)
             }
           }
         }
@@ -1087,9 +1075,21 @@ BarWidget {
     }
   }
 
+  // The shell's own components get their text only through `Model.hostText`: in Omarchy 4.0.0
+  // and 4.0.1 they read markup (cos20 #492, eleventh review). Each one is used only through the
+  // components below, and those are given a `label`, never a `text` (guard in tests/test_qml.py).
+  component Header: PanelSectionHeader {
+    property string label: ""
+    text: Model.hostText(label)
+    foreground: root.ink
+    fontFamily: root.font
+  }
+
   // The shell's button, wired to this panel's cursor (keys and mouse share it).
   component PanelButton: Button {
     property int slot: -1
+    property string label: ""
+    text: Model.hostText(label)
     fontSize: Style.font.bodySmall
     foreground: root.ink
     fontFamily: root.font
@@ -1102,6 +1102,8 @@ BarWidget {
   // A row of a list in the talk view: the same button, on the talk's own cursor (`pick`).
   component PickButton: Button {
     property int at: 0
+    property string label: ""
+    text: Model.hostText(label)
     width: parent ? parent.width : implicitWidth
     fontSize: Style.font.bodySmall
     foreground: root.ink

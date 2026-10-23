@@ -366,7 +366,10 @@ PRICES = {"market_list": {"available": True, "reference_prices": {"bomb": 100, "
     ({"to_player_id": "p2", "item_type": "bomb", "count": 10}, False),  # 1000 over a rest of 50
     ({"to_player_id": "p2", "item_type": "nothing", "count": 1}, False),  # no price, no check
     ({"to_player_id": "p2", "item_type": "bomb", "count": "NaN"}, False),
-    ({"to_player_id": "p2", "item_type": "seed", "count": 2}, True),  # 2, within the rest
+    # ~~2, within the rest: plays~~ (eleventh review, K46): the reference price is the cheapest
+    # offer of any other agent, the world books goods at the house price. No value of goods can
+    # be said, so they play the rules under a budget (test_eleventh_pass).
+    ({"to_player_id": "p2", "item_type": "seed", "count": 2}, False),
 ])  # fmt: skip
 async def test_giving_things_away_is_checked_like_giving_energy(
     params: dict[str, Any], plays: bool,

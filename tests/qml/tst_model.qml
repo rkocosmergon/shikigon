@@ -540,4 +540,17 @@ TestCase {
     compare(Model.compassWord("what is a blinker?"), "", "a question is refused")
     compare(Model.compassWord(""), "")
   }
+
+  // cos20 #492, eleventh review: Omarchy 4.0.0 and 4.0.1 read markup in their Button and
+  // PanelSectionHeader. A text for them holds no tag, so Qt never reads it as styled text.
+  function test_a_text_for_the_shells_components_holds_no_tag() {
+    var named = Model.hostText('<img src="https://evil.example/x.png" width=9999>')
+    verify(named.indexOf("<") < 0, named)
+    compare(named, '‹img src="https://evil.example/x.png" width=9999>')
+    compare(Model.hostText("answers: " + "<b>qwen</b>"), "answers: ‹b>qwen‹/b>")
+    compare(Model.hostText("qwen3.5:9b"), "qwen3.5:9b", "a plain name stays as it is")
+    compare(Model.hostText(7), "7")
+    compare(Model.hostText(undefined), "")
+    compare(Model.hostText(null), "")
+  }
 }
