@@ -14,9 +14,9 @@ certifi==2026.10.19 \
     # via
     #   httpcore
     #   httpx
-cosmergon-agent==0.27.31 \
-    --hash=sha256:1df9eab080f6b4705ad45caf058bb3df449602cb9be5152f59e4214b796bad81 \
-    --hash=sha256:d40e331fb590ad5e3fb263a68d73da49423635e9d245b5efaf459d80f3592bd1
+cosmergon-agent==0.27.32 \
+    --hash=sha256:544ab7d7ae041b3e224bb4d9f030c4de222da31d322705441d3d2b32fed334f9 \
+    --hash=sha256:7e4e4c9ded6b9ac115fe2b8a4d2b8407c0aa2eee5947d1ab5a4f44d6b4fcf9a5
     # via
     #   -r requirements.in
     #   cosmergon-decider-tree
