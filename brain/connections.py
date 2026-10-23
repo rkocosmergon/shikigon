@@ -656,10 +656,76 @@ def proc_tables() -> list[str]:
     return tables
 
 
+# ---------- the socket that took this very connection (cos20 #492, fifth review) -----------------
+# ``own_port`` reads who listens on a port now. A local user who listened on a freed port, took the
+# connection and closed his listener before the player's server bound the port again was no longer
+# among the listeners, and the request went to him. The socket that took a connection keeps the
+# uid of the listener that made it, also before ``accept`` and after the listener is gone.
+
+
+def _plain(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
+    """An address as text; an IPv4 address inside IPv6 (``::ffff:127.0.0.1``) as IPv4."""
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        return str(ip.ipv4_mapped)
+    return str(ip)
+
+
+def _endpoint(cell: str) -> tuple[str, int]:
+    """``0100007F:1F90`` of ``/proc/net/tcp`` as ``("127.0.0.1", 8080)``. Each 32-bit word of
+    the address stands in the machine's byte order."""
+    address, port = cell.rsplit(":", 1)
+    raw = bytes.fromhex(address)
+    if sys.byteorder == "little":
+        raw = b"".join(raw[i : i + 4][::-1] for i in range(0, len(raw), 4))
+    return _plain(ipaddress.ip_address(raw)), int(port, 16)
+
+
+def own_sockets() -> set[str]:
+    """The inodes of this process's sockets (``/proc/self/fd`` → ``socket:[inode]``)."""
+    inodes: set[str] = set()
+    with contextlib.suppress(OSError):
+        for fd in os.listdir("/proc/self/fd"):
+            with contextlib.suppress(OSError):
+                link = os.readlink(f"/proc/self/fd/{fd}")
+                if link.startswith("socket:["):
+                    inodes.add(link[8:-1])
+    return inodes
+
+
+def takers(host: str, port: int, tables: list[str], mine: set[str]) -> list[int]:
+    """The owners (uid) of the sockets on this machine that took this process's connections to
+    ``host:port``; empty when none stands in the tables."""
+    rows = []
+    for table in tables:
+        for line in table.splitlines()[1:]:
+            cells = line.split()
+            with contextlib.suppress(ValueError, IndexError):
+                rows.append((_endpoint(cells[1]), _endpoint(cells[2]), int(cells[7]), cells[9]))
+    server = (_plain(ipaddress.ip_address(host.split("%", 1)[0])), port)
+    clients = {local for local, remote, _uid, inode in rows if inode in mine and remote == server}
+    return [uid for local, remote, uid, _inode in rows if local == server and remote in clients]
+
+
+def taken_by_player(host: str, port: int, *, system_ok: bool, tables: list[str] | None = None,
+                    mine: set[str] | None = None) -> bool:
+    """True if every socket that took a connection of this process to ``host:port`` is the
+    player's (or a system service's, ``system_ok``). None found is not the player's: the brain
+    looks three times within ten milliseconds, then refuses."""
+    found: list[int] = []
+    for _ in range(3):
+        found = takers(host, port, proc_tables() if tables is None else tables,
+                       own_sockets() if mine is None else mine)
+        if found or tables is not None:
+            break
+        time.sleep(0.005)
+    below = system_accounts_below() if system_ok else 0
+    return bool(found) and all(uid == os.getuid() or uid < below for uid in found)
+
+
 # ---------- checked when sending, not when found (H9, cos20 #492, review #12356) -----------------
 
 NOT_OURS = ("that address is on this machine, and its port is not yours right now (another "
-            "user listens there, or nothing does): nothing was sent")
+            "user listens there or took the connection, or nothing listens): nothing was sent")
 NOT_OURS_SHORT = "its port on this machine is not yours right now"  # the panel's move line
 
 
@@ -757,11 +823,14 @@ PEER_ELSEWHERE = ("that address is on this machine, but the connection reached a
 
 
 def peer_refusal(host: str, port: int, local: bool, with_key: bool) -> str:
-    """Why the connection just made may not carry the request, or ``""``."""
+    """Why the connection just made may not carry the request, or ``""``: on this machine, every
+    listener on the port and the socket that took this connection must be the player's (or a
+    system service's, without a key)."""
     here = _here(host, own_addresses())
     if local and not here:
         return PEER_ELSEWHERE
-    if here and not own_port(port, system_ok=not with_key):
+    if here and not (own_port(port, system_ok=not with_key)
+                     and taken_by_player(host, port, system_ok=not with_key)):
         return NOT_OURS
     return ""
 

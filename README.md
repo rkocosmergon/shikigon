@@ -186,9 +186,11 @@ shows **WHO ANSWERS?**, one list:
   and the panel says so. The same holds for every address that leads to this machine, also one
   you typed (`localhost`, `127.0.0.1`, your machine's own name or address), and for a world on
   this machine: for the world the check runs inside `cosmergon-agent`, right before every
-  request it sends, each retry included. Over https the certificate already makes sure of it. The brain also checks the
-  connection it really made, before a byte of the question leaves: a name that points elsewhere
-  when connecting, or a proxy set in your environment, cannot lead past the check.
+  request it sends, each retry included. Over https the certificate already makes sure of it.
+  The brain also checks the connection it really made, before a byte of the question leaves:
+  where it leads, and whose socket took it. A name that points elsewhere when connecting, a
+  proxy set in your environment, or another user who took the connection and left the port to
+  your server again cannot lead past the check.
 - **set up an agent in Omarchy…** opens Omarchy's own chooser; signing in is the agent's part.
 - **an address of its own…**: type any OpenAI-compatible address over https, or one on this
   machine (`localhost`), and pick one of the models it offers. Plain http to another machine is

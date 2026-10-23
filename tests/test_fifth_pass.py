@@ -9,8 +9,9 @@ class has its narrow place.
 5. a word where the head's answer should hold a number ended the brain;
 6. opening the panel started ``mise`` and asked two ports of this machine.
 
-Finding 7 (the socket check reads the listeners, not the peer of the connection) is not built:
-a residual named in the threat model (K11), like ``setsid`` at K14.
+7. the check at the socket read who listens on the port, not who took this very connection: a
+   local user who took it and closed his listener before the player's server listened again
+   got the request (founder 23.10.: "mach").
 
 Each test is red against ``9ce01c0`` (counter-test), except where its docstring says it guards
 the form of a fix.
@@ -34,10 +35,11 @@ import connections
 import files
 import head
 import shikigon_brain as brain
-from conftest import hostile
+from conftest import hostile, sends
 from test_advisor import CONF, _state
 from test_brain import FakeDecider
 from test_head import Replies, StubTree, _move
+from test_sending import CLIENT, ME, OURS, STRANGER, Kernel
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY = "test-key-not-real-0123"  # without the pattern of real keys (whitelist check)
@@ -179,3 +181,58 @@ def test_opening_the_panel_starts_no_look_for_who_answers() -> None:
     readme = " ".join((ROOT / "README.md").read_text(encoding="utf-8").split())
     assert "When you press **ask**, the brain looks for who could answer" in readme
     assert "`mise`" in readme and "11434 and 1234" in readme
+
+
+# --- 7: the socket that took this very connection decides, not the listeners alone ------------
+
+
+def test_a_connection_a_stranger_took_is_refused_though_the_player_listens_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kernel = Kernel(monkeypatch, 11434, ME)
+    assert connections.peer_refusal("127.0.0.1", 11434, True, False) == ""
+    # A stranger listened on the freed port, took the connection and closed his listener; the
+    # player's server listens there again. The listeners alone look like the player's.
+    kernel.taker = STRANGER
+    assert connections.peer_refusal("127.0.0.1", 11434, True, False) == connections.NOT_OURS
+    assert connections.peer_refusal("127.0.0.1", 11434, True, True) == connections.NOT_OURS
+    check = brain.world_peer_check({"world": {"base_url": "http://127.0.0.1:11434"}})
+    assert check("127.0.0.1", 11434) == connections.NOT_OURS, "the world's connection as well"
+
+
+def test_a_taker_on_a_dual_stack_listener_is_read_as_ipv4(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The player's server listens on ``[::]``: the socket that took an IPv4 connection stands in
+    ``/proc/net/tcp6`` as ``::ffff:127.0.0.1``."""
+    head_line = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt\n"
+    port, mapped, nowhere = 8080, "0000000000000000FFFF00000100007F", "0" * 32
+    v4 = head_line + (f"   1: 0100007F:{CLIENT:04X} 0100007F:{port:04X} 01 0:0 00:0 0 "
+                      f"{ME:>5} 0 {OURS} 1\n")
+
+    def tables(taker: int) -> list[str]:
+        v6 = head_line + (
+            f"   0: {nowhere}:{port:04X} {nowhere}:0000 0A 0:0 00:0 0 {ME:>5} 0 1 1\n"
+            f"   1: {mapped}:{port:04X} {mapped}:{CLIENT:04X} 01 0:0 00:0 0 {taker:>5} 0 0 1\n")
+        return [v4, v6]
+
+    monkeypatch.setattr(connections, "own_addresses", set)
+    monkeypatch.setattr(connections, "own_sockets", lambda: {OURS}, raising=False)
+    monkeypatch.setattr(connections, "proc_tables", lambda: tables(ME))
+    assert connections.peer_refusal("127.0.0.1", port, True, True) == ""
+    monkeypatch.setattr(connections, "proc_tables", lambda: tables(STRANGER))
+    assert connections.peer_refusal("127.0.0.1", port, True, True) == connections.NOT_OURS
+
+
+def test_the_players_own_server_passes_on_the_real_kernel() -> None:
+    """Positive control on the kernel's own tables (green against ``9ce01c0`` as well, where the
+    taker was not read): a server of this process, a connection of this process; the socket
+    that took it is found by the inode of the connection and is the player's."""
+    import socket
+
+    with hostile(sends(b"{}")) as (address, _seen):
+        port = int(address.rsplit(":", 1)[1])
+        with socket.create_connection(("127.0.0.1", port)):
+            assert connections.peer_refusal("127.0.0.1", port, True, True) == ""
+            found = getattr(connections, "takers", None)
+            if found is not None:
+                assert found("127.0.0.1", port, connections.proc_tables(),
+                             connections.own_sockets()) == [ME]

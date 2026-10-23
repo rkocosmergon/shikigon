@@ -18,6 +18,11 @@ What changed for someone who uses Shikigon. Newest first.
   files, as many as it listed; now at most fifty per look, and the bar's view is written once.
 - **Opening the panel looks for nobody.** Who could answer (`mise`, the model servers on ports
   11434 and 1234) is looked for when you press **ask**, as the README says.
+- **The socket that took the connection decides, not only who listens.** On this machine the
+  brain checked who listened on a port when it connected. Another local user who listened on a
+  freed port, took the connection and closed his listener before your server listened there
+  again was no longer among the listeners and got the question (or, for a world on this
+  machine, the key). Now the socket that took this very connection must be yours as well.
 - **Nothing goes over plain http to another machine,** also without a key. Your question, the
   talk so far and the situation went in plain text to any http address that wanted no key; on a
   network that only looks like home anyone could read them, and the advice and the moves would

@@ -43,21 +43,35 @@ def _private_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
 
 
-def _table(port: int, uid: int | None) -> str:
-    """``/proc/net/tcp`` with one listener on ``127.0.0.1:port`` (none for ``uid=None``)."""
+CLIENT, OURS = 50000, "4711"  # the brain's own end of the connection, and its socket inode
+
+
+def _table(port: int, uid: int | None, taker: int | None = None) -> str:
+    """``/proc/net/tcp`` with one listener on ``127.0.0.1:port`` (none for ``uid=None``), the
+    brain's own connection to it, and the socket that took that connection. The taker is the
+    listener's account unless the test names another: in the kernel a socket a listener took
+    keeps that listener's uid (cos20 #492, fifth review)."""
     head = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid\n"
     if uid is None:
         return head
-    return head + f"   0: 0100007F:{port:04X} 00000000:0000 0A 0:0 00:0 0 {uid:>5} 0 1 1\n"
+    taker = uid if taker is None else taker
+    return head + (
+        f"   0: 0100007F:{port:04X} 00000000:0000 0A 0:0 00:0 0 {uid:>5} 0 1 1\n"
+        f"   1: 0100007F:{CLIENT:04X} 0100007F:{port:04X} 01 0:0 00:0 0 {ME:>5} 0 {OURS} 1\n"
+        f"   2: 0100007F:{port:04X} 0100007F:{CLIENT:04X} 01 0:0 00:0 0 {taker:>5} 0 0 1\n")
 
 
 class Kernel:
-    """Stands in for ``/proc/net/tcp``: who listens on which port, changed by the test."""
+    """Stands in for ``/proc/net/tcp``: who listens on which port and who took the brain's
+    connection to it, changed by the test."""
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, port: int, uid: int | None) -> None:
         self.port, self.uid = port, uid
-        monkeypatch.setattr(connections, "proc_tables", lambda: [_table(self.port, self.uid)])
+        self.taker: int | None = None
+        monkeypatch.setattr(connections, "proc_tables",
+                            lambda: [_table(self.port, self.uid, self.taker)])
         monkeypatch.setattr(connections, "own_addresses", set)
+        monkeypatch.setattr(connections, "own_sockets", lambda: {OURS}, raising=False)
 
 
 def _chat(text: str) -> bytes:
