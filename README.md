@@ -60,10 +60,10 @@ folders may hold something of it:
 - `~/.cosmergon`: the terminal's settings (the Cosmergon SDK writes `config.toml` there when
   you close its first dialog). Other Cosmergon programs of yours keep their keys in the same
   file; if you use none, `rm -rf ~/.cosmergon`.
-- OpenCode's own storage (`~/.local/share/opencode`), if your agent was OpenCode: Shikigon
-  deletes the session of each question once it has the answer, so only a question that broke
-  off before its answer (a timeout) can have left one. `opencode session list` shows them,
-  `opencode session delete <id>` removes one.
+- OpenCode's own storage (`~/.local/share/opencode`), if your agent was OpenCode with Shikigon
+  0.1.12 or earlier: a question that broke off before its answer (a timeout) can have left a
+  session there. `opencode session list` shows them, `opencode session delete <id>` removes one.
+  Shikigon 0.1.13 no longer asks OpenCode (below, "A coding agent you already use").
 
 ## What it sends
 
@@ -86,11 +86,13 @@ quoted as information) and what the world answered to its last moves; when it lo
 it may ask the brain for lines from three files the brain wrote for it (its last hundred
 moves, their numbers, the rules of the world). The key itself is never sent. All of it goes
 over https, or stays on this machine: never in plain text over a network, where anyone on the
-way could read it (below, "an address of its own"). When your agent (pi, OpenCode) answers, the
-brain hands it all of this over stdin on this machine, and your agent sends it on over its own
+way could read it (below, "an address of its own"). When your agent (pi) answers, the brain
+hands it all of this over stdin on this machine, and your agent sends it on over its own
 connection to its model: Shikigon lets the agent connect only to port 443, the port of https
-(below, "A coding agent you already use"). OpenCode's sharing is off for these calls, whatever
-your OpenCode is set to.
+(below, "A coding agent you already use"). pi adds none of your files to it: Shikigon starts it
+with a system prompt of its own and an appended line of its own, so pi's `SYSTEM.md` and
+`APPEND_SYSTEM.md`, its context files (`AGENTS.md`, `CLAUDE.md`), skills, prompt templates,
+extensions, MCP servers and sessions stay out.
 
 Shikigon never puts your questions, instructions or the talk with the model into a command
 line, which every local user can read: the bar, the terminal and the advisor's agent get them
@@ -110,11 +112,10 @@ On your desktop, the bar runs inside the shell and touches only this:
   which the world gives it, and never a sentence of the server. A notifier offers a link it
   finds in a notification as a click.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your
-  model's agent (pi or OpenCode) or Omarchy's agent setup. When you press **ask**, the brain
-  looks for who could answer: it asks `mise` where pi and OpenCode are, if Omarchy's
-  placeholder stands in their place, asks each agent it finds for its version (`--version`,
-  again before each question), and asks the model servers on ports 11434 and 1234 of this
-  machine for their models. When you let your agent take over,
+  model's agent (pi) or Omarchy's agent setup. When you press **ask**, the brain looks for who
+  could answer: it asks `mise` where pi is, if Omarchy's placeholder stands in its place, asks
+  pi for its version (`--version`, again before each question), and asks the model servers on
+  ports 11434 and 1234 of this machine for their models. When you let your agent take over,
   the brain calls it on every move, and every five moves for a look back; it gets no tool,
   reads only lines the brain hands it (below), and reaches no port but 443.
 - **Files:** its folder above, and only small files there: the status, the last twelve journal
@@ -123,7 +124,8 @@ On your desktop, the bar runs inside the shell and touches only this:
   (`tips.json`); and whether someone is picked to answer (`advisor.json`, read every 30
   seconds while a Shikigon lives here). Journal, talk and lessons only while the panel is open
   (the talk also while an answer to your question is on its way). A list of models is read with
-  a limit (256 KiB, 8 seconds, 200 names).
+  a limit: from a model server 256 KiB within 8 seconds, from your agent 1 MiB within 40 seconds
+  (its version, then its list); 200 names either way.
 - **Command lines:** what you type (a question, an address, a key) never stands in one: other
   people on the machine can read those. It goes to the brain on stdin.
 
@@ -177,18 +179,23 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
 Optional, and off until you pick who answers. Press **ask** in the panel: the first time it
 shows **WHO ANSWERS?**, one list:
 
-- **A coding agent you already use:** OpenCode or pi, if it is installed. Shikigon calls the
-  agent's own command without a terminal, in an empty folder, with every tool off, and takes
-  its answer. It never reads the agent's credentials; it runs your program as you. Starting
+- **A coding agent you already use:** pi, if it is installed. Shikigon calls the agent's own
+  command without a terminal, in an empty folder, with every tool off, and takes its answer. It never reads the agent's credentials; it runs your program as you. Starting
   the agent adds a few seconds to each answer. Your agent, and everything it starts, may
   connect only to port 443, the port of https: before the agent starts, Shikigon asks the
   kernel to hold it to that (Landlock, Linux 6.7 or later), and on a kernel without it no
   question goes to an agent. The kernel sees the port, not the encryption: an address your
   agent's own setup writes as `http://…:443` would still go in plain text. A model server on
   this machine or in your home is not reached through your agent; pick it here directly (the
-  next two points). Shikigon asks only the versions of an agent it was tried with (pi 1.2 to
-  1.4, OpenCode 1.19), read from the agent before each question: after an update to another
-  version this list and the panel say so, and the rule tree plays on. pi signs in with `/login` inside pi. If you
+  next two points). Shikigon asks only the versions of pi it was tried with (1.2 to 1.4), read
+  from pi before each question: after an update to another version this list and the panel say
+  so, and the rule tree plays on. OpenCode is not asked from here (since 0.1.13): it puts your
+  own instruction files (`~/.config/opencode/AGENTS.md`, else `~/.claude/CLAUDE.md`, and the
+  `instructions` of your `opencode.json`) into every prompt, with no switch to turn that off, and
+  what the model writes can go on to another agent (below, "It writes to other agents"). Any
+  agent can still play Cosmergon itself, without Shikigon: see the
+  [cosmergon-agent README](https://github.com/rkocosmergon/cosmergon-agent#readme) (SDK and MCP
+  server). pi signs in with `/login` inside pi. If you
   added a local model with a thinking mode to pi yourself, pi's `--thinking off` does not reach
   it: put `"samplingParams": {"reasoning_effort": "none"}` on that model in
   `~/.pi/agent/models.json`, or an answer can take minutes.
@@ -289,12 +296,16 @@ its last moves (`this move: -214,612`), and when it looks back, each kind of mov
 effect beside the change of total energy that followed it from all causes.
 
 **What it may lose is up to you.** `learning_budget_pct` (default 5) is the share of its total
-energy at the start of the UTC day that its own moves may lose in a day. A move that gives
-something to another agent is checked before it goes out: energy by its amount, goods by
-their count at the reference price the world names for them. One the rest would not cover,
-or whose value cannot be said, is played by the rule tree instead. An offer on the market below
-its worth is not counted: the move itself loses nothing, what it costs comes later, when
-someone buys. Once the budget is used up the rule tree plays until the day ends. `0` means no limit. What is left today stands in `status.json`
+energy at the start of the UTC day that its own moves may lose in a day. Each move your agent
+writes itself is checked before it goes out for what it gives to another agent. It goes out if
+the world's own word for it says it gives nothing (placing cells, a field, a mission without a
+reward, a pact without escrow), or if what it gives has a number the rest covers: energy by
+its amount, goods by their count at the reference price the world names for them. Anything
+else is played by the rule tree instead: buying another agent's offer, a contract with escrow
+or one that has your Shikigon pay, a breach, and any move the world adds later, until Shikigon
+knows it. An offer on the market below its worth is not counted: the move itself loses
+nothing, what it costs comes later, when someone buys. Once the budget is used up the rule tree
+plays until the day ends. `0` means no limit. What is left today stands in `status.json`
 (`learning_budget_left`).
 
 It learns faster, too: every five moves (`review_every`) it looks back on its last hundred

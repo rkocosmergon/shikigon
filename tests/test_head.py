@@ -339,9 +339,7 @@ def test_no_agent_is_ever_given_a_tool() -> None:
         assert "review_argv" not in spec, name
     pi = connections.agent_argv({"agent": "pi"})
     assert {"--no-tools", "--no-mcp"} <= set(pi)
-    advisor_agent = connections.OPENCODE_ADVISOR["agent"]["shikigon-advisor"]
-    assert advisor_agent["tools"] == {"*": False}, "MCP tools of the player's config too"
-    assert advisor_agent["permission"] == {"*": "deny"}
+    assert "opencode" not in connections.AGENTS, "OpenCode is no longer asked (0.1.13)"
 
 
 def test_an_agent_never_tried_on_a_device_is_refused_where_it_is_sent() -> None:

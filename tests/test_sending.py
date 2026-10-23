@@ -123,10 +123,10 @@ def test_a_typed_address_on_this_machine_is_asked_only_on_the_players_port(
     real_ours: Callable[..., bool], monkeypatch: pytest.MonkeyPatch, where: str,
 ) -> None:
     Kernel(monkeypatch, connections.port_of(where) or 0, STRANGER)
-    asked: list[str] = []
-    found = connections.models_at(where, lambda url, **_: asked.append(url))
+    # through the door itself (0.1.13, seventh review): nobody listens there, so a request that
+    # went out would say "no answer", not the door's sentence
+    found = connections.models_at(where, connections.bounded_get)
     assert found == {"ok": False, "models": [], "why": connections.NOT_OURS}
-    assert asked == [], "the list was not even asked for"
 
 
 def test_over_https_the_certificate_guards_and_no_name_is_resolved(
@@ -337,9 +337,62 @@ def _checkers(trees: list[ast.AST]) -> set[str]:
         checkers |= more
 
 
+# The door's own senders (``connections.bounded_*``): a function handed one of them sends through
+# ``exchange``, which reads the port right before every request.
+DOOR = {"bounded_get", "bounded_post", "bounded_delete", "bounded_call"}
+
+
+def _functions(trees: dict[str, ast.AST]) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    return [fn for tree in trees.values() for fn in ast.walk(tree)
+            if isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef)]  # fmt: skip
+
+
+def _handed(call: ast.Call, fn: ast.FunctionDef | ast.AsyncFunctionDef, param: str) -> Any:
+    """What ``call`` (a call of ``fn``) hands to ``fn``'s parameter ``param``, or ``None``."""
+    for keyword in call.keywords:
+        if keyword.arg == param:
+            return keyword.value
+    names = [a.arg for a in fn.args.args]
+    index = names.index(param) if param in names else -1
+    return call.args[index] if 0 <= index < len(call.args) else None
+
+
+def _given_the_door(trees: dict[str, ast.AST], name: str, param: str,
+                    seen: frozenset[str] = frozenset()) -> bool:  # fmt: skip
+    """True if every call of the brain's function ``name`` hands its ``param`` the door, or a
+    parameter of its own caller that is in turn given the door by every caller of that one
+    (``found`` → ``models_at``). Derived from the code: a caller that hands anything else, or no
+    caller at all, is no proof (cos20 #492, seventh review, finding 4)."""
+    functions = _functions(trees)
+    defined = next((fn for fn in functions if fn.name == name), None)
+    calls = [(outer, n) for outer in functions for n in _own_body(outer)
+             if isinstance(n, ast.Call) and _name(n) == name]  # fmt: skip
+    if defined is None or not calls or name in seen:
+        return False
+    for outer, call in calls:
+        given = _handed(call, defined, param)
+        if given is None:
+            return False
+        if isinstance(given, ast.Attribute | ast.Name) and _name_of(given) in DOOR:
+            continue
+        own = {a.arg for a in outer.args.args + outer.args.kwonlyargs}
+        if isinstance(given, ast.Name) and given.id in own and _given_the_door(
+                trees, outer.name, given.id, seen | {name}):
+            continue
+        return False
+    return True
+
+
+def _name_of(node: ast.AST) -> str:
+    return node.attr if isinstance(node, ast.Attribute) else getattr(node, "id", "")
+
+
 def sending_functions(sources: dict[str, str] | None = None) -> dict[str, bool]:
     """Every function in the brain that opens a connection, and whether it reads the port
-    first. Derived from the code, never a list kept by hand."""
+    first. Derived from the code, never a list kept by hand. A function that sends only through
+    a ``get``/``post``/``delete`` it is handed reads it first if every caller hands it the door
+    (``_given_the_door``): since 0.1.13 the model list leaves its checks to the door, inside its
+    deadline (seventh review, finding 4)."""
     if sources is None:
         sources = {p.name: p.read_text(encoding="utf-8") for p in sorted(BRAIN.glob("*.py"))}
     trees = {name: ast.parse(text) for name, text in sources.items()}
@@ -351,11 +404,14 @@ def sending_functions(sources: dict[str, str] | None = None) -> dict[str, bool]:
                 continue
             params = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
             calls = [n for n in _own_body(fn) if isinstance(n, ast.Call)]
-            sends = [c.lineno for c in calls if _sends(c, params)]
-            if not sends:
+            sending = [c for c in calls if _sends(c, params)]
+            if not sending:
                 continue
             checks = [c.lineno for c in calls if _checked(c, checkers)]
-            found[f"{name}:{fn.name}"] = bool(checks) and min(checks) < min(sends)
+            first = bool(checks) and min(checks) < min(c.lineno for c in sending)
+            handed = {_name(c) for c in sending}
+            door = handed <= params and all(_given_the_door(trees, fn.name, p) for p in handed)
+            found[f"{name}:{fn.name}"] = first or door
     return found
 
 
@@ -366,6 +422,17 @@ def test_every_place_that_sends_reads_the_port_first() -> None:
     assert {"connections.py:exchange", "shikigon_brain.py:register",
             "shikigon_brain.py:make_agent"} <= set(found), sorted(found)
     assert all(found.values()), [where for where, ok in found.items() if not ok]
+
+
+def test_the_guard_turns_red_when_a_caller_hands_the_model_list_another_sender() -> None:
+    sources = {p.name: p.read_text(encoding="utf-8") for p in sorted(BRAIN.glob("*.py"))}
+    assert sending_functions(sources)["connections.py:models_at"], "handed the door as it stands"
+    source = sources["shikigon_brain.py"]
+    other = source.replace("connections.models_at(where, connections.bounded_get, key)",
+                           "connections.models_at(where, httpx_get, key)", 1)
+    assert other != source
+    found = sending_functions({**sources, "shikigon_brain.py": other})
+    assert found["connections.py:models_at"] is False, "red once a caller hands anything else"
 
 
 def test_the_guard_turns_red_on_a_place_that_sends_unchecked(tmp_path: Path) -> None:

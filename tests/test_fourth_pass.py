@@ -1,7 +1,8 @@
 """The fourth review (cos20 #492, the betreuer pass at ``54f86ea``): each finding closed where the
 class has its narrow place.
 
-1. OpenCode shared a session when the player's own OpenCode was set to share;
+1. OpenCode shared a session when the player's own OpenCode was set to share (its tests went with
+   OpenCode in 0.1.13: it is no longer asked from here, seventh review, finding 1);
 2. an agent outlived the brain when the brain was killed (SIGKILL reaches no handler);
 4. "Remove" left OpenCode's sessions and ``~/.cosmergon``; the terminal made files with its umask;
 5. the quote around another player's text could be closed from inside that text;
@@ -47,72 +48,6 @@ HUGE = "x" * (8 * 1024 * 1024)  # what an SDK answer may carry at most
 def _private_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
-
-
-# --- 1 and 4: OpenCode shares nothing and keeps no session ---------------------------------------
-
-# Stands in for opencode: `run` answers with what it was given, `session delete` writes it down.
-OPENCODE = """#!{python}
-import json, os, pathlib, sys
-log = pathlib.Path(os.environ["OPENCODE_LOG"])
-if sys.argv[1:] == ["--version"]:
-    print("1.19.4")
-    sys.exit(0)
-if sys.argv[1:3] == ["session", "delete"]:
-    log.write_text(log.read_text() + " ".join(sys.argv[1:]) + "\\n" if log.exists() else
-                   " ".join(sys.argv[1:]) + "\\n")
-    sys.exit(0)
-sys.stdin.read()
-config = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT", "{{}}"))
-seen = {{"share": config.get("share"), "disable": os.environ.get("OPENCODE_DISABLE_SHARE"),
-        "auto": os.environ.get("OPENCODE_AUTO_SHARE")}}
-for event in ({{"type": "step_start", "sessionID": os.environ["SESSION"]}},
-              {{"type": "text", "sessionID": os.environ["SESSION"],
-               "part": {{"type": "text", "text": json.dumps(seen)}}}}):
-    print(json.dumps(event))
-"""
-
-
-def _opencode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, session: str) -> Path:
-    bin_ = tmp_path / "bin"
-    bin_.mkdir(exist_ok=True)
-    (bin_ / "opencode").write_text(OPENCODE.format(python=sys.executable))
-    (bin_ / "opencode").chmod(0o755)
-    log = tmp_path / "opencode.log"
-    monkeypatch.setenv("PATH", f"{bin_}:{os.environ['PATH']}")
-    monkeypatch.setenv("OPENCODE_LOG", str(log))
-    monkeypatch.setenv("SESSION", session)
-    monkeypatch.setenv("OPENCODE_AUTO_SHARE", "true")  # the player's own OpenCode shares
-    return log
-
-
-def test_opencode_shares_nothing_whatever_the_players_opencode_says(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _opencode(tmp_path, monkeypatch, "ses_4thpass01")
-    seen = json.loads(connections.run_agent({"agent": "opencode"}, "q", 30.0))
-    assert seen["disable"] == "1", "the switch that holds whatever config wins the merge"
-    assert seen["share"] == "disabled", "the inline config says so too"
-    assert seen["auto"] is None, "the player's OPENCODE_AUTO_SHARE does not reach the agent"
-
-
-def test_the_session_of_each_question_is_deleted_once_answered(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    log = _opencode(tmp_path, monkeypatch, "ses_4thpass02")
-    connections.run_agent({"agent": "opencode"}, "q", 30.0)
-    deleted = log.read_text().splitlines() if log.exists() else []
-    assert deleted == ["session delete ses_4thpass02"], "the session was deleted"
-
-
-@pytest.mark.parametrize("session", ["-rf", "../ses", "ses 1", ""])
-def test_an_odd_session_id_never_becomes_an_argument(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, session: str,
-) -> None:
-    """Guards the form of the fix: the id comes from the agent's output."""
-    log = _opencode(tmp_path, monkeypatch, session)
-    connections.run_agent({"agent": "opencode"}, "q", 30.0)
-    assert not log.exists()
 
 
 # --- 2: the agent and what it started end with the brain, also when it is killed ----------------

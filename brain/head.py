@@ -318,9 +318,26 @@ def form_problem(action: str, params: dict[str, Any], state: Any,
             "for writing it yourself")
 
 
-# What a move gives to another agent: checked against the learning budget BEFORE it goes out,
-# both ways a value can leave (cos20 #492, sixth review, finding 6: only transfer_energy was).
-TRANSFERS = frozenset({"transfer_energy", "transfer_inventory"})
+# What a move the head writes itself may give to another agent is checked against the learning
+# budget BEFORE it goes out (``gives_away``). The class has one place and denies by default: a
+# move is let through only where the world's own word for it (``your_effect`` in
+# ``GET /api/v1/game/info``, cos20 ``core/action_declarations.py:533ff``) says it gives nothing to
+# another agent, or where the brain can put a number on what it gives. Everything else plays
+# the rules while a budget is set, also a move the world adds later. ``your_effect`` is prose, so
+# the list is read from it by hand (cos20 #492, seventh review, finding 3: until 0.1.13 only the
+# two transfers were checked, and buying another agent's offer or a contract that has this agent
+# pay went past; sixth review, finding 6: until then only ``transfer_energy``).
+GIVES_NOTHING = frozenset({
+    "wait", "place_cells", "create_field", "create_cube", "evolve", "heal_holes", "buy_shield",
+    "market_list",  # stays its own until bought; an offer below its worth is the README's exception
+    "market_cancel", "reject_contract", "cancel_mission", "claim_field", "shoot_spore",
+    "burn_plague", "place_deployable", "pickup_drop", "terminal_query", "set_compass",
+    "set_tournament_compass", "abandon_field", "message", "say",
+})  # fmt: skip
+# Gives a number: energy by its amount, goods by their count at the world's reference price.
+TRANSFERS = frozenset({"transfer_energy", "transfer_inventory", "remit_to_owner"})
+# Gives nothing as long as there is no escrow and this agent is not the one who pays.
+CONTRACTS = frozenset({"propose_contract", "accept_contract"})
 # Names the brain's own call takes for itself (``agent.act(self, action, **params)``): until
 # 0.1.13 ``{"action": …}`` in a model's params ended the brain with a ``TypeError`` (finding 2).
 # ``action`` is also the world's word for the move itself. Its other switches (``strict``,
@@ -338,12 +355,12 @@ def _inner(params: dict[str, Any]) -> dict[str, Any]:
 def given_value(action: str, params: dict[str, Any], state: Any) -> float | None:
     """What a transfer gives away, in energy; ``None`` when it cannot be said.
 
-    ``transfer_energy`` by its amount, ``transfer_inventory`` by its count at the reference
-    price the world names for that item (``market_list.reference_prices``). Read like every value
-    of a model's answer: by its type (``files.finite``), never with a bare ``float()``. A value
-    that cannot be said lets the rules play while a budget is set."""
+    ``transfer_energy`` and ``remit_to_owner`` by their amount, ``transfer_inventory`` by its
+    count at the reference price the world names for that item (``market_list.reference_prices``).
+    Read like every value of a model's answer: by its type (``files.finite``), never with a bare
+    ``float()``. A value that cannot be said lets the rules play while a budget is set."""
     fields = _inner(params)
-    if action == "transfer_energy":
+    if action in ("transfer_energy", "remit_to_owner"):
         amount = files.finite(fields.get("amount") or 0)
         return amount if amount is not None and amount >= 0 else None
     count = files.finite(fields.get("count"))
@@ -353,6 +370,44 @@ def given_value(action: str, params: dict[str, Any], state: Any) -> float | None
     if count is None or price is None or count <= 0 or price < 0:
         return None
     return count * price
+
+
+def _pays_or_pledges(action: str, params: dict[str, Any], state: Any) -> bool:
+    """True if a contract move pledges escrow, or makes this agent the one who pays (tribute); a
+    contract it accepts is read from the offers the world lists, never from the model's words."""
+    fields = _inner(params)
+    escrow = files.finite(fields.get("escrow_amount") or 0)
+    if escrow is None or escrow > 0:
+        return True
+    me = str(getattr(state, "agent_id", "") or "")
+    terms: Any = fields.get("terms")
+    if action == "accept_contract":
+        wanted = str(fields.get("contract_id") or "")
+        offers = [c for c in getattr(state, "pending_contracts", ()) or ()
+                  if isinstance(c, dict) and str(c.get("contract_id")) == wanted]  # fmt: skip
+        if not offers:
+            return True
+        terms = offers[0].get("terms")
+    payer = terms.get("payer_id") if isinstance(terms, dict) else None
+    return payer is not None and (not me or str(payer) == me)
+
+
+def gives_away(action: str, params: dict[str, Any], state: Any) -> float | None:
+    """What a move gives to another agent, in energy: ``0`` for a move the world says gives
+    nothing, a number for a transfer, ``None`` when it cannot be said beforehand (buying another
+    agent's offer, a contract with escrow or with this agent as payer, a breach, any move not
+    named here). The one place the learning budget asks (``HeadDecider._take``)."""
+    if action in GIVES_NOTHING:
+        return 0.0
+    if action in TRANSFERS:
+        return given_value(action, params, state)
+    if action in CONTRACTS:
+        return None if _pays_or_pledges(action, params, state) else 0.0
+    if action == "start_mission":  # a reward or a contract behind it may pay another agent
+        fields = _inner(params)
+        reward = files.finite(fields.get("reward_energy") or 0)
+        return 0.0 if reward == 0 and not fields.get("from_contract") else None
+    return None
 
 
 def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
@@ -490,13 +545,15 @@ class HeadDecider:
 
     def _take(self, move: Move) -> tuple[str, dict[str, Any]]:
         action, params, why = move
+        line = any(action == a and _same(params, p) for a, p in self._suggested)
         if self.last is not None:
-            line = any(action == a and _same(params, p) for a, p in self._suggested)
             self.last.update({"choice": action, "why": why, "own": not line})
         rest = self.budget_left
-        if action in TRANSFERS and rest is not None:
-            value = given_value(action, params, self._state)
-            if value is None or value > rest:  # a value that cannot be said is none to check
+        if rest is not None and (not line or action in TRANSFERS):
+            value = gives_away(action, params, self._state)
+            if value is None:  # what it gives cannot be said: none to check against the rest
+                return self._rules_play("learning budget: what this move gives cannot be said")
+            if value > rest:
                 return self._rules_play("learning budget: the rest would not cover this")
         if not params or any(action == a and _same(params, p) for a, p in self._suggested):
             return action, params  # a rules' line goes out as the rules send it

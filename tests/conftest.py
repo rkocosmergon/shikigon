@@ -33,7 +33,7 @@ REAL_OURS: Callable[..., bool] | None = getattr(connections, "ours", None)
 # What a stand-in for an agent's program says to its version command (``connections.untried``):
 # the versions the agents run at on the device. A fake that answered the question to it too
 # would make every agent untried.
-TRIED = {"pi": "1.4.0", "opencode": "1.19.4"}
+TRIED = {"pi": "1.4.0"}
 
 
 def version_answer(argv: list[str]) -> SimpleNamespace | None:

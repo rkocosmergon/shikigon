@@ -119,15 +119,6 @@ def test_every_program_runs_in_a_folder_of_the_players_own(
         assert stat.S_IMODE(folder.stat().st_mode) == 0o700, folder
 
 
-def test_opencode_reads_no_project_configuration_neither_asked_nor_listing() -> None:
-    seen: list[dict[str, Any]] = []
-    answer = '{"part": {"type": "text", "text": "OK"}}\n'
-    assert connections.run_agent({"agent": "opencode"}, "q", 5.0, run=_record(seen, answer)) == "OK"
-    connections.agent_models("opencode", run=_record(seen))
-    assert len(seen) == 2
-    assert all((s.get("env") or {}).get("OPENCODE_DISABLE_PROJECT_CONFIG") == "1" for s in seen)
-
-
 # --- 2: one deadline for the whole exchange, also before the head of the answer ----------------
 
 
@@ -202,15 +193,9 @@ def test_the_talk_goes_only_encrypted_or_to_this_machine(url: str, may: bool) ->
 
 
 def test_a_model_server_in_the_home_network_gets_nothing_over_plain_http() -> None:
-    asked: list[str] = []
-
-    def get(url: str, **_: Any) -> Any:
-        asked.append(url)
-        return SimpleNamespace(status_code=200, raise_for_status=lambda: None,
-                               json=lambda: {"data": [{"id": "m"}]})
-
-    found = connections.models_at("http://192.168.1.50:11434/v1", get)
-    assert asked == [] and found["ok"] is False
+    """Through the door itself (0.1.13, seventh review): the list's own rule is the door's."""
+    found = connections.models_at("http://192.168.1.50:11434/v1", connections.bounded_get)
+    assert found["ok"] is False
     assert found["why"] == connections.TALK_ONLY_SAFE and "ssh -L" in found["why"]
 
 

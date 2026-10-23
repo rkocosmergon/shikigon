@@ -1,7 +1,7 @@
 """Tests for "who answers": finding connections, asking an agent, keeping the choice.
 
 No network and no agent is ever started: commands are stubs that record how they were
-called. The OpenCode output is a sample taken from the device (OpenCode 1.19.0, 11.10.2026).
+called. OpenCode is no longer asked from here (0.1.13, cos20 #492, seventh review).
 """
 
 from __future__ import annotations
@@ -24,13 +24,6 @@ import connections
 import files
 import shikigon_brain as brain
 from conftest import version_answer
-
-OPENCODE_SAMPLE = """\
-{"type":"step_start","timestamp":1791708796549,"sessionID":"ses_x","part":{"id":"prt_1","messageID":"msg_1","sessionID":"ses_x","type":"step-start"}}
-{"type":"reasoning","timestamp":1791708798028,"sessionID":"ses_x","part":{"id":"prt_2","type":"reasoning","text":"The user is asking me to reply with a simple acknowledgment."}}
-{"type":"text","timestamp":1791708798140,"sessionID":"ses_x","part":{"id":"prt_3","messageID":"msg_1","sessionID":"ses_x","type":"text","text":"OK"}}
-{"type":"step_finish","timestamp":1791708798140,"sessionID":"ses_x","part":{"id":"prt_4","reason":"stop","type":"step-finish","tokens":{"total":7669,"input":7643,"output":26}}}
-"""  # noqa: E501 — the lines as the program printed them
 
 # `pi --list-models` on the device (pi 1.2.0, 14.10.2026): its first two lines as printed,
 # without their trailing blanks; the third is a provider's model in the same columns, as pi
@@ -107,9 +100,9 @@ def test_a_placeholder_is_never_started_only_mise_is_asked(
 def test_a_program_of_the_users_own_counts_and_a_missing_one_does_not(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _on_path(tmp_path, monkeypatch, "opencode", "\x7fELF" + "x" * 5000)
+    _on_path(tmp_path, monkeypatch, "pi", "\x7fELF" + "x" * 5000)
     nothing = Commands()
-    assert connections.installed("opencode", run=nothing) is True
+    assert connections.installed("pi", run=nothing) is True
     assert connections.installed("codex", run=nothing) is False  # not on the path at all
     assert nothing.calls == []
 
@@ -127,23 +120,11 @@ def test_the_list_names_agents_first_then_what_runs_here_then_the_configs_own() 
     rows = connections.found(conf, get, is_installed=lambda agent: True,
                              is_own=lambda url: True, why_not=lambda agent: "")  # Codex too
     assert [row["id"] for row in rows] == [
-        "agent:opencode", "agent:pi",
-        "http:http://localhost:11434/v1", "http:http://model-box.test:11434/v1"]
-    assert rows[0]["text"] == "OpenCode — your own keys"
+        "agent:pi", "http:http://localhost:11434/v1", "http:http://model-box.test:11434/v1"]
     assert not connections.AGENTS["codex"]["proven"], "offered only once its file probe has run"
-    assert rows[1]["text"] == "pi — your own keys" and rows[1]["sign_in"] == ["pi"]
-    assert rows[2]["text"] == "Ollama on this machine" and rows[2]["models"][0] == "qwen3.5:9b"
-    assert rows[3]["text"] == "qwen3.5:9b at model-box.test"
-
-
-def test_an_agents_models_name_the_players_own_first() -> None:
-    listing = ("opencode/big-pickle\nopencode/exo-free\nollama/qwen3.5:9b\nollama/big:latest\n"
-               "\nnot a model\n")
-    commands = Commands(stdout=listing)
-    assert connections.agent_models("opencode", run=commands) == [
-        "ollama/qwen3.5:9b", "ollama/big:latest", "opencode/big-pickle", "opencode/exo-free"]
-    assert commands.calls[0][0] == ["opencode", "models"]
-    assert connections.agent_models("codex", run=commands) == [], "Codex has no listing command"
+    assert rows[0]["text"] == "pi — your own keys" and rows[0]["sign_in"] == ["pi"]
+    assert rows[1]["text"] == "Ollama on this machine" and rows[1]["models"][0] == "qwen3.5:9b"
+    assert rows[2]["text"] == "qwen3.5:9b at model-box.test"
 
 
 def test_pis_models_come_from_its_table() -> None:
@@ -176,11 +157,11 @@ def test_an_address_says_its_models_or_that_it_wants_a_key_or_that_it_is_away() 
     connections.models_at("https://x/v1", lambda url, **kw: sent.update(kw) or _answer(200, {}),
                           key="sk-secret")
     assert sent["headers"] == {"Authorization": "Bearer sk-secret"}
-    # 0.1.4: a name without a dot over plain http gets no key (cos20 #492, #11798)
-    asked: list[str] = []
-    connections.models_at("http://x/v1", lambda url, **kw: asked.append(url) or _answer(200, {}),
-                          key="sk-secret")
-    assert asked == [], "the key does not leave the machine in plain text"
+    # 0.1.4: no key over plain http to another machine (cos20 #492, #11798); said by the door
+    # itself (0.1.13, seventh review), so the address is a test address and no name is resolved
+    refused = connections.models_at("http://192.0.2.1/v1", connections.bounded_get,
+                                    key="sk-secret")  # fmt: skip
+    assert refused["why"] == connections.TALK_ONLY_SAFE, "the key does not leave in plain text"
 
 
 @pytest.mark.parametrize(("url", "may"), [
@@ -204,10 +185,10 @@ def test_a_key_goes_only_encrypted_or_to_this_machine(url: str, may: bool) -> No
 
 
 def test_listing_models_with_a_key_over_plain_http_asks_nothing() -> None:
-    asked: list[str] = []
-    found = connections.models_at("http://api.example.com/v1",
-                                  lambda url, **kw: asked.append(url), key="sk-paid")
-    assert asked == [] and found["ok"] is False and "https" in found["why"]
+    found = connections.models_at("http://198.51.100.7/v1", connections.bounded_get,
+                                  key="sk-paid")  # the door's own rule, before any connection
+    assert found["ok"] is False and found["why"] == connections.TALK_ONLY_SAFE
+    assert "https" in found["why"]
 
 
 # --- Asking an agent: narrow, in an empty folder, its own words on failure ----------------------
@@ -218,18 +199,6 @@ def test_each_agent_is_called_in_its_narrowest_setting() -> None:
     assert codex[:2] == ["codex", "exec"]
     assert codex[codex.index("--sandbox") + 1] == "read-only"
     assert "--approve-for-me" not in codex and "--full-auto" not in codex
-    opencode = connections.agent_argv({"agent": "opencode", "agent_model": "ollama/qwen3.5:9b"})
-    assert opencode[:2] == ["opencode", "run"]
-    assert "--auto" not in opencode, "auto-approval would let it run commands unasked"
-    assert opencode[opencode.index("-m") + 1] == "ollama/qwen3.5:9b"
-    # OpenCode allows every operation by default: its call brings an agent that may do nothing
-    assert opencode[opencode.index("--agent") + 1] == "shikigon-advisor"
-    inline = json.loads(connections.AGENTS["opencode"]["env"]["OPENCODE_CONFIG_CONTENT"])
-    assert inline["agent"]["shikigon-advisor"]["permission"] == {"*": "deny"}
-    # Without these two a one-word answer took two minutes on the device, with them 4.5 s:
-    # the model thought at length, and OpenCode asked a second time for a session title.
-    assert inline["agent"]["shikigon-advisor"]["reasoningEffort"] == "none"
-    assert inline["agent"]["title"] == {"disable": True}
     pi = connections.agent_argv({"agent": "pi", "agent_model": "ollama-macmini/qwen3.5:9b-64k"})
     assert pi[:2] == ["pi", "-p"]
     # pi's tools, session, extensions, MCP, skills, templates and context files: all off
@@ -238,11 +207,12 @@ def test_each_agent_is_called_in_its_narrowest_setting() -> None:
         assert switch in pi, switch
     assert pi[pi.index("--thinking") + 1] == "off"
     assert pi[pi.index("--system-prompt") + 1] == connections.PI_SYSTEM
+    assert pi[pi.index("--append-system-prompt") + 1] == connections.NO_TOOLS
     assert pi[pi.index("--model") + 1] == "ollama-macmini/qwen3.5:9b-64k"
 
 
 def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to_act() -> None:
-    commands = Commands(stdout=OPENCODE_SAMPLE)
+    commands = Commands(stdout="OK")
     text = connections.prompt_text([
         {"role": "system", "content": "You advise."},
         {"role": "user", "content": "one?"},
@@ -254,11 +224,10 @@ def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to
     assert text.index("do not read or write files.") < text.index("(Asked before: one?)")
     assert text.index("one?") < text.index("(You answered before: first)") < text.index("two?")
     assert text.endswith("two?"), "the question stays last: its language line is the final word"
-    assert connections.run_agent({"agent": "opencode"}, text, 30.0, run=commands) == "OK"
+    assert connections.run_agent({"agent": "pi"}, text, 30.0, run=commands) == "OK"
     argv, kwargs = commands.calls[0]
     assert kwargs["input"] == text and kwargs["timeout"] == 30.0
     assert text not in argv
-    assert "shikigon-advisor" in kwargs["env"]["OPENCODE_CONFIG_CONTENT"]
     assert "PATH" in kwargs["env"], "the user's own environment stays"
     assert Path(kwargs["cwd"]).parent == files.state_dir() / "run"  # the player's own folder
     assert not Path(kwargs["cwd"]).exists()  # gone again
@@ -269,7 +238,7 @@ def test_the_agent_runs_in_an_empty_folder_without_a_terminal_and_is_told_not_to
 )
 def test_the_players_words_never_stand_in_the_agents_arguments(agent: str) -> None:
     """Arguments stand in /proc/<pid>/cmdline for every local user (#11550): stdin only."""
-    commands = Commands(stdout=OPENCODE_SAMPLE if agent == "opencode" else "OK")
+    commands = Commands(stdout="OK")
     secret = "my-private-question-7f3a"
     prompt = connections.prompt_text([{"role": "system", "content": "You advise."},
                                       {"role": "user", "content": secret}])
@@ -277,11 +246,6 @@ def test_the_players_words_never_stand_in_the_agents_arguments(agent: str) -> No
     argv, kwargs = commands.calls[0]
     assert not any(secret in part for part in argv), argv
     assert secret in kwargs["input"]
-
-
-def test_what_opencode_answered_is_its_text_not_its_thinking() -> None:
-    assert connections.opencode_text(OPENCODE_SAMPLE) == "OK"
-    assert connections.opencode_text("not json\n{}") == ""
 
 
 def test_an_agent_that_fails_says_so_in_its_own_last_line() -> None:
@@ -330,12 +294,12 @@ async def test_a_move_waits_the_configs_seconds_a_question_may_take_longer(
 
 async def test_a_question_an_agent_cannot_answer_says_the_agents_reason() -> None:
     async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
-        raise connections.AgentError("OpenCode is not signed in.")
+        raise connections.AgentError("pi is not signed in.")
 
-    conf = {"via": "agent", "agent": "opencode", "max_per_day": 0}
+    conf = {"via": "agent", "agent": "pi", "max_per_day": 0}
     turn = await advisor.answer(conf, brain.state_dir(), "what now?", "ctx", [], send)
-    assert turn["ok"] is False and turn["model"] == "OpenCode"
-    assert turn["why"] == "no answer (OpenCode is not signed in.)"
+    assert turn["ok"] is False and turn["model"] == "pi"
+    assert turn["why"] == "no answer (pi is not signed in.)"
     unproven = {"via": "agent", "agent": "codex", "max_per_day": 0}
     assert not advisor.configured(unproven)
     nobody = await advisor.answer({}, brain.state_dir(), "what now?", "ctx", [], send)
@@ -349,9 +313,9 @@ def test_the_panels_choice_goes_over_the_config_file_and_the_file_keeps_the_rest
     cfg = {"brain": {"advisor": {"base_url": "http://x/v1", "model": "mine", "max_per_day": 7}}}
     home = brain.state_dir()
     assert advisor.who(advisor.settings(cfg, home)) == "mine"
-    connections.choose(home, {"via": "agent", "agent": "opencode"})
+    connections.choose(home, {"via": "agent", "agent": "pi"})
     conf = advisor.settings(cfg, home)
-    assert advisor.who(conf) == "OpenCode" and advisor.configured(conf)
+    assert advisor.who(conf) == "pi" and advisor.configured(conf)
     assert conf["max_per_day"] == 7 and conf["reasoning_effort"] == "none"
     assert advisor.who(advisor.settings(cfg)) == "mine", "without the state folder: the files only"
 
@@ -363,7 +327,7 @@ async def _says_ok(messages: list[dict[str, str]], max_tokens: int) -> str:
 def test_a_connection_is_taken_only_after_it_answered(monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = brain.load_config()
     home = brain.state_dir()
-    replies = iter([connections.AgentError("OpenCode: no provider"), "OK"])
+    replies = iter([connections.AgentError("pi: no provider"), "OK"])
 
     def sender(conf: dict[str, Any], state: Any = None, patience: int = 1) -> Any:
         async def send(messages: list[dict[str, str]], max_tokens: int) -> str:
@@ -375,13 +339,13 @@ def test_a_connection_is_taken_only_after_it_answered(monkeypatch: pytest.Monkey
         return send
 
     monkeypatch.setattr(advisor, "sender", sender)
-    failed = brain.advisor_command(cfg, "try", ["agent:opencode", "ollama/qwen3.5:9b"])
-    assert failed == {"ok": False, "why": "OpenCode: no provider"}
+    failed = brain.advisor_command(cfg, "try", ["agent:pi", "ollama/qwen3.5:9b"])
+    assert failed == {"ok": False, "why": "pi: no provider"}
     assert connections.chosen(home) == {}, "a connection that did not answer is not kept"
-    taken = brain.advisor_command(cfg, "try", ["agent:opencode", "ollama/qwen3.5:9b"])
-    assert taken["ok"] is True and taken["said"] == "OK" and taken["label"] == "OpenCode"
+    taken = brain.advisor_command(cfg, "try", ["agent:pi", "ollama/qwen3.5:9b"])
+    assert taken["ok"] is True and taken["said"] == "OK" and taken["label"] == "pi"
     assert connections.chosen(home) == {
-        "via": "agent", "agent": "opencode", "agent_model": "ollama/qwen3.5:9b"}
+        "via": "agent", "agent": "pi", "agent_model": "ollama/qwen3.5:9b"}
     # another connection replaces it whole (seen on the device: the agent's keys stayed behind)
     connections.choose(home, {**connections.chosen(home), "advise": 15, "every": 15})
     monkeypatch.setattr(advisor, "sender", lambda conf, state=None, patience=1: _says_ok)

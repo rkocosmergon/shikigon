@@ -193,7 +193,13 @@ def world_peer_check(cfg: dict[str, Any]) -> Callable[[str, int], str]:
     import connections
 
     world = str(cfg.get("world", {}).get("base_url") or "https://cosmergon.com")
-    local = connections.on_this_machine(world)
+    # Whether the world leads to this machine is asked only of a plain-http world: one the key
+    # may go to is ``localhost`` or a loopback address (``key_may_go_to``), and that needs no
+    # name resolution. Over https the certificate decides, as in ``connections.ours``; a peer on
+    # this machine is still checked in ``peer_refusal``. Until 0.1.13 every world's name was
+    # resolved here, when the agent was made, outside any deadline (cos20 #492, seventh review,
+    # a variant of finding 4).
+    local = urllib.parse.urlsplit(world).scheme == "http" and connections.on_this_machine(world)
 
     def check(host: str, port: int) -> str:
         return connections.peer_refusal(host, port, local, True)
@@ -880,25 +886,38 @@ def chat_tail(count: int) -> list[dict[str, Any]]:
     return [turn for turn in turns if turn.get("ok")][-count:]
 
 
-def world_rules(cfg: dict[str, Any], get: Callable[..., Any]) -> str:
-    """The rules as the server itself states them (public, no key); empty if unreachable."""
+def world_info(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:
+    """The world's ``GET /api/v1/game/info`` (public, no key) as an object; ``{}`` if it is
+    unreachable, refused, or answers in another form. The one reader of it: ``world_rules`` and
+    ``world_forms`` read it by its form from here (cos20 #492, seventh review, finding 2)."""
     import advisor
 
     if world_refusal(cfg):
-        return ""
+        return {}
     url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/game/info"
     try:
         resp = get(url, timeout=15)
         resp.raise_for_status()
         info = resp.json()
     except advisor.call_errors():  # the talk goes on with what the plugin knows itself
-        return ""
-    if not isinstance(info, dict):
+        return {}
+    return info if isinstance(info, dict) else {}
+
+
+def world_rules(cfg: dict[str, Any], get: Callable[..., Any]) -> str:
+    """The rules as the server itself states them; empty if unreachable. Each action is taken
+    only as an object: until 0.1.13 an ``actions`` that was a list or a word ended ``ask`` with a
+    traceback."""
+    import advisor
+
+    info = world_info(cfg, get)
+    if not info:
         return ""
     rules = {part: info[part] for part in RULE_PARTS if part in info}
+    given = rules.get("actions")
     actions = {
-        name: {key: value for key, value in body.items() if key not in PROGRAM_ONLY}
-        for name, body in (rules.get("actions") or {}).items()
+        str(name): {key: value for key, value in body.items() if key not in PROGRAM_ONLY}
+        for name, body in (given.items() if isinstance(given, dict) else ())
         if isinstance(body, dict)
     }
     rules["actions"] = {name: body for name, body in actions.items() if body}
@@ -907,20 +926,11 @@ def world_rules(cfg: dict[str, Any], get: Callable[..., Any]) -> str:
 
 
 def world_forms(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:
-    """The form of each move as the server states it (public, no key; cos20 #530); empty if
-    the world is unreachable or publishes none."""
-    import advisor
+    """The form of each move as the server states it (cos20 #530); empty if the world is
+    unreachable or publishes none."""
     import head
 
-    if world_refusal(cfg):
-        return {}
-    url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/game/info"
-    try:
-        resp = get(url, timeout=15)
-        resp.raise_for_status()
-        return head.forms_of(resp.json())
-    except advisor.call_errors():
-        return {}
+    return head.forms_of(world_info(cfg, get))
 
 
 def recent_moves(count: int) -> list[str]:
@@ -958,11 +968,17 @@ async def right_now(state: Any) -> str:
 
 
 async def ask(
-    agent: Any, cfg: dict[str, Any], question: str, rules: str, send: Any = None
+    agent: Any, cfg: dict[str, Any], question: str, rules: str | None = None, send: Any = None
 ) -> dict[str, Any]:
-    """A question from you to the advisor. Asked and answered on your machine, kept in a file."""
-    import advisor
+    """A question from you to the advisor. Asked and answered on your machine, kept in a file.
 
+    ``rules`` ``None``: read here, inside the boundary of ``with_agent`` (until 0.1.13 the command
+    read them before it, and an odd answer of the world ended it with a traceback)."""
+    import advisor
+    import connections
+
+    if rules is None:
+        rules = await asyncio.to_thread(world_rules, cfg, connections.bounded_get)
     state = await agent.refresh_state()
     context = "Notes:\n" + NOTES.read_text(encoding="utf-8")
     if rules:
@@ -1063,7 +1079,7 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
             return {"ok": False, "why": "unknown connection, or no model named"}
         tried = {**conf, **choice}
         patient = advisor.sender(tried, home, patience=advisor.ANSWER_PATIENCE)
-        result = asyncio.run(connections.probe(patient))
+        result: dict[str, Any] = connections.run_loop(connections.probe(patient))
         if result["ok"]:
             # a new connection replaces the old one whole; how often it advises stays
             before = connections.chosen(home)
@@ -1334,7 +1350,7 @@ def _account(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
         print(json.dumps(register(cfg, connections.bounded_post, replace=args.new)))
         return 0
     if args.command == "learn":
-        print(json.dumps(asyncio.run(with_agent(cfg, lambda a: learn_now(cfg, a)))))
+        print(json.dumps(connections.run_loop(with_agent(cfg, lambda a: learn_now(cfg, a)))))
         return 0
     if not args.yes:
         why = "this deletes your Shikigon on the server and its files here: add --yes"
@@ -1347,6 +1363,8 @@ def _account(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
 
 def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     """A move (tick), the loop (run), or a dry run with the advisor (advise)."""
+    import connections
+
     try:
         decider = make_decider(cfg, advised=args.command == "advise")
     except UnknownDecider as exc:
@@ -1354,10 +1372,10 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
         print(json.dumps(fall_asleep(CONFIG, str(exc))))
         return 1
     if args.command == "run":
-        asyncio.run(with_agent(cfg, lambda a: run(cfg, a, decider), once=False))
+        connections.run_loop(with_agent(cfg, lambda a: run(cfg, a, decider), once=False))
         return 0
     act = guarded_tick if args.command == "tick" else advise
-    print(json.dumps(asyncio.run(with_agent(cfg, lambda a: act(a, decider)))))
+    print(json.dumps(connections.run_loop(with_agent(cfg, lambda a: act(a, decider)))))
     return 0
 
 
@@ -1370,14 +1388,12 @@ def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     if not text:
         print(json.dumps({"ok": False, "why": f"nothing to {args.command}: no words on stdin"}))
         return 1
-    if args.command == "ask":
-        import connections
+    import connections
 
-        rules = world_rules(cfg, connections.bounded_get)
-        print(json.dumps(asyncio.run(with_agent(cfg, lambda a: ask(a, cfg, text, rules)))))
-    else:
-        table = cfg.get("instructions", {})
-        print(json.dumps(asyncio.run(with_agent(cfg, lambda a: instruct(a, text, table)))))
+    table = cfg.get("instructions", {})
+    work = (lambda a: ask(a, cfg, text)) if args.command == "ask" else (
+        lambda a: instruct(a, text, table))
+    print(json.dumps(connections.run_loop(with_agent(cfg, work))))
     return 0
 
 

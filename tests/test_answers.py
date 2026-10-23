@@ -165,7 +165,6 @@ def test_brackets_are_a_refusal_not_a_crash() -> None:
         None, "the answer was not JSON, or a number in it was not finite")
     assert advisor.parse(deep, 3) is None
     assert lessons._json_object(deep)[0] is None
-    assert connections.opencode_text("[" * 100_000) == ""
 
 
 def test_finding_the_json_in_an_answer_takes_linear_time() -> None:

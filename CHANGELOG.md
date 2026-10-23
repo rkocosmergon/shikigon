@@ -4,7 +4,14 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.13 (2026-10-23)
 
-- **Through your agent only https.** pi or OpenCode sent the talk wherever their own setup named
+- **OpenCode is no longer asked, and pi adds none of your files.** pi appended its
+  `~/.pi/agent/APPEND_SYSTEM.md` to every prompt, OpenCode its `~/.config/opencode/AGENTS.md` (or
+  `~/.claude/CLAUDE.md`) and the `instructions` of your `opencode.json`, and what the model wrote
+  could go on to another agent. pi now runs with an appended line of Shikigon's own, which keeps
+  its file out. OpenCode has no switch for its files, so Shikigon no longer asks it: pick pi or
+  a model directly. If you picked OpenCode before, **WHO ANSWERS?** asks you again. Playing
+  Cosmergon with OpenCode itself, without Shikigon, is not touched by this.
+- **Through your agent only https.** Your agent sent the talk wherever its own setup named
   for the model: also in plain text across the network, or to a port on this machine that
   another user may hold, and Shikigon could not see which. Now the kernel lets your agent, and
   everything it starts, connect only to port 443, the port of https (Landlock, Linux 6.7 or
@@ -12,7 +19,7 @@ What changed for someone who uses Shikigon. Newest first.
   in your home: pick it in the panel directly, not through your agent.
 - **Only versions of an agent it was tried with.** Omarchy updates every agent to its newest
   version every four hours, and Shikigon asked whichever version ran. Now it reads the agent's
-  version before each question and asks only pi 1.2 to 1.4 and OpenCode 1.19; after an update
+  version before each question and asks only pi 1.2 to 1.4; after an update
   to another version **WHO ANSWERS?** and the panel say so, and the rule tree plays.
 - **The coach is gone.** `shikigon coach` wrote a task with the world's words into a file for a
   coding agent with tools (`coach.md` in its state folder), and the skill told that agent to
@@ -29,11 +36,18 @@ What changed for someone who uses Shikigon. Newest first.
 - **The look back reads no name and no words of another player.** Your agent got its moves as
   the journal kept them: whom it wrote to, what it wrote, what the model advised. Now each move
   goes as its numbers and its move word, the world's reason for a refusal quoted.
-- **Goods given away count against the budget before they go.** Only energy sent was checked;
-  goods sent to another agent are now checked at the reference price the world names, and a
-  value that cannot be said lets the rule tree play.
+- **What your agent gives away counts against the budget before it goes.** Only energy sent
+  was checked. Now each move your agent writes itself is checked: goods at the reference price
+  the world names, and a move whose value for another agent cannot be said beforehand (buying
+  another agent's offer, a contract with escrow or one that has your Shikigon pay, a breach, a
+  move the world adds later) lets the rule tree play while a budget is set.
 - **A name that does not resolve holds no call past its time.** The checks before a call
-  resolved the address outside the call's deadline.
+  resolved the address outside the call's deadline, those of a model list too, and the world's
+  name was resolved when the agent was made. And when a call had ended, its loop still waited
+  for a resolution left in one of its threads, up to 300 s; the brain did so too when the bar
+  stopped it.
+- **The rules of the world in another form end no question.** A world whose rules named its
+  moves as a list ended **ask** with an error; now they are read as far as they go.
 - **When its key ended, the panel says so.** With the SDK it ran on, a key that ended looked
   like a world that did not answer: the panel said "The world did not answer" for ever, never
   offered **wake a new one**, and the brain sent the dead key every minute (`cosmergon-agent`
@@ -65,21 +79,15 @@ What changed for someone who uses Shikigon. Newest first.
   move falls back to the rules in its time, whatever the server sends first. The same holds for
   every answer of the world through `cosmergon-agent` 0.27.31.
 - **Programs it starts read no configuration from a folder someone else can write.** The empty
-  folder they run in lay in `/tmp`, and OpenCode reads its configuration from every folder above
-  its own, up to `/`: another user's `/tmp/opencode.json` could start a program of theirs as you.
-  Now the folder lies in Shikigon's own state folder, and OpenCode reads no project
-  configuration at all.
+  folder they run in lay in `/tmp`, and a program may read its configuration from every folder
+  above its own, up to `/` (`mise` does): another user's file in `/tmp` could start a program of
+  theirs as you. Now the folder lies in Shikigon's own state folder.
 - **Your agent ends when the brain does,** and with it everything your agent started. Stopped
   by the bar (a change of "advise on moves") or a closed terminal, the brain now ends the agent
   it was asking, instead of leaving it to run to its own end. Killed without a word (the
   terminal's time limit, a reload of the shell), the brain could not; now a small guard between
   the brain and each agent ends the agent's whole group then. The terminal waits longer than the
   brain for an answer (300 s) and asks it to stop before it kills it (`cosmergon-agent` 0.27.32).
-- **OpenCode shares nothing and keeps nothing.** If your OpenCode was set to share sessions
-  (`"share": "auto"`, `autoshare`, `OPENCODE_AUTO_SHARE`), every call of Shikigon's was shared
-  with OpenCode's share service, your question and the situation with it. Now sharing is off for
-  these calls whatever your OpenCode, an account or a managed config says, and Shikigon deletes
-  the session of each question once it has the answer.
 - **Another player's text stays inside its quote.** A message or contract terms with `>>>` in
   them ended the quote around them, and what followed reached the model as the brain's own words.
   Now `<` and `>` in such a text become `‹` and `›`, and the names of other players stand inside

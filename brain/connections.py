@@ -2,9 +2,12 @@
 
 Three kinds, one list (the panel's "WHO ANSWERS?"):
 
-- a coding agent the player already uses (``codex``, ``opencode``, ``pi``): Shikigon calls the
-  agent's own command without a terminal and takes its answer. It never reads the agent's
-  credentials; it runs the player's program as the player.
+- a coding agent the player already uses (``pi``; ``codex`` is listed, never offered): Shikigon
+  calls the agent's own command without a terminal and takes its answer. It never reads the
+  agent's credentials; it runs the player's program as the player. OpenCode is no longer asked
+  from here (0.1.13, cos20 #492: it puts the player's own instruction files into every prompt,
+  with no switch to turn that off); any agent can still play Cosmergon by itself, without
+  Shikigon.
 - a model server on this machine (Ollama, LM Studio), found by asking its address;
 - an address the player typed (any OpenAI-compatible endpoint).
 
@@ -16,7 +19,8 @@ Three rules this file keeps (cos20 #451, concept 10.5d):
 1. An agent is called without tools and approvals, in an empty folder; every other program
    started here (its model listing, ``mise``) runs in an empty folder too (``in_empty_folder``).
    The folder lies in the player's own state folder, so none of the folders above it is
-   writable by another user: OpenCode reads its configuration from every folder up to ``/``.
+   writable by another user: a program may read its configuration from every folder up to ``/``
+   (OpenCode did, ``mise`` does).
 2. Looking at what is installed never starts a placeholder. On Omarchy the agents' commands
    are stubs that install the agent the first time they run.
 3. An agent's allowance is the player's: no advice on every move through an agent.
@@ -55,8 +59,9 @@ CHOICE_FILE = "advisor.json"
 KEY_FILE = "advisor_key"
 AGENT_MIN_EVERY = 15  # through an agent, advice at most on every 15th move (not measured yet)
 # A question through an agent waits this long: an agent is a whole program around the model,
-# and what it adds by itself can cost minutes (see OPENCODE_ADVISOR). A move never waits that
-# long: it gets ``timeout_s`` from the config and falls back to the rules.
+# and what it adds by itself can cost minutes (OpenCode took 107 s for a one-word answer on the
+# device, 11.10.2026). A move never waits that long: it gets ``timeout_s`` from the config and
+# falls back to the rules.
 AGENT_ANSWER_S = 240.0
 PROBE_QUESTION = "Reply with the single word OK."
 
@@ -66,58 +71,17 @@ LOCAL_SERVERS = (
     ("LM Studio", "http://localhost:1234/v1"),
 )
 
-# OpenCode "allows all operations without requiring explicit approval" by default
-# (https://opencode.ai/docs/config/), so Shikigon brings an agent of its own for the one
-# call, with every tool denied. It goes in through the environment (inline config, merged
-# over the user's), never into the user's files. Measured on the device (OpenCode 1.19.0):
-# with OpenCode's own agent the one-word answer cost 7,643 tokens in, with this one 146.
-#
-# Two more lines make the difference between two minutes and five seconds. Read from the
-# model server's own log (Ollama on an M4, qwen3.5:9b, 11.10.2026), for the one-word answer:
-#   as OpenCode asks by itself     107 s: the model thought for 1,114 tokens, and OpenCode
-#                                  sent a second request for a session title (648 tokens);
-#                                  two at once halve the speed (17 instead of 35 tokens/s)
-#   + "reasoningEffort": "none"    134 s: the answer took 0.9 s, the title 127 s (2,210 tokens)
-#   + the title agent disabled       4.5 s
-# Not tried with a provider's model (no account on the device).
-OPENCODE_ADVISOR = {
-    "agent": {
-        "shikigon-advisor": {
-            "description": "Answers one question in plain text. No tools.",
-            "mode": "primary",
-            "prompt": "You answer one question in plain text. You have no tools.",
-            "permission": {"*": "deny"},
-            # a second switch beside the denied permissions (cos20 #492, K28): by OpenCode's
-            # docs both cover MCP tools too (named `<server>_<tool>`), which `--pure` does not
-            # drop (it drops plugins only, opencode 1.19.0). `tools` is deprecated upstream.
-            "tools": {"*": False},
-            "reasoningEffort": "none",
-            "temperature": 0.2,  # as on the direct way; the model's own default made it invent
-        },
-        "title": {"disable": True},
-    },
-    # Never shared (cos20 #492, fourth review): OpenCode 1.19 shares a `run` session when the
-    # player's own config says `"share": "auto"` (or `autoshare`), or OPENCODE_AUTO_SHARE is set
-    # (share/session.ts:43). The switch that holds whatever config wins the merge is the
-    # environment's OPENCODE_DISABLE_SHARE (share/share-next.ts:23, see AGENTS); this is the
-    # second layer, and `agent_env` takes OPENCODE_AUTO_SHARE out.
-    "share": "disabled",
-}
-
 # The agents Shikigon can ask without a terminal. ``argv`` is the agent's own documented
 # one-shot command in its narrowest setting; ``{model}`` is filled in. The prompt goes in on
 # stdin, never as an argument: arguments stand in /proc/<pid>/cmdline, which every local user
-# can read (marketplace review, omacom/omarchy-plugin-marketplace#11550). All three read the
-# prompt from stdin when none is given as an argument; pi 1.2.0 and opencode 1.19.0 tried on
-# the device (15.10.2026), codex from its documentation only.
+# can read (marketplace review, omacom/omarchy-plugin-marketplace#11550). Both read the prompt
+# from stdin when none is given as an argument; pi 1.2.0 tried on the device (15.10.2026), codex
+# from its documentation only.
 # ``proven`` says the file probe ran on a device (a task that wants to create a file creates
 # none); an agent without it is not offered.
 #   codex exec: read-only sandbox by default, the final message alone on stdout
 #     (https://learn.chatgpt.com/docs/non-interactive-mode.md). Not proven: no account to
 #     try it with on 11.10.2026.
-#   opencode run: --format json prints events (https://opencode.ai/docs/cli/). --thinking
-#     stays from the first runs, where a call without it did not come back within 200 s;
-#     whether it is still needed now that thinking is off was not tried again.
 #   pi -p: its own switches turn off tools, session, extensions, MCP, skills, templates and
 #     context files (pi --help, 1.2.0); the answer alone on stdout, a system prompt of its
 #     own instead of the coding one. Probed on the device (14.10.2026, qwen3.5:9b on a
@@ -126,7 +90,18 @@ OPENCODE_ADVISOR = {
 #     words, never a deed), ~/.pi unchanged.
 #     --thinking off does not reach a model the player added to pi; a local one with a
 #     thinking mode needs "samplingParams" in pi's models.json (README).
+#     Nothing of the player's goes into its prompt (cos20 #492, seventh review, finding 1): pi
+#     1.2 to 1.4 appends ~/.pi/agent/APPEND_SYSTEM.md unless --append-system-prompt is given
+#     (core/resource-loader.ts:663-667, 1227-1238), and --system-prompt and --no-context-files
+#     do not cover it. The text given is read as a file only where a file of that name exists
+#     (:167-182); it runs in an empty folder, and this sentence names none.
+# ~~OpenCode~~ (0.1.11 to 0.1.12): no longer asked from here (0.1.13, founder 23.10.2026). It puts
+# ~/.config/opencode/AGENTS.md (else ~/.claude/CLAUDE.md) and the ``instructions`` of the
+# player's opencode.json into every system prompt (1.19.0 session/instruction.ts:60-63, 135-168,
+# session/prompt.ts:1257-1268), with no switch for the first; what it answered could go on to
+# another player (speech.py). Playing Cosmergon with OpenCode itself is not touched by this.
 PI_SYSTEM = "You answer one question in plain text. You have no tools."
+NO_TOOLS = "Answer with text only. Do not run commands, do not read or write files."
 AGENTS: dict[str, dict[str, Any]] = {
     "codex": {
         "name": "Codex",
@@ -134,51 +109,23 @@ AGENTS: dict[str, dict[str, Any]] = {
         "argv": ["codex", "exec", "--skip-git-repo-check", "--sandbox", "read-only",
                  "--ephemeral"],
         "model_flag": ["-m", "{model}"],
-        "answer": "stdout",
         "sign_in": ["codex", "login"],
         "proven": False,
-    },
-    "opencode": {
-        "name": "OpenCode",
-        "whose": "your own keys",
-        "argv": ["opencode", "run", "--pure", "--thinking", "--agent", "shikigon-advisor",
-                 "--format", "json"],
-        # No project configuration at all (cos20 #492, third review): outside a Git folder
-        # OpenCode 1.19 reads every opencode.json and .opencode/ from its working folder up to
-        # `/` (project.ts:217, config/paths.ts:10-41), and a configured MCP server starts on
-        # the first question whatever the agent may do (session/tools.ts:136).
-        # OPENCODE_DISABLE_SHARE: every way to OpenCode's share service returns before the
-        # network (share/share-next.ts:23). Set here, not in the config: an account's or a managed
-        # config is merged over OPENCODE_CONFIG_CONTENT (config/config.ts) and could turn
-        # sharing back on there (cos20 #492, fourth review).
-        "env": {"OPENCODE_CONFIG_CONTENT": json.dumps(OPENCODE_ADVISOR),
-                "OPENCODE_DISABLE_PROJECT_CONFIG": "1", "OPENCODE_DISABLE_SHARE": "1"},
-        "unset": ("OPENCODE_AUTO_SHARE",),
-        "forget": ["opencode", "session", "delete"],
-        # The versions it is asked at (``untried``): 1.19, whose source the lines above cite.
-        "version": ["opencode", "--version"],
-        "versions": ("1.19",),
-        "model_flag": ["-m", "{model}"],
-        "answer": "opencode-json",
-        "sign_in": ["opencode", "auth", "login"],
-        "models": ["opencode", "models"],
-        "proven": True,
     },
     "pi": {
         "name": "pi",
         "whose": "your own keys",
         "argv": ["pi", "-p", "--no-tools", "--no-session", "--no-extensions", "--no-mcp",
                  "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve",
-                 "--offline", "--thinking", "off", "--system-prompt", PI_SYSTEM],
+                 "--offline", "--thinking", "off", "--system-prompt", PI_SYSTEM,
+                 "--append-system-prompt", NO_TOOLS],
         # 1.2 to 1.4: the options above read the same in all three (``cli/args.ts``), and
         # ``--version`` answers before any session, extension or network (``main.ts``).
         "version": ["pi", "--offline", "--version"],
         "versions": ("1.2", "1.3", "1.4"),
         "model_flag": ["--model", "{model}"],
-        "answer": "stdout",
         "sign_in": ["pi"],  # its sign-in is "/login" inside pi
         "models": ["pi", "--offline", "--list-models"],
-        "models_listing": "table",
         "proven": True,
     },
 }
@@ -574,15 +521,66 @@ def bounded_call(method: str, url: str, *, headers: dict[str, str] | None = None
                           seconds=seconds))
 
 
+class _Daemons(concurrent.futures.ThreadPoolExecutor):
+    """The executor of every event loop of the brain (``run_loop``): each call on a daemon thread
+    of its own, and nobody waits for them when the loop closes.
+
+    A loop hands blocking work to its executor: the door's checks (``asyncio.to_thread``), and
+    the name resolution of httpx when it connects (``loop.getaddrinfo``). A resolver that does not
+    answer keeps such a thread long after the call's deadline. ``asyncio.run`` waits for those
+    threads when it closes, up to 300 s (``THREAD_JOIN_TIMEOUT``), and the interpreter waits for
+    a ``ThreadPoolExecutor``'s at exit: a model list, a registration, the rules of the world and
+    the end of the brain on SIGTERM waited for the resolver (cos20 #492, seventh review, finding 4;
+    measured 3.0 s for a deadline of 0.5 s). A daemon thread ends with the process."""
+
+    def submit(  # type: ignore[override]
+        self, fn: Callable[..., Any], /, *args: Any, **kwargs: Any
+    ) -> concurrent.futures.Future[Any]:
+        future: concurrent.futures.Future[Any] = concurrent.futures.Future()
+
+        def work() -> None:
+            if not future.set_running_or_notify_cancel():
+                return
+            try:
+                future.set_result(fn(*args, **kwargs))
+            except BaseException as exc:  # noqa: BLE001 - handed to the caller as it is
+                future.set_exception(exc)
+
+        threading.Thread(target=work, daemon=True).start()
+        return future
+
+    def shutdown(self, wait: bool = True, *, cancel_futures: bool = False) -> None:
+        return None  # nothing to wait for: a thread still at work ends with the process
+
+
+def run_loop(work: Coroutine[Any, Any, Any]) -> Any:
+    """``asyncio.run`` for the brain: the same, with ``_Daemons`` as the loop's executor, so a
+    loop closes when its work is done, whatever a thread of it is still waiting for."""
+    with asyncio.Runner() as runner:
+        runner.get_loop().set_default_executor(_Daemons())
+        return runner.run(work)
+
+
 def alone(work: Coroutine[Any, Any, Any]) -> Any:
-    """``work`` run to its end from synchronous code; in a thread of its own where this thread
-    already runs an event loop (``asyncio.run`` would refuse there)."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(work)
-    with concurrent.futures.ThreadPoolExecutor(1) as pool:
-        return pool.submit(asyncio.run, work).result()
+    """``work`` run to its end from synchronous code, in a loop of its own (``run_loop``) on a
+    daemon thread of its own: also where this thread already runs a loop (``asyncio.run`` would
+    refuse there). The answer is taken when ``work`` ends."""
+    done = threading.Event()
+    outcome: dict[str, Any] = {}
+
+    async def watched() -> None:
+        try:
+            outcome["value"] = await work
+        except BaseException as exc:  # noqa: BLE001 - handed to the caller as it is
+            outcome["error"] = exc
+        finally:
+            done.set()
+
+    threading.Thread(target=run_loop, args=(watched(),), daemon=True).start()
+    done.wait()
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["value"]
 
 
 def bounded_get(url: str, headers: dict[str, str] | None = None, timeout: float = 4) -> Any:
@@ -613,14 +611,13 @@ def clean_names(names: list[Any]) -> list[str]:
 
 
 def models_at(base_url: str, get: Callable[..., Any], key: str = "") -> dict[str, Any]:
-    """The models an OpenAI-compatible address offers. ``needs_key`` if it wants one."""
-    with_key = bool(key) or credentials_in(base_url)
-    if not talk_may_go_to(base_url):  # said here, before the address is taken (decision A)
-        return {"ok": False, "models": [], "why": TALK_ONLY_SAFE}
-    if with_key and not key_may_go_to(base_url):
-        return {"ok": False, "models": [], "why": KEY_ONLY_SAFE}
-    if not ours(base_url, with_key=with_key):  # also an address typed by hand (H9)
-        return {"ok": False, "models": [], "why": NOT_OURS}
+    """The models an OpenAI-compatible address offers. ``needs_key`` if it wants one.
+
+    The rules of the door (https or this machine, a key only where it may go, a port on this
+    machine only while it is the player's) are said by the door itself, inside the list's
+    deadline: ``get`` is ``bounded_get`` in use, and ``exchange`` raises them as ``AgentError`` or
+    ``NotOurs`` before a byte leaves. Until 0.1.13 they were asked here first, and their name
+    resolution held the list past its 8 seconds (cos20 #492, seventh review, finding 4)."""
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     try:
         resp = get(base_url.rstrip("/") + "/models", headers=headers, timeout=4)
@@ -1131,11 +1128,7 @@ def agent_models(agent: str, run: Callable[..., Any] = run_in_group) -> list[str
                                timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return []
-    if AGENTS[agent].get("models_listing") == "table":
-        names = table_models(done.stdout)
-    else:
-        names = [line.strip() for line in done.stdout.splitlines()
-                 if "/" in line and " " not in line.strip()]
+    names = table_models(done.stdout)  # pi's listing, the one agent that has one
     # What the player set up themselves first; the agent's own catalogue after it. The panel
     # shows the first eight (on the device eleven catalogue models stood before the player's).
     names = clean_names(names)
@@ -1154,9 +1147,6 @@ def table_models(listing: str) -> list[str]:
 
 
 # ---------- asking an agent -------------------------------------------------------------------
-
-
-NO_TOOLS = "Answer with text only. Do not run commands, do not read or write files."
 
 
 def prompt_text(messages: list[dict[str, str]]) -> str:
@@ -1192,56 +1182,6 @@ def agent_argv(conf: dict[str, Any]) -> list[str]:
     return argv
 
 
-def opencode_text(output: str) -> str:
-    """The answer in ``opencode run --format json``: the text parts of its event lines."""
-    texts: list[str] = []
-    for line in output.splitlines():
-        try:
-            event = files.loads(line)
-        except ValueError:
-            continue
-        part = event.get("part") if isinstance(event, dict) else None
-        if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
-            texts.append(str(part["text"]))
-    return "\n".join(texts).strip()
-
-
-SESSION_ID = re.compile(r"[A-Za-z0-9_]{1,128}")  # OpenCode's session ids: ``ses_`` and letters
-
-
-def opencode_session(output: str) -> str:
-    """The session ``opencode run --format json`` names in its events; empty if none or odd.
-
-    Every event line carries ``sessionID`` (OpenCode 1.19 ``run.ts:678-684``). An id that is not
-    letters, digits and ``_`` is not taken: it becomes an argument of the next command."""
-    for line in output.splitlines():
-        try:
-            event = files.loads(line)
-        except ValueError:
-            continue
-        found = event.get("sessionID") if isinstance(event, dict) else None
-        if isinstance(found, str) and SESSION_ID.fullmatch(found):
-            return found
-    return ""
-
-
-def forget(agent: str, output: str, run: Callable[..., Any]) -> None:
-    """Delete the session the agent kept of this question (cos20 #492, fourth review).
-
-    ``opencode run`` stores every session under ``~/.local/share/opencode``: the question, the
-    talk before it, the situation, other players' messages. They stayed after "Remove". Now the
-    brain deletes its session once the answer is read (``opencode session delete``, 1.19
-    ``cli/cmd/session.ts:52``; it finds a session by its id from any folder). A failed delete
-    leaves the session where OpenCode keeps it; the README names that place."""
-    argv: list[str] = list(AGENTS.get(agent, {}).get("forget") or [])
-    session = opencode_session(output) if argv else ""
-    if not session:
-        return
-    with contextlib.suppress(OSError, subprocess.SubprocessError):
-        in_empty_folder(run, [*argv, session], env=agent_env(agent), capture_output=True,
-                        text=True, timeout=30, check=False)
-
-
 def last_line(text: str) -> str:
     lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
     return lines[-1][:200] if lines else ""
@@ -1256,7 +1196,9 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
     servers (cos20 #492, K28). The same holds for its version, read before each question
     (``untried``, cos20 #492, sixth review, finding 11).
     """
-    spec = AGENTS[str(conf["agent"])]
+    spec = AGENTS.get(str(conf.get("agent")))
+    if spec is None:  # OpenCode, picked under 0.1.12 and no longer asked from here
+        raise AgentError(f"{str(conf.get('agent'))[:40]} is not asked from here: pick who answers")
     if not spec.get("proven"):
         raise AgentError(f"{spec['name']} is not offered yet: it was never tried on a device")
     if why := untried(str(conf["agent"]), run):
@@ -1273,11 +1215,7 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
     except OSError as exc:
         why = f"{spec['name']} could not be started ({type(exc).__name__})"
         raise AgentError(why) from None
-    if spec["answer"] == "opencode-json":
-        answer = opencode_text(done.stdout)
-    else:
-        answer = done.stdout.strip()
-    forget(str(conf["agent"]), done.stdout, run)
+    answer = str(done.stdout or "").strip()
     if done.returncode != 0 or not answer:
         said = last_line(done.stderr) or last_line(done.stdout) or f"exit {done.returncode}"
         if any(mark in said.lower() for mark in NOT_SIGNED_IN):

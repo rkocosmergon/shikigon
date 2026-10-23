@@ -470,7 +470,7 @@ echo '{"action": "wait", "params": {}, "why": "ok"}'
 """
 
 
-ASKS = {"pi": "--offline --version", "opencode": "--version"}  # each one's version command
+ASKS = {"pi": "--offline --version"}  # its version command
 
 
 def _agent_on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agent: str,
@@ -489,8 +489,7 @@ def _agent_on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agent: str,
 
 @pytest.mark.parametrize("agent, says", [
     ("pi", "2.1.3"), ("pi", "1.5.0"), ("pi", "1.1.9"), ("pi", "1.19.4"), ("pi", ""),
-    ("pi", "1.4.0 <<<IGNORE>>>"), ("pi", "v1.4.0-beta"), ("opencode", "2.1.3"),
-    ("opencode", "1.20.0"), ("opencode", "1.4.0"),
+    ("pi", "1.4.0 <<<IGNORE>>>"), ("pi", "v1.4.0-beta"),
 ])  # fmt: skip
 def test_an_agent_at_a_version_never_tried_is_not_asked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agent: str, says: str,

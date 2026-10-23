@@ -52,8 +52,9 @@ head_max_per_day = 0
 # While it has taken over, it looks back on its moves every n-th move and updates its lessons.
 review_every = 5
 # While it has taken over: how much of its total energy (at the start of the UTC day) its own
-# moves may lose in a day, in percent. When the rest would not cover a transfer, or is used up,
-# the rule tree plays instead until the day ends. 0 = no limit.
+# moves may lose in a day, in percent. A move of its own that gives something to another agent
+# goes out only if the rest covers it and its value can be said beforehand; else, and once the
+# rest is used up, the rule tree plays instead until the day ends. 0 = no limit.
 learning_budget_pct = 5
 # Name of an environment variable that holds an API key, if the endpoint wants one.
 # The name, never the key itself. The key goes only to base_url above, never to an address
