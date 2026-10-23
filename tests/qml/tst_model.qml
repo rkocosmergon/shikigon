@@ -83,18 +83,30 @@ TestCase {
                                next: "claim it — tournament #281, 3 free slots left" } }
     var tip = Model.nextTip(later, ["awake", "landless"], 0, 5000, false)
     compare(tip.id, "tournament")
-    compare(tip.body, "tournament #281, 3 free slots left. Open terminal, press T to take it.")
+    compare(tip.body, "Open terminal, press T to take it.")
     var won = Model.nextTip({ name: "T", mood: "thriving", fields: 1 }, ["awake", "landless"], 4990, 5000, false)
     compare(won.id, "first_field"); compare(won.title, "T won its first field!")
     compare(Model.nextTip({ name: "T", mood: "thriving", fields: 1 }, ["awake"], 0, 5000, false).id,
             "compass", "never landless here: no celebration")
   }
 
-  // A mission by its kind, not by the action's name (#451, 14.10.)
-  function test_a_hints_body_is_never_read_as_markup() {
-    compare(Model.notifyBody("Slot <b>open</b> & free"), "Slot &lt;b&gt;open&lt;/b&gt; &amp; free")
-    compare(Model.notifyBody("&lt;"), "&amp;lt;", "what looks escaped already is shown as written")
-    compare(Model.notifyBody(undefined), "")
+  // No hint body carries a word of the server (cos20 #492, fifth review): Omarchy's notifier
+  // decodes entities before it cleans the body, so escaping it once was undone. Every hint is
+  // asked for with a status whose every text is a link; no body may hold any of it.
+  function test_no_hint_body_holds_a_word_of_the_server() {
+    var link = "<a href=\"https://elsewhere.example/x\">open terminal</a>"
+    var s = { name: link, persona: link, mood: "content", fields: 0, first_field: true,
+              next_step: { stage: "tournament_offer", you_are_here: link, next: link } }
+    var won = { name: link, mood: "thriving", fields: 1, next_step: s.next_step }
+    var tips = [Model.nextTip(s, [], 0, 1000000, false),
+                Model.nextTip(s, ["awake", "landless"], 0, 1000000, false),
+                Model.nextTip(s, ["awake", "tournament"], 0, 1000000, false),
+                Model.nextTip(s, ["awake", "tournament", "compass"], 0, 1000000, false),
+                Model.nextTip(won, ["awake", "landless"], 0, 1000000, false)]
+    compare(tips.map(function(t) { return t.id }),
+            ["awake", "tournament", "compass", "ask", "first_field"], "every hint was asked for")
+    for (var j = 0; j < tips.length; j++)
+      verify(tips[j].body.indexOf("elsewhere") < 0 && tips[j].body.indexOf("<") < 0, tips[j].body)
   }
 
   function test_journal_names_the_mission() {

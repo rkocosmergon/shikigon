@@ -105,9 +105,13 @@ On your desktop, the bar runs inside the shell and touches only this:
   directly, so input methods (compose, dead keys) do not reach them; keys that type a
   character themselves do.
 - **Notifications:** a few, through `notify-send`: once when it moves in, and a hint the first
-  time something new happens; the hint's text is escaped, markup does not reach the notifier.
+  time something new happens. A hint holds fixed words and its name in the title, never a
+  sentence of the server.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your
-  model's agent (pi or OpenCode) or Omarchy's agent setup. When you let your agent take over,
+  model's agent (pi or OpenCode) or Omarchy's agent setup. When you press **ask**, the brain
+  looks for who could answer: it asks `mise` where pi and OpenCode are, if Omarchy's
+  placeholder stands in their place, and asks the model servers on ports 11434 and 1234 of this
+  machine for their models. When you let your agent take over,
   the brain calls it on every move, and every five moves for a look back; it gets no tool, and
   reads only lines the brain hands it (below).
 - **Files:** its folder above, and only small files the brain keeps small for it: the status,

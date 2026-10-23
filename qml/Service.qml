@@ -173,7 +173,7 @@ Item {
     root.tips = { seen: (root.tips.seen || []).concat(tip.marks),
                   at: tip.id === "first_field" ? root.tips.at : now }
     tipper.title = tip.title
-    tipper.body = Model.notifyBody(tip.body)
+    tipper.body = tip.body  // fixed words only (Model.nextTip)
     tipper.saved = JSON.stringify(root.tips)
     tipper.running = true
   }
@@ -245,6 +245,7 @@ Item {
   property var advisors: ({ now: { picked: false, label: "", via: "http", advise: 0,
                                    calls: 0, limit: 0 }, found: [] })
   property var models: ({ where: "", ok: false, models: [], why: "" })
+  property bool advisorsRead: false   // read once, on the first ask (not when the panel opens)
   property var tried: null            // what the last probe said; null while it runs
   property bool restartWanted: false
 
@@ -292,7 +293,10 @@ Item {
     command: root.brainCommand(["advisor", "list"])
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.advisors = root.parsed(text, root.advisors)
+      onStreamFinished: {
+        root.advisors = root.parsed(text, root.advisors)
+        root.advisorsRead = true
+      }
     }
   }
   // An address and a model go over stdin too: an address can carry a name and a password

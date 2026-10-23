@@ -75,7 +75,9 @@ BarWidget {
     popupOpen = true
     readPanelFiles()
     scroll.contentY = 0
-    if (service) { service.recheck(); service.refreshAdvisors() }
+    // Who could answer is looked for when the talk opens (startTalking), not here: the look
+    // starts `mise` and asks two ports on this machine (cos20 #492, fifth review).
+    if (service) service.recheck()
   }
   function close() { popupOpen = false; cursor = -1; talking = false; step = "talk" }
   function toggle() { if (popupOpen) close(); else open() }
@@ -138,7 +140,9 @@ BarWidget {
   function startTalking() {
     talking = true
     if (service) service.refreshAdvisors()
-    toStep(advisorPicked ? "talk" : "who")
+    // Not read yet (the first ask since the shell started): the talk, and onAdvisorsChanged turns
+    // to the list if nobody is picked.
+    toStep(advisorPicked || !(service && service.advisorsRead) ? "talk" : "who")
   }
   function stopTalking() { talking = false; step = "talk"; keyCatcher.forceActiveFocus() }
   // Esc: out of a list or a line back to the talk if someone answers, else out of the view.

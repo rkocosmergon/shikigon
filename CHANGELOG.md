@@ -4,6 +4,20 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.13 (2026-10-23)
 
+- **When its key ended, the panel says so.** With the SDK it ran on, a key that ended looked
+  like a world that did not answer: the panel said "The world did not answer" for ever, never
+  offered **wake a new one**, and the brain sent the dead key every minute (`cosmergon-agent`
+  0.27.33 tells the two apart).
+- **No answer of your agent ends the brain.** An answer with a word where a number belongs
+  (`"amount": "half"`) ended the brain on every move it chose itself; now such an answer counts
+  as unusable, and the rule tree plays.
+- **A hint holds fixed words only.** The tournament hint carried the server's sentence, and
+  Omarchy's notifier from 4.5 on decodes a body before it cleans it, so the escaping was undone:
+  a link could stand there under a label of the world's choosing.
+- **A world's count of missions costs little.** Each ended tournament mission it listed cost two
+  files, as many as it listed; now at most fifty per look, and the bar's view is written once.
+- **Opening the panel looks for nobody.** Who could answer (`mise`, the model servers on ports
+  11434 and 1234) is looked for when you press **ask**, as the README says.
 - **Nothing goes over plain http to another machine,** also without a key. Your question, the
   talk so far and the situation went in plain text to any http address that wanted no key; on a
   network that only looks like home anyone could read them, and the advice and the moves would
@@ -75,8 +89,10 @@ What changed for someone who uses Shikigon. Newest first.
   refusal went into the terminal's log as markup, with its control characters; now every
   foreign text there is text. With `cosmergon-agent` 0.27.32 that holds for the numbers too
   (tick, rank, how many are ranked): they are read as numbers, so text in their place cannot
-  reach the terminal. The terminal opens only https addresses in your browser, and its settings
-  (`~/.cosmergon`) are yours alone from the first byte.
+  reach the terminal. With 0.27.33 it holds for every answer of the world, whichever call reads
+  it; the running mission in the agent panel came as markup until then. The terminal opens only
+  https addresses in your browser, and its settings (`~/.cosmergon`) are yours alone from the
+  first byte.
 
 ## 0.1.12 (2026-10-22)
 

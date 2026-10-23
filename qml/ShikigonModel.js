@@ -71,6 +71,10 @@ function journalLines(entries, limit) {
 // apart ("always informed, never overwhelmed", founder 10.10.). The first step is read from
 // the state, not written into the text: a fixed "[P] Place cells" pointed nowhere once the
 // world was full (#468). Returns { id, title, body, marks } — marks go into tips.json as seen.
+// A body holds fixed words only, never a sentence of the server: a notifier reads the body as
+// markup, and Omarchy's from 4.5 on decodes entities up to three times before it cleans it, so
+// escaping it once here was undone (cos20 #492, fifth review). The title names the agent; a
+// notifier shows a title as plain text.
 var TIP_GAP_S = 600
 
 // The server names its stage (API contract, cos20 14.10.2026): clients branch on the key, the
@@ -93,12 +97,6 @@ var COMPASS_WORDS = ["grow", "defend", "attack", "trade", "cooperate", "explore"
 function compassWord(text) {
   var w = String(text || "").trim().toLowerCase()
   return COMPASS_WORDS.indexOf(w) >= 0 ? w : ""
-}
-
-// A notification's body may carry markup (Desktop Notifications spec; mako reads it), and a
-// hint can hold the server's words: `<`, `>` and `&` are shown as written, never read as tags.
-function notifyBody(text) {
-  return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
 // The input lines are read-only (cos20 #492, marketplace review #11665) and type what a key
@@ -175,12 +173,9 @@ function nextTip(status, seen, lastAt, now, advisorPicked) {
     if (offer) marks.push("tournament")
     return { id: "awake", title: name + " is awake", body: body, marks: marks }
   }
-  if (!was("tournament") && tournamentOffer(status)) {
-    var what = String(status.next_step.next || "").replace(/^claim it — /, "")
+  if (!was("tournament") && tournamentOffer(status))
     return { id: "tournament", title: "A free tournament slot is open",
-             body: (what ? what + ". " : "") + "Open terminal, press T to take it.",
-             marks: ["tournament"] }
-  }
+             body: "Open terminal, press T to take it.", marks: ["tournament"] }
   if (!was("compass"))
     return { id: "compass", title: "Tell " + name + " what matters",
              body: "The compass buttons in its panel tilt its choices: grow, defend, trade … "
@@ -495,7 +490,6 @@ if (typeof module !== "undefined") {
     journalLines: journalLines,
     moveWords: moveWords,
     nextTip: nextTip,
-    notifyBody: notifyBody,
     typedText: typedText,
     pastedLine: pastedLine,
     lineInsert: lineInsert,

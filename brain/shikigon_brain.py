@@ -453,8 +453,10 @@ BAR_TURNS = 3  # exchanges the panel shows
 QUESTION_CHARS, ANSWER_CHARS = 500, 2000  # longest seen on the device (17.10.2026): 333, 516
 
 
-def journal(entry: dict[str, Any]) -> None:
-    files.append(state_dir() / "journal.jsonl", entry, JOURNAL_KEEP_BYTES)
+def journal(*entries: dict[str, Any]) -> None:
+    """Add lines to the journal, then write the bar's view of it once (cos20 #492)."""
+    for entry in entries:
+        files.append(state_dir() / "journal.jsonl", entry, JOURNAL_KEEP_BYTES)
     show_journal()
 
 
@@ -479,7 +481,11 @@ def show_talk() -> None:
 
 # Tournament missions are run by the server (its assigner), not by this brain; their ends go
 # into the journal so the bar can say what happened (cos20 #475). Each end is written once.
-SEEN_KEEP = 200  # mission ids remembered; the server lists at most 50 per call
+# At most MISSIONS_PER_LOOK per look, the server's own number: until 0.1.13 every ended
+# mission a world listed cost two files, as many as it listed (cos20 #492, fifth review).
+MISSIONS_PER_LOOK = 50
+SEEN_KEEP = 200  # mission ids remembered: four looks
+ID_CHARS, MISSION_CHARS = 64, 80
 
 
 def tournament_running(state: Any) -> bool:
@@ -494,13 +500,19 @@ def mission_entry(mission: dict[str, Any], tick_no: int) -> dict[str, Any]:
 
     status = str(mission.get("status") or "")
     text = mission_outcome_text(str(mission.get("outcome") or ""))
+    kind = mission_word(str(mission.get("mission_type") or "mission"))
     return {
         "at": int(time.time()),
         "tick": tick_no,
-        "mission": mission_word(str(mission.get("mission_type") or "mission")),
-        "text": text or ("done" if status == "completed" else status),
+        "mission": short(kind, MISSION_CHARS),
+        "text": short(text or ("done" if status == "completed" else status), SENTENCE_CHARS),
         "ok": status != "failed",
     }
+
+
+def mission_key(mission: dict[str, Any]) -> str:
+    """A mission's id as the brain remembers it, cut short."""
+    return str(mission.get("mission_id"))[:ID_CHARS]
 
 
 def seen_path() -> Path:
@@ -535,15 +547,15 @@ async def tournament_journal(agent: Any, state: Any) -> int:
         return 0
     ended = [
         m
-        for m in reversed(missions)  # the server lists newest first
-        if m.get("body") == "tournament" and m.get("status") in ("completed", "failed", "cancelled")
+        for m in reversed(missions[:MISSIONS_PER_LOOK])  # the server lists newest first
+        if isinstance(m, dict) and m.get("body") == "tournament"
+        and m.get("status") in ("completed", "failed", "cancelled")
     ]
     seen = load_seen()
-    new = [m for m in ended if str(m.get("mission_id")) not in (seen or [])]
-    if seen is not None:
-        for mission in new:
-            journal(mission_entry(mission, getattr(state, "tick", 0)))
-    ids = (seen or []) + [str(m.get("mission_id")) for m in new]
+    new = [m for m in ended if mission_key(m) not in (seen or [])]
+    if seen is not None and new:
+        journal(*(mission_entry(m, getattr(state, "tick", 0)) for m in new))
+    ids = (seen or []) + [mission_key(m) for m in new]
     files.write_json(seen_path(), {"ids": ids[-SEEN_KEEP:]})
     return 0 if seen is None else len(new)
 

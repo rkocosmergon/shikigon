@@ -22,6 +22,7 @@ Measured why it chooses freely and may try again (cos20 #525, #527): an agent wi
 from __future__ import annotations
 
 import json
+import math
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -304,12 +305,28 @@ def form_problem(action: str, params: dict[str, Any], state: Any,
         return mission_form(params, state)
     if action in CONTRACT_ANSWERS:
         offered_ids = {str(c.get("contract_id")) for c in getattr(state, "pending_contracts", ())}
-        wanted = str((params.get("params") or params).get("contract_id") or "")
+        inner = params.get("params")
+        wanted = str((inner if isinstance(inner, dict) else params).get("contract_id") or "")
         return "" if wanted in offered_ids else "contract_id must be one of the contracts offered"
     if forms and action in forms:
         return ""
     return (f"{action} goes out only as the rules' line, unchanged: the world states no form "
             "for writing it yourself")
+
+
+def _amount(params: dict[str, Any]) -> float | None:
+    """The amount a move names, or ``None`` when it is no number (``"half"``, a list).
+
+    Read like every value of a model's answer: by its type, never with a bare ``float()``. Until
+    0.1.13 an answer with a word there ended the brain (cos20 #492, fifth review)."""
+    value = params.get("amount") or 0
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        return None
+    try:
+        number = float(value)
+    except (ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
@@ -444,9 +461,11 @@ class HeadDecider:
         if self.last is not None:
             line = any(action == a and _same(params, p) for a, p in self._suggested)
             self.last.update({"choice": action, "why": why, "own": not line})
-        rest, amount = self.budget_left, float(params.get("amount") or 0)
-        if action == "transfer_energy" and rest is not None and amount > rest:
-            return self._rules_play("learning budget: the rest would not cover this")
+        rest = self.budget_left
+        if action == "transfer_energy" and rest is not None:
+            amount = _amount(params)
+            if amount is None or amount > rest:  # a word for a number is no amount to check
+                return self._rules_play("learning budget: the rest would not cover this")
         if not params or any(action == a and _same(params, p) for a, p in self._suggested):
             return action, params  # a rules' line goes out as the rules send it
         if action in self.forms:  # the world checks its names: a wrong one is refused, honestly
