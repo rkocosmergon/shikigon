@@ -45,7 +45,7 @@ import connections
 import files
 import shikigon_brain as brain
 import speech
-from conftest import hostile, sends
+from conftest import hostile, sends, version_answer
 from test_advisor import _state, _tree
 from test_sending import ASK, _chat
 
@@ -95,6 +95,8 @@ def _within(seconds: float, work: Callable[[], Any]) -> tuple[bool, BaseExceptio
 
 def _record(seen: list[dict[str, Any]], stdout: str = "") -> Callable[..., Any]:
     def run(argv: list[str], **kw: Any) -> Any:
+        if (said := version_answer(argv)) is not None:
+            return said
         seen.append({"argv": argv, **kw})
         return SimpleNamespace(stdout=stdout, stderr="", returncode=0)
 

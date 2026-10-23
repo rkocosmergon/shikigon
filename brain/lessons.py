@@ -90,10 +90,14 @@ def window(entries: list[dict[str, Any]], size: int = HEAD_WINDOW) -> list[dict[
 
 def review_folder(home: Path, moves: list[dict[str, Any]], numbers: str, world: str) -> Path:
     """Write what the head may read while it looks back; the folder is inside the state
-    folder (0700). Its moves one per line, the numbers, the rules of the world."""
+    folder (0700). Its moves one per line, as a model may read them (``advisor.move_for_model``:
+    no names of other agents, the world's reason quoted), the numbers, the rules of the world."""
+    import advisor
+
     folder = home / REVIEW_FOLDER
     folder.mkdir(parents=True, exist_ok=True)
-    lines = [json.dumps(move, ensure_ascii=False)[:LINE_CHARS] for move in moves]
+    lines = [json.dumps(advisor.move_for_model(move), ensure_ascii=False)[:LINE_CHARS]
+             for move in moves]  # fmt: skip
     (folder / "moves.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     (folder / "rated.txt").write_text(numbers + "\n", encoding="utf-8")
     (folder / "world.txt").write_text(world[:8000] + "\n", encoding="utf-8")
@@ -343,7 +347,9 @@ async def learn(
         entry["why"] = "daily limit reached"
         return entry
     advisor.count_call(home)
-    numbers = summary(moves)
+    # the numbers as a model may read them (``advisor.move_for_model``): a mission type the world
+    # named went into them raw until 0.1.13, also into ``rated.txt`` (sixth review, finding 4)
+    numbers = summary([m for m in map(advisor.move_for_model, moves) if "energy" in m])
     before = latest_text(home) if head else ""
     note = ""
     if head and reader is not None:

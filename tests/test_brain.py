@@ -567,7 +567,7 @@ def test_the_words_come_in_on_stdin_not_as_an_argument(
     assert brain.main(["instruct"]) == 1
     assert "stdin" in json.loads(capsys.readouterr().out)["why"]
     # 0.1.4: no words as arguments, from anyone (the dashboard sends them on stdin since 0.27.10)
-    for command in ("instruct", "ask", "coach"):
+    for command in ("instruct", "ask"):
         assert brain.main([command, "be", "bold"]) == 1, command
         assert "never as arguments" in json.loads(capsys.readouterr().out)["why"]
     assert heard == ["be careful"]
@@ -711,58 +711,24 @@ async def test_the_loop_waits_for_a_late_tick_instead_of_moving_twice(
     assert decider.asked == 2 and len(agent.acted) == 2
 
 
-# --- Your own coding agent as its coach (cos20 #451, the way through Omarchy) -------------------
+# --- No coach any more (cos20 #492, sixth review, finding 9; founder 23.10.2026) ------------------
+# Until 0.1.13 `coach` wrote status.json (the world's blocks, other agents' names) into a task for
+# the player's coding agent, which keeps its tools. No text from outside goes to such a program.
 
 
-def test_the_coachs_task_names_the_skill_the_paths_and_the_snapshot_never_the_key() -> None:
+def test_there_is_no_coach_command_and_no_skill_file() -> None:
+    with pytest.raises(SystemExit) as stop:
+        brain.main(["coach"])
+    assert stop.value.code == 2  # argparse: no such command
+    assert not (brain.REPO_DEFAULT_CONFIG.parent.parent / "skill").exists()
+
+
+def test_a_coach_task_an_earlier_version_left_is_removed_at_the_start() -> None:
     _living()
-    status = {"mood": "content", "name": "Root-storm"}
-    brain.files.write_json(brain.state_dir() / "status.json", status)
-    task = brain.coach_prompt(CFG, "  why does it wait?  ")
-    assert brain.SKILL.exists() and str(brain.SKILL) in task
-    assert f"State folder: {brain.state_dir()}" in task
-    assert "<world> is: https://world.test\n" in task
-    assert "shikigon_brain.py" in task and '"name": "Root-storm"' in task
-    assert task.endswith("The player asks: why does it wait?")
-    assert "its-key" not in task
-
-
-def test_without_a_question_or_a_snapshot_the_task_still_stands() -> None:
-    task = brain.coach_prompt(CFG, "")
-    assert '{"mood": "asleep"}' in task
-    assert task.endswith("What is my Shikigon doing, and what could I do next?")
-
-
-def test_the_coach_is_given_the_python_that_has_the_brains_packages(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`coach` itself runs with any Python; `instruct` and `tick` need the brain's own."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    assert brain.brain_python() == sys.executable  # not set up yet
-    own = tmp_path / ".local" / "share" / "shikigon" / "venv" / "bin" / "python"
-    own.parent.mkdir(parents=True)
-    own.write_text("")
-    assert brain.brain_python() == str(own)
-    assert f"<brain> is: {own} " in brain.coach_prompt(CFG, "")
-
-
-def test_the_skill_names_only_commands_the_brain_has_and_keeps_its_three_nevers() -> None:
-    import re
-
-    skill = brain.SKILL.read_text(encoding="utf-8")
-    assert skill.startswith("---\nname: shikigon-coach\ndescription: ")
-    named = set(re.findall(r"`<brain> ([a-z]+)", skill)) | {"forget", "register"}
-    assert {"status", "advise", "instruct"} <= named
-    # No moves for it (14.10.2026): the bar has no "move now" (founder 11.10.), and a coach's
-    # move would only take the one it makes by itself in that tick.
-    assert "tick" not in named and "Do not make moves for it" in skill
-    for command in sorted(named):
-        with pytest.raises(SystemExit) as stop:
-            brain.main([command, "--help"])
-        assert stop.value.code == 0, f"the skill names `{command}`, the brain does not know it"
-    for never in ("Never read, print or copy `credentials.json`", "Never run `forget`",
-                  "Never edit files"):
-        assert never in skill
+    old = brain.state_dir() / "coach.md"
+    old.write_text("Its snapshot right now: {...}\n", encoding="utf-8")
+    brain.private_state()
+    assert not old.exists()
 
 
 def test_running_the_brain_writes_nothing_into_the_plugins_folder(tmp_path: Path) -> None:

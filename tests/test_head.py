@@ -24,6 +24,7 @@ import head
 import lessons
 import shikigon_brain as brain
 import speech
+from conftest import version_answer
 from test_advisor import CONF, _state, _tree
 from test_brain import FakeResult
 
@@ -358,6 +359,8 @@ def test_the_look_back_runs_in_an_empty_folder_and_the_prompt_goes_on_stdin(
     seen: dict[str, Any] = {}
 
     def run(argv: list[str], **kw: Any) -> Any:
+        if (said := version_answer(argv)) is not None:
+            return said
         seen.update(argv=argv, **kw)
         return SimpleNamespace(stdout=LESSON, stderr="", returncode=0)
 

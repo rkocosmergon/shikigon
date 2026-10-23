@@ -224,7 +224,7 @@ Item {
     command: ["sh", "-c",
       'umask 077; mkdir -p "$4" && printf %s "$3" > "$4/tips.json.tmp" '
       + '&& mv "$4/tips.json.tmp" "$4/tips.json" && '
-      + 'notify-send -a Shikigon -- "$1" "$2"',  // the title starts with the world's name
+      + 'notify-send -a Shikigon -- "$1" "$2"',  // fixed words only, title and body (Model.nextTip)
       "sh", title, body, saved, root.stateDir]
   }
 

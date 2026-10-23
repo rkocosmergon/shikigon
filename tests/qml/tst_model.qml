@@ -57,7 +57,7 @@ TestCase {
     var newcomer = { name: "Thread-sharp", mood: "struggling", fields: 0, first_field: true,
                      next_step: slot }
     var tip = Model.nextTip(newcomer, [], 0, 1000, false)
-    compare(tip.id, "awake"); compare(tip.title, "Thread-sharp is awake")
+    compare(tip.id, "awake"); compare(tip.title, "Your Shikigon is awake")
     verify(tip.body.indexOf("All cubes are full and busy right now") === 0)
     verify(tip.body.indexOf("take a free tournament slot. Open terminal, press T.") > 0)
     compare(tip.marks, ["awake", "landless", "tournament"])
@@ -85,7 +85,7 @@ TestCase {
     compare(tip.id, "tournament")
     compare(tip.body, "Open terminal, press T to take it.")
     var won = Model.nextTip({ name: "T", mood: "thriving", fields: 1 }, ["awake", "landless"], 4990, 5000, false)
-    compare(won.id, "first_field"); compare(won.title, "T won its first field!")
+    compare(won.id, "first_field"); compare(won.title, "Your Shikigon won its first field!")
     compare(Model.nextTip({ name: "T", mood: "thriving", fields: 1 }, ["awake"], 0, 5000, false).id,
             "compass", "never landless here: no celebration")
   }
@@ -107,6 +107,28 @@ TestCase {
             ["awake", "tournament", "compass", "ask", "first_field"], "every hint was asked for")
     for (var j = 0; j < tips.length; j++)
       verify(tips[j].body.indexOf("elsewhere") < 0 && tips[j].body.indexOf("<") < 0, tips[j].body)
+  }
+
+  // Nor any title (cos20 #492, sixth review, finding 1): the title named the agent, whose name
+  // the world gives, and Omarchy's notifier opens a link it finds in the title on a click on
+  // the card. A name that is a link stands in no title and no body.
+  function test_no_hint_title_holds_a_word_of_the_world() {
+    var link = "https://elsewhere.example/x"
+    var s = { name: link, persona: link, mood: "content", fields: 0, first_field: true,
+              next_step: { stage: "tournament_offer", you_are_here: link, next: link } }
+    var won = { name: link, mood: "thriving", fields: 1, next_step: s.next_step }
+    var tips = [Model.nextTip(s, [], 0, 1000000, false),
+                Model.nextTip(s, ["awake", "landless"], 0, 1000000, false),
+                Model.nextTip(s, ["awake", "tournament"], 0, 1000000, false),
+                Model.nextTip(s, ["awake", "tournament", "compass"], 0, 1000000, false),
+                Model.nextTip(won, ["awake", "landless"], 0, 1000000, false)]
+    compare(tips.map(function(t) { return t.id }),
+            ["awake", "tournament", "compass", "ask", "first_field"], "every hint was asked for")
+    for (var j = 0; j < tips.length; j++) {
+      verify(tips[j].title.indexOf("elsewhere") < 0 && tips[j].title.indexOf("http") < 0,
+             tips[j].title)
+      verify(tips[j].body.indexOf("elsewhere") < 0, tips[j].body)
+    }
   }
 
   function test_journal_names_the_mission() {

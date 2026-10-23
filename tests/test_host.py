@@ -245,20 +245,6 @@ def test_at_a_terminal_the_words_are_asked_for_on_stderr(
     assert out.out == "" and "Your question" in out.err
 
 
-def test_the_coach_task_goes_to_a_private_file_and_the_command_line_holds_its_path(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
-) -> None:
-    brain.files.write_json(brain.state_dir() / "status.json", {"name": "x", "energy": 4242.0})
-    monkeypatch.setattr(sys, "stdin", _Terminal("why does it wait?\n"))
-    assert brain.main(["coach"]) == 0
-    printed = capsys.readouterr().out
-    path = brain.state_dir() / "coach.md"
-    assert printed.strip() == f"Read the task in {path} and follow it."
-    assert "4242" not in printed and "why does it wait" not in printed
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    assert "4242" in path.read_text() and "why does it wait?" in path.read_text()
-
-
 # --- F8: the state folder is the player's alone, whoever makes it -------------------------------
 
 

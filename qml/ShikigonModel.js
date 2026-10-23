@@ -73,8 +73,10 @@ function journalLines(entries, limit) {
 // world was full (#468). Returns { id, title, body, marks } — marks go into tips.json as seen.
 // A body holds fixed words only, never a sentence of the server: a notifier reads the body as
 // markup, and Omarchy's from 4.5 on decodes entities up to three times before it cleans it, so
-// escaping it once here was undone (cos20 #492, fifth review). The title names the agent; a
-// notifier shows a title as plain text.
+// escaping it once here was undone (cos20 #492, fifth review). The title holds fixed words
+// too (sixth review, finding 1): it named the agent, whose name the world gives, and Omarchy's
+// notifier looks for a link in title and body and opens it on a click on the card
+// (Detect.links, Service.activate), so a name like "https://…" was a link of the world's.
 var TIP_GAP_S = 600
 
 // The server names its stage (API contract, cos20 14.10.2026): clients branch on the key, the
@@ -153,10 +155,9 @@ function nextTip(status, seen, lastAt, now, advisorPicked) {
   if (!status || !status.name || status.mood === "asleep") return null
   seen = seen || []
   function was(id) { return seen.indexOf(id) >= 0 }
-  var name = status.name
   // a celebration does not wait for the gap
   if (was("landless") && !was("first_field") && Number(status.fields) > 0)
-    return { id: "first_field", title: name + " won its first field!",
+    return { id: "first_field", title: "Your Shikigon won its first field!",
              body: "Its own land: now it can place cells on it and grow.", marks: ["first_field"] }
   if (lastAt && now - lastAt < TIP_GAP_S) return null
   if (!was("awake")) {
@@ -171,13 +172,13 @@ function nextTip(status, seen, lastAt, now, advisorPicked) {
     var marks = ["awake"]
     if (status.first_field) marks.push("landless")
     if (offer) marks.push("tournament")
-    return { id: "awake", title: name + " is awake", body: body, marks: marks }
+    return { id: "awake", title: "Your Shikigon is awake", body: body, marks: marks }
   }
   if (!was("tournament") && tournamentOffer(status))
     return { id: "tournament", title: "A free tournament slot is open",
              body: "Open terminal, press T to take it.", marks: ["tournament"] }
   if (!was("compass"))
-    return { id: "compass", title: "Tell " + name + " what matters",
+    return { id: "compass", title: "Tell your Shikigon what matters",
              body: "The compass buttons in its panel tilt its choices: grow, defend, trade … "
                    + "It stays itself.",
              marks: ["compass"] }

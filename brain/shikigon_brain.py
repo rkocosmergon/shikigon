@@ -17,9 +17,10 @@ Commands (called by the Omarchy plugin, or by you)::
     shikigon_brain.py learn         # a lesson from its last moves now (else every 100 moves)
     shikigon_brain.py advisor list  # who could answer; also: try ID [MODEL] | advise off|N | forget
     shikigon_brain.py forget --yes  # delete it: its agent on the server, its files here
-    shikigon_brain.py coach [TEXT]  # the task text for your own coding agent (no model here)
 
-Nothing here ever prints or logs the API key.
+Nothing here ever prints or logs the API key. No text from outside (the world, other agents, a
+model) goes to a program that has tools: the ``coach`` command did that until 0.1.13 and is
+gone (cos20 #492, sixth review, finding 9).
 """
 
 from __future__ import annotations
@@ -67,9 +68,13 @@ def state_dir() -> Path:
 def private_state() -> Path:
     """The state folder, the player's alone (0700), also when a command by hand comes before
     the first wake (cos20 #492 F8: it was made with the default mode then), and every file in
-    it 0600, as a new file where an old one was readable for others (``files.keep_private``)."""
+    it 0600, as a new file where an old one was readable for others (``files.keep_private``).
+
+    The coach's task of 0.1.12 and earlier (``coach.md``: its snapshot with the world's words)
+    is removed, so no coding agent finds it there any more (cos20 #492, sixth review)."""
     home = files.private_folder(state_dir())
     files.keep_private(home)
+    (home / "coach.md").unlink(missing_ok=True)
     return home
 
 
@@ -82,7 +87,7 @@ def said_on_stdin(asked: str = "") -> str:
     if sys.stdin.isatty():
         if not asked:
             return ""
-        # on stderr: inside "$(shikigon coach)" stdout is what the agent gets
+        # on stderr: stdout is the JSON answer a caller reads
         print(f"{asked}: ", end="", file=sys.stderr, flush=True)
     return sys.stdin.readline().strip()
 
@@ -261,11 +266,20 @@ def register(
         # The server knows why (too many new agents from one address, registration paused):
         # its sentence is passed on; without one, the number says at least that much.
         raise SystemExit(server_says(resp) or f"The world refused the registration ({code}).")
-    data = resp.json()
+    # Read by its form, inside the same refusal: until 0.1.13 an answer that was no JSON or had
+    # no key ended `register` with a traceback (cos20 #492, sixth review, finding 3).
+    try:
+        data = resp.json()
+        agent_id, api_key = data["agent_id"], data["api_key"]
+        expires_at = data.get("expires_at") or ""
+    except advisor.call_errors():
+        raise SystemExit("The world's answer to the registration could not be read.") from None
+    if not (isinstance(agent_id, str) and agent_id and isinstance(api_key, str) and api_key):
+        raise SystemExit("The world's answer to the registration named no agent and no key.")
     creds = {
-        "agent_id": data["agent_id"],
-        "api_key": data["api_key"],
-        "expires_at": data.get("expires_at", ""),
+        "agent_id": agent_id,
+        "api_key": api_key,
+        "expires_at": str(expires_at)[:64],
         "world": connections.origin(url),  # the key goes to this world only (H3)
     }
     write_private(credentials_path(), creds)
@@ -351,13 +365,15 @@ FIRST_FIELD = ("the world is full: it has to win its first field "
 
 
 def situation(state: Any) -> list[str]:
-    """Why it does what it does, in words: read from what the server offers it."""
-    offered = getattr(state, "available_actions", None) or {}
+    """Why it does what it does, in words: read from what the server offers it, by its form
+    (``advisor.facts_of``: a word or a list where an object belongs is none)."""
+    import advisor
+
     notes = []
-    marauder = (offered.get("start_mission") or {}).get("marauder_state")
-    if marauder:
+    marauder = advisor.facts_of(state, "start_mission").get("marauder_state")
+    if isinstance(marauder, str) and marauder:
         notes.append(MARAUDER_TEXT.get(marauder, f"its marauder: {marauder}"))
-    full = (offered.get("create_field") or {}).get("slots_available") is False
+    full = advisor.facts_of(state, "create_field").get("slots_available") is False
     if full and not getattr(state, "fields", None):
         notes.append(FIRST_FIELD)
     return notes
@@ -573,13 +589,19 @@ def fall_asleep(reason: str, why: str) -> dict[str, Any]:
 
 
 async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any]:
-    """Send one move. A move the world does not take is said in words, never a crash.
+    """Send one move: the one door every move goes through. A move the world does not take is
+    said in words, never a crash.
 
     The world takes one move per tick and answers a second one with 429 (a `tick`
-    from a terminal next to the running brain); a lost connection is the other case.
+    from a terminal next to the running brain); a lost connection is the other case. A move
+    that cannot even be built or sent (a parameter httpx refuses, an answer of the world in a
+    form the SDK cannot read) is a refusal of its own, never the end of the brain: until 0.1.13
+    it raised past this door and ended the brain on every such move (cos20 #492, sixth review,
+    findings 2 and 3). A key that ended and a port that changed hands still end the work: the
+    caller puts the Shikigon to sleep and says why.
     """
+    from cosmergon_agent.exceptions import AuthenticationError, RateLimitError, SendRefusedError
     from cosmergon_agent.exceptions import ConnectionError as CsgConnectionError
-    from cosmergon_agent.exceptions import RateLimitError
 
     try:
         result = await agent.act(action, **params)
@@ -588,7 +610,12 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
         return {"action": action, "ok": False, "why": why}
     except CsgConnectionError:
         return {"action": action, "ok": False, "why": "the world did not answer"}
-    why = "" if result.success else (result.error_message or "")
+    except (AuthenticationError, SendRefusedError):
+        raise
+    except Exception as exc:  # noqa: BLE001 - the door: nothing of one move ends the brain
+        why = f"the move could not be sent ({type(exc).__name__})"
+        return {"action": action, "ok": False, "why": why, "refused": True}
+    why = "" if result.success else str(result.error_message or "")
     done: dict[str, Any] = {"action": action, "ok": bool(result.success), "why": why[:200]}
     if not result.success:
         done["refused"] = True  # the world answered and said no; a 429 or no answer is not that
@@ -600,7 +627,9 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
     data = getattr(result, "data", None)
     effect = data.get("energy_effect") if isinstance(data, dict) else None
     if result.success and isinstance(effect, dict):
-        done["effect"] = {k: float(effect.get(k) or 0.0) for k in ("free", "held", "items")}
+        # by their type (``files.finite``): a word there ended the brain until 0.1.13
+        done["effect"] = {k: files.finite(effect.get(k) or 0) or 0.0
+                          for k in ("free", "held", "items")}  # fmt: skip
     return done
 
 
@@ -895,14 +924,16 @@ def world_forms(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:
 
 
 def recent_moves(count: int) -> list[str]:
-    """Its last moves from the journal, in words."""
-    lines = files.tail(state_dir() / "journal.jsonl", 10 * count)  # words, missions between
-    moves = [line for line in lines if "action" in line][-count:]
+    """Its last moves from the journal, in words, as a model may read them
+    (``advisor.move_for_model``: the world's reason quoted, no names of other agents)."""
+    import advisor
     from words import move_words
 
+    lines = files.tail(state_dir() / "journal.jsonl", 10 * count)  # words, missions between
+    moves = [advisor.move_for_model(line) for line in lines if "action" in line][-count:]
     return [
         move_words(move)
-        if move.get("ok")
+        if move["ok"]
         else f"{move_words(move)} (refused: {move.get('why', '')})"
         for move in moves
     ]
@@ -949,40 +980,6 @@ async def ask(
     files.append(chat_path(), turn)  # kept whole: the talk is the player's (cos20 #468)
     show_talk()
     return turn
-
-
-SKILL = Path(__file__).resolve().parent.parent / "skill" / "SKILL.md"
-
-
-def brain_python() -> str:
-    """The Python that has the brain's packages: its own environment, once it is set up."""
-    own = Path.home() / ".local" / "share" / "shikigon" / "venv" / "bin" / "python"
-    return str(own) if own.exists() else sys.executable
-
-
-def coach_prompt(cfg: dict[str, Any], question: str) -> str:
-    """The task for the player's own coding agent (on Omarchy: ``omarchy agent prompt``).
-
-    Shikigon connects to no model here: it hands the agent the facts and points it to the
-    skill file, the way Omarchy's own crash helper does. The snapshot never holds the key.
-    """
-    path = state_dir() / "status.json"
-    shown = path.read_text(encoding="utf-8") if path.exists() else json.dumps({"mood": ASLEEP})
-    asks = question.strip() or "What is my Shikigon doing, and what could I do next?"
-    return "\n".join(
-        [
-            "You are coaching the player of a Shikigon, a Cosmergon agent in their Omarchy bar.",
-            f"Read this skill file first and follow it: {SKILL}",
-            "(If your harness has no skill mechanism, read the file directly.)",
-            "",
-            f"<brain> is: {brain_python()} {Path(__file__).resolve()}",
-            f"State folder: {state_dir()}",
-            f"<world> is: {cfg['world']['base_url'].rstrip('/')}",
-            f"Its snapshot right now: {shown}",
-            "",
-            f"The player asks: {asks}",
-        ]
-    )
 
 
 class UnknownDecider(Exception):
@@ -1206,6 +1203,37 @@ def learning_next(cfg: dict[str, Any], state: Any, learning: Any) -> Any:
     return None
 
 
+NOT_PLAYED = "this move could not be played"
+NOT_PLAYED_COUNT = {"since_start": 0}  # how many, in the sentence of each (status.json, the bar)
+
+
+async def guarded_tick(
+    agent: Any, decider: Any, done_in: int | None = None, refusals: Refusals | None = None
+) -> dict[str, Any]:
+    """``tick`` behind the boundary of every move: whatever one move raises ends that move,
+    never the brain (cos20 #492, sixth review, finding 3).
+
+    The state, the choice and the move read the world's answer through the SDK and the rule tree;
+    until 0.1.13 an answer of the wrong form there (a word for a number, a list for an object, no
+    JSON at all) ended the brain, and the bar started it again only to see it end on the next
+    move. Now the Shikigon sleeps for that move, says why in one line, and tries again on the
+    next tick. Each such move is counted, in its own sentence: how often it happened since the
+    brain started stands in ``status.json`` and in the bar. A key that ended and a port that
+    changed hands pass on: ``with_agent`` puts it to sleep with their own words."""
+    from cosmergon_agent.exceptions import AuthenticationError, SendRefusedError
+
+    try:
+        return await tick(agent, decider, done_in, refusals)
+    except (AuthenticationError, SendRefusedError):
+        raise
+    except Exception as exc:  # noqa: BLE001 - the boundary of a move
+        NOT_PLAYED_COUNT["since_start"] += 1
+        count = NOT_PLAYED_COUNT["since_start"]
+        why = f"{NOT_PLAYED} ({type(exc).__name__}; {count} since the brain started)"
+        print(why, file=sys.stderr)
+        return fall_asleep(WORLD_SILENT, why)
+
+
 async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
     """A move, a pause, a move: the pause follows the world's tick, not only the clock.
 
@@ -1221,7 +1249,7 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
         if why := world_refusal(cfg):  # the world's port can change hands while it runs (H9)
             fall_asleep(CONFIG, why)
             return
-        last = await tick(agent, decider, done_in, refusals)
+        last = await guarded_tick(agent, decider, done_in, refusals)
         if last.get("skipped"):  # the world's tick is late: one choice per tick, so wait for it
             await asyncio.sleep(LATE_TICK_S)
             continue
@@ -1231,11 +1259,17 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
         await asyncio.sleep(pause(interval, state))
 
 
-async def with_agent(cfg: dict[str, Any], work: Callable[[Any], Awaitable[Any]]) -> Any:
+async def with_agent(
+    cfg: dict[str, Any], work: Callable[[Any], Awaitable[Any]], *, once: bool = True
+) -> Any:
     """Open the SDK connection around one piece of work.
 
     An expired key is not a crash: the Shikigon falls asleep and says why. Its world
-    keeps it as a vagant that follows your last briefing (server side).
+    keeps it as a vagant that follows your last briefing (server side). A single command
+    (``once``: tick, advise, ask, instruct, learn) answers anything else that went wrong as JSON
+    in one sentence, not with a traceback (cos20 #492, sixth review, finding 3). The run loop
+    (``once=False``) has its own boundary around each move (``guarded_tick``); what fails outside
+    a move ends it with an exit code, so the bar starts it again.
     """
     from cosmergon_agent.exceptions import AuthenticationError, SendRefusedError
 
@@ -1250,6 +1284,10 @@ async def with_agent(cfg: dict[str, Any], work: Callable[[Any], Awaitable[Any]])
         return fall_asleep(KEY_ENDED, "key expired: register a new Shikigon")
     except SendRefusedError as exc:  # the world's port changed hands at the moment of sending
         return fall_asleep(CONFIG, exc.message)
+    except Exception as exc:  # one command says why in one sentence
+        if not once:
+            raise
+        return {"ok": False, "why": f"it could not finish this ({type(exc).__name__})"}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1262,7 +1300,7 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("terminal", help="may the terminal client open for this Shikigon?")
     gone = sub.add_parser("forget")
     gone.add_argument("--yes", action="store_true", help="yes, delete it on the server and here")
-    for name in ("instruct", "ask", "coach"):
+    for name in ("instruct", "ask"):
         # Words come in on stdin, or when it asks at a terminal: arguments stand in
         # /proc/<pid>/cmdline for every local user (#11550). They are taken only to refuse them.
         sub.add_parser(name).add_argument("text", nargs="*")
@@ -1273,22 +1311,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
-    """What needs no Shikigon of its own: the coach's task, the advisor, the terminal's world,
-    the snapshot."""
-    if args.command == "coach":
-        if args.text:
-            print(json.dumps({"ok": False, "why": WORDS_ON_STDIN}))
-            return 1
-        # The task holds its snapshot (energy is the player's alone) and the question: it goes
-        # to a file for the owner only, and the agent's command line names the file alone
-        # (`omarchy agent prompt` takes its prompt as an argument; cos20 #492 F7).
-        asked = said_on_stdin("Your question (Enter: none)")
-        path = private_state() / "coach.md"
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(coach_prompt(cfg, asked) + "\n")
-        print(f"Read the task in {path} and follow it.")
-        return 0
+    """What needs no Shikigon of its own: the advisor, the terminal's world, the snapshot."""
     if args.command == "terminal":
         why = terminal_refusal(cfg, load_credentials() or {})
         if why:
@@ -1331,9 +1354,9 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
         print(json.dumps(fall_asleep(CONFIG, str(exc))))
         return 1
     if args.command == "run":
-        asyncio.run(with_agent(cfg, lambda a: run(cfg, a, decider)))
+        asyncio.run(with_agent(cfg, lambda a: run(cfg, a, decider), once=False))
         return 0
-    act = tick if args.command == "tick" else advise
+    act = guarded_tick if args.command == "tick" else advise
     print(json.dumps(asyncio.run(with_agent(cfg, lambda a: act(a, decider)))))
     return 0
 
@@ -1359,7 +1382,7 @@ def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
 
 
 COMMANDS: dict[str, Callable[[argparse.Namespace, dict[str, Any]], int]] = {
-    **dict.fromkeys(("coach", "advisor", "status", "terminal"), _local),
+    **dict.fromkeys(("advisor", "status", "terminal"), _local),
     **dict.fromkeys(("register", "learn", "forget"), _account),
     **dict.fromkeys(("tick", "run", "advise"), _moves),
     **dict.fromkeys(("ask", "instruct"), _words),

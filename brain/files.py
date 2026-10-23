@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import json
+import math
 import os
 import shutil
 import stat
@@ -96,16 +97,45 @@ def write_json(path: Path, data: Any) -> None:
         raise
 
 
+def _no_constant(name: str) -> Any:
+    raise ValueError(f"{name} is no JSON number")
+
+
+def _finite_float(text: str) -> float:
+    number = float(text)
+    if not math.isfinite(number):
+        raise ValueError(f"{text[:20]} is no finite number")
+    return number
+
+
 def loads(data: str | bytes) -> Any:
-    """``json.loads`` for text from outside: deep nesting is a ``ValueError`` like other bad JSON.
+    """``json.loads`` for text from outside: deep nesting is a ``ValueError`` like other bad JSON,
+    and so is a number that is not finite.
 
     ``json.loads("[" * 100_000)`` raises ``RecursionError``, which no ``except ValueError``
     catches: a model's answer of brackets ended a move with a traceback instead of a refusal
-    (cos20 #492 S8). Every JSON the brain reads goes through here (guard in ``test_files``)."""
+    (cos20 #492 S8). ``NaN``, ``Infinity`` and ``1e999`` are no JSON numbers; Python took them,
+    and a head's move with one in it ended the brain where httpx refuses to send it
+    (``allow_nan=False``; sixth review, finding 2). Every JSON the brain reads goes through here
+    (guard in ``test_files``)."""
     try:
-        return json.loads(data)
+        return json.loads(data, parse_constant=_no_constant, parse_float=_finite_float)
     except RecursionError as exc:
         raise ValueError("the JSON is nested too deep") from exc
+
+
+def finite(value: Any) -> float | None:
+    """``value`` as a finite number, or ``None``: how the brain reads a number from outside.
+
+    A word, a list, ``True`` or an endless number is no amount (cos20 #492, fifth and sixth
+    review: a bare ``float()`` on such a value ended the brain)."""
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        return None
+    try:
+        number = float(value)
+    except (ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 def json_in(text: str) -> Any:

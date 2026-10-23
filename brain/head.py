@@ -22,7 +22,6 @@ Measured why it chooses freely and may try again (cos20 #525, #527): an agent wi
 from __future__ import annotations
 
 import json
-import math
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -127,11 +126,13 @@ def mission_lines(facts: dict[str, Any]) -> list[str]:
     loot = facts.get("richest_loot_field") or {}
     if loot:
         lines.append(f"  most bomb boxes: {_short(loot, 160)}")
-    for mission in facts.get("mission_types") or []:
+    kinds = facts.get("mission_types")
+    for mission in kinds if isinstance(kinds, list) else []:
         if not isinstance(mission, dict):
             continue
+        given = mission.get("params_schema")
         schema = ", ".join(f"{k}: {_short(v, 40)}"
-                           for k, v in (mission.get("params_schema") or {}).items())
+                           for k, v in (given if isinstance(given, dict) else {}).items())
         lines.append(f"  - {mission.get('type')}({schema})")
     lines.append('  form: {"action": "start_mission", "params": {"mission_type": "<type>", '
                  '"params": {...}}}')
@@ -141,7 +142,8 @@ def mission_lines(facts: dict[str, Any]) -> list[str]:
 def offered(state: Any, blocked: frozenset[str]) -> dict[str, Any]:
     """The moves the world offers now, with what it says about each; ``wait`` is always one."""
     moves: dict[str, Any] = {}
-    for action, facts in (getattr(state, "available_actions", None) or {}).items():
+    actions = getattr(state, "available_actions", None)
+    for action, facts in (actions if isinstance(actions, dict) else {}).items():
         if action not in blocked and possible(str(action), facts, state):
             moves[str(action)] = facts
     if getattr(state, "pending_contracts", None):
@@ -153,14 +155,15 @@ def offered(state: Any, blocked: frozenset[str]) -> dict[str, Any]:
 
 
 def recent_moves(home: Path, count: int = RECENT) -> list[str]:
-    """Its own last moves and how the world answered, from the journal."""
+    """Its own last moves and how the world answered, from the journal, as a model may read
+    them (``advisor.move_for_model``: the world's reason quoted, no names of other agents)."""
     lines = []
     for entry in files.tail(home / "journal.jsonl", count * 4):
-        if "action" not in entry or "tick" not in entry:
+        move = advisor.move_for_model(entry)
+        if "action" not in move or "tick" not in move:
             continue
-        why = _short(entry.get("why") or "", WHY_CHARS)
-        said = "taken" if entry.get("ok") else f"refused: {why}"
-        lines.append(f"- tick {entry.get('tick')}: {entry['action']} — {said}{_effect(entry)}")
+        said = "taken" if move["ok"] else f"refused: {move.get('why', '')}"
+        lines.append(f"- tick {move['tick']}: {move['action']} — {said}{_effect(move)}")
     return lines[-count:]
 
 
@@ -280,9 +283,10 @@ def mission_form(params: dict[str, Any], state: Any) -> str:
     inner = params.get("params") if set(params) == {"params"} else params
     if not isinstance(inner, dict):
         return "a mission needs mission_type and params"
-    facts = (getattr(state, "available_actions", None) or {}).get("start_mission") or {}
-    schemas = {str(m.get("type")): m.get("params_schema") or {}
-               for m in facts.get("mission_types") or [] if isinstance(m, dict)}
+    kinds = advisor.facts_of(state, "start_mission").get("mission_types")
+    schemas: dict[str, dict[str, Any]] = {
+        str(m.get("type")): m["params_schema"] if isinstance(m.get("params_schema"), dict) else {}
+        for m in (kinds if isinstance(kinds, list) else []) if isinstance(m, dict)}
     kind = str(inner.get("mission_type") or "")
     if kind not in schemas:
         return f"mission_type must be one of: {', '.join(sorted(schemas))[:300]}"
@@ -314,30 +318,56 @@ def form_problem(action: str, params: dict[str, Any], state: Any,
             "for writing it yourself")
 
 
-def _amount(params: dict[str, Any]) -> float | None:
-    """The amount a move names, or ``None`` when it is no number (``"half"``, a list).
+# What a move gives to another agent: checked against the learning budget BEFORE it goes out,
+# both ways a value can leave (cos20 #492, sixth review, finding 6: only transfer_energy was).
+TRANSFERS = frozenset({"transfer_energy", "transfer_inventory"})
+# Names the brain's own call takes for itself (``agent.act(self, action, **params)``): until
+# 0.1.13 ``{"action": …}`` in a model's params ended the brain with a ``TypeError`` (finding 2).
+# ``action`` is also the world's word for the move itself. Its other switches (``strict``,
+# ``params``) only shape how the world reads the same move; where the head knows the move's form
+# it sets them itself (``_take``, ``shaped``).
+RESERVED_PARAMS = frozenset({"action", "self"})
 
-    Read like every value of a model's answer: by its type, never with a bare ``float()``. Until
-    0.1.13 an answer with a word there ended the brain (cos20 #492, fifth review)."""
-    value = params.get("amount") or 0
-    if isinstance(value, bool) or not isinstance(value, int | float | str):
+
+def _inner(params: dict[str, Any]) -> dict[str, Any]:
+    """The fields of a move, whether the head wrote them flat or under ``params``."""
+    inner = params.get("params") if set(params) == {"params"} else params
+    return inner if isinstance(inner, dict) else {}
+
+
+def given_value(action: str, params: dict[str, Any], state: Any) -> float | None:
+    """What a transfer gives away, in energy; ``None`` when it cannot be said.
+
+    ``transfer_energy`` by its amount, ``transfer_inventory`` by its count at the reference
+    price the world names for that item (``market_list.reference_prices``). Read like every value
+    of a model's answer: by its type (``files.finite``), never with a bare ``float()``. A value
+    that cannot be said lets the rules play while a budget is set."""
+    fields = _inner(params)
+    if action == "transfer_energy":
+        amount = files.finite(fields.get("amount") or 0)
+        return amount if amount is not None and amount >= 0 else None
+    count = files.finite(fields.get("count"))
+    prices = advisor.facts_of(state, "market_list").get("reference_prices")
+    price = files.finite(prices.get(str(fields.get("item_type")))) if isinstance(prices, dict) \
+        else None
+    if count is None or price is None or count <= 0 or price < 0:
         return None
-    try:
-        number = float(value)
-    except (ValueError, OverflowError):
-        return None
-    return number if math.isfinite(number) else None
+    return count * price
 
 
 def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
-    """``((action, params, why), "")`` for a usable answer, else ``(None, why not)``."""
+    """``((action, params, why), "")`` for a usable answer, else ``(None, why not)``.
+
+    The JSON is read finite (``files.loads``): ``NaN``, ``Infinity`` or ``1e999`` in a parameter
+    is no usable answer. Until 0.1.13 such an answer reached ``agent.act``, where httpx refuses
+    a number that is not finite, and that ended the brain (sixth review, finding 2)."""
     start, end = (text or "").find("{"), (text or "").rfind("}")
     if start < 0 or end <= start:
         return None, "the answer was not JSON"
     try:
         data = files.loads(text[start : end + 1])
     except ValueError:
-        return None, "the answer was not JSON"
+        return None, "the answer was not JSON, or a number in it was not finite"
     if not isinstance(data, dict):
         return None, "the answer was not a JSON object"
     action = str(data.get("action") or "")
@@ -346,6 +376,8 @@ def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     params = data.get("params") or {}
     if not isinstance(params, dict):
         return None, "params must be a JSON object"
+    if RESERVED_PARAMS & params.keys():
+        return None, "params may not name action or self"
     if len(json.dumps(params)) > PARAMS_BYTES:
         return None, "params are too long"
     why = " ".join(str(data.get("why") or "").split()[: advisor.WHY_WORDS])[:WHY_CHARS]
@@ -462,9 +494,9 @@ class HeadDecider:
             line = any(action == a and _same(params, p) for a, p in self._suggested)
             self.last.update({"choice": action, "why": why, "own": not line})
         rest = self.budget_left
-        if action == "transfer_energy" and rest is not None:
-            amount = _amount(params)
-            if amount is None or amount > rest:  # a word for a number is no amount to check
+        if action in TRANSFERS and rest is not None:
+            value = given_value(action, params, self._state)
+            if value is None or value > rest:  # a value that cannot be said is none to check
                 return self._rules_play("learning budget: the rest would not cover this")
         if not params or any(action == a and _same(params, p) for a, p in self._suggested):
             return action, params  # a rules' line goes out as the rules send it

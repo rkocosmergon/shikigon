@@ -4,6 +4,36 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.13 (2026-10-23)
 
+- **Through your agent only https.** pi or OpenCode sent the talk wherever their own setup named
+  for the model: also in plain text across the network, or to a port on this machine that
+  another user may hold, and Shikigon could not see which. Now the kernel lets your agent, and
+  everything it starts, connect only to port 443, the port of https (Landlock, Linux 6.7 or
+  later); on a kernel without it no question goes to an agent. A model server on this machine or
+  in your home: pick it in the panel directly, not through your agent.
+- **Only versions of an agent it was tried with.** Omarchy updates every agent to its newest
+  version every four hours, and Shikigon asked whichever version ran. Now it reads the agent's
+  version before each question and asks only pi 1.2 to 1.4 and OpenCode 1.19; after an update
+  to another version **WHO ANSWERS?** and the panel say so, and the rule tree plays.
+- **The coach is gone.** `shikigon coach` wrote a task with the world's words into a file for a
+  coding agent with tools (`coach.md` in its state folder), and the skill told that agent to
+  follow it. Command and skill are removed; a task an earlier version left is deleted.
+- **No answer of the world ends the brain.** An answer in a form the SDK or the rule tree could
+  not read (no JSON, a word for a number, a list for an object) ended the brain, and the bar
+  started it again only to see it end on the next move. Now that move ends with one line, and
+  the next tick tries again (`cosmergon-agent` 0.27.34 and `cosmergon-decider-tree` 2.3.10 read
+  such answers by their form). A registration answered so says it in one sentence.
+- **No endless number of your agent reaches the world, and no parameter the call takes for
+  itself.** `NaN`, `Infinity` or `1e999` in an answer, or a parameter named `action`, ended the
+  brain where the move was sent. Now such an answer is unusable and the rule tree plays, and
+  whatever a move raises while it is built or sent is a refused move, never the end.
+- **The look back reads no name and no words of another player.** Your agent got its moves as
+  the journal kept them: whom it wrote to, what it wrote, what the model advised. Now each move
+  goes as its numbers and its move word, the world's reason for a refusal quoted.
+- **Goods given away count against the budget before they go.** Only energy sent was checked;
+  goods sent to another agent are now checked at the reference price the world names, and a
+  value that cannot be said lets the rule tree play.
+- **A name that does not resolve holds no call past its time.** The checks before a call
+  resolved the address outside the call's deadline.
 - **When its key ended, the panel says so.** With the SDK it ran on, a key that ended looked
   like a world that did not answer: the panel said "The world did not answer" for ever, never
   offered **wake a new one**, and the brain sent the dead key every minute (`cosmergon-agent`
@@ -11,7 +41,8 @@ What changed for someone who uses Shikigon. Newest first.
 - **No answer of your agent ends the brain.** An answer with a word where a number belongs
   (`"amount": "half"`) ended the brain on every move it chose itself; now such an answer counts
   as unusable, and the rule tree plays.
-- **A hint holds fixed words only.** The tournament hint carried the server's sentence, and
+- **A hint holds fixed words only, in its title too.** The title carried its name, which the
+  world gives it. The tournament hint carried the server's sentence, and
   Omarchy's notifier from 4.5 on decodes a body before it cleans it, so the escaping was undone:
   a link could stand there under a label of the world's choosing.
 - **A world's count of missions costs little.** Each ended tournament mission it listed cost two
@@ -27,7 +58,7 @@ What changed for someone who uses Shikigon. Newest first.
   talk so far and the situation went in plain text to any http address that wanted no key; on a
   network that only looks like home anyone could read them, and the advice and the moves would
   reach a stranger by themselves. Now an address is https or on this machine (`localhost`). For
-  a model server elsewhere: https, an ssh tunnel, or your agent (README).
+  a model server elsewhere: https or an ssh tunnel (README).
 - **Every call has one deadline, from the request to the last byte of the answer.** The limit
   counted from the body of an answer on; a server that answered `100 Continue` again and again,
   or sent its headers a byte at a time, held a move, a question or a model list for ever. Now a

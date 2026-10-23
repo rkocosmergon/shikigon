@@ -55,6 +55,9 @@ def _private_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 OPENCODE = """#!{python}
 import json, os, pathlib, sys
 log = pathlib.Path(os.environ["OPENCODE_LOG"])
+if sys.argv[1:] == ["--version"]:
+    print("1.19.4")
+    sys.exit(0)
 if sys.argv[1:3] == ["session", "delete"]:
     log.write_text(log.read_text() + " ".join(sys.argv[1:]) + "\\n" if log.exists() else
                    " ".join(sys.argv[1:]) + "\\n")

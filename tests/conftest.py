@@ -16,6 +16,7 @@ from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -27,6 +28,20 @@ import connections
 # ``None`` only in the counter-test against 0.1.9, which had no check when sending: each test
 # of H9 is then red on its own, not the whole run at this import.
 REAL_OURS: Callable[..., bool] | None = getattr(connections, "ours", None)
+
+
+# What a stand-in for an agent's program says to its version command (``connections.untried``):
+# the versions the agents run at on the device. A fake that answered the question to it too
+# would make every agent untried.
+TRIED = {"pi": "1.4.0", "opencode": "1.19.4"}
+
+
+def version_answer(argv: list[str]) -> SimpleNamespace | None:
+    """The answer to ``argv`` if it is an agent's version command, else ``None``."""
+    for agent, spec in connections.AGENTS.items():
+        if spec.get("version") and list(argv) == spec["version"]:
+            return SimpleNamespace(returncode=0, stdout=TRIED[agent] + "\n", stderr="")
+    return None
 
 
 @pytest.fixture(autouse=True)

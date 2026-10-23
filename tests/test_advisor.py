@@ -455,7 +455,9 @@ async def test_the_advisor_is_told_the_last_moves_also_a_refused_one() -> None:
 
     action, params = await _tree().decide(state)
     first = move_words({"action": action, "kind": brain.mission_kind(action, params)})
-    told = f"Its last moves: {first}, {first} (refused: Not enough energy)"
+    # the world's reason only quoted: it is the world's text (cos20 #492, sixth review, 4)
+    why = advisor.quoted("Not enough energy", advisor.WHY_QUOTED)
+    told = f"Its last moves: {first}, {first} (refused: {why})"
     assert told in model.asked[0][0]["content"]
 
 

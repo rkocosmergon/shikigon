@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import re
 import time
 import tomllib
 from collections.abc import Awaitable, Callable
@@ -152,6 +153,45 @@ def quoted(value: Any, chars: int) -> str:
     return f"{QUOTE[0]}{inner}{QUOTE[1]}"
 
 
+MOVE_WORD_CHARS, WHY_QUOTED = 40, 120
+# A move's word as the rules and the world's offers name it (``start_mission``, ``gather_spores``).
+# The world names the moves it offers and its mission types, so a name of another form stays out.
+MOVE_WORD = re.compile(rf"[a-z][a-z0-9_]{{0,{MOVE_WORD_CHARS - 1}}}")
+
+
+def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
+    """One move of the journal as a model may read it: the one way from the journal into a prompt.
+
+    Its tick, the move, whether the world took it, the numbers of its energy, fields and what it
+    booked, and the world's reason for a refusal, quoted. The look back's moves, its numbers
+    (``lessons.summary``) and the last moves in a prompt all come through here. Never
+    ``words`` or ``advice``: they name the agent it wrote to and carry what a model wrote to it.
+    Move words only in their form (``MOVE_WORD``): the world names the moves it offers and its
+    mission types. Until 0.1.13 the head's look back read each journal line raw
+    (``review/moves.txt``), another player's name outside the quote, and the lesson it wrote went
+    into every later move (cos20 #492, sixth review, finding 4)."""
+    shown: dict[str, Any] = {}
+    if type(entry.get("tick")) is int:
+        shown["tick"] = entry["tick"]
+    for key in ("action", "kind"):  # names the world offers: only in the form of a move's word
+        if isinstance(entry.get(key), str) and MOVE_WORD.fullmatch(entry[key]):
+            shown[key] = entry[key]
+    shown["ok"] = entry.get("ok") is True
+    if type(entry.get("fields")) is int:
+        shown["fields"] = entry["fields"]
+    for key in ("energy", "total"):
+        number = files.finite(entry.get(key))
+        if number is not None:
+            shown[key] = number
+    effect = entry.get("effect")
+    if isinstance(effect, dict):
+        shown["effect"] = {k: files.finite(effect.get(k) or 0) or 0.0
+                           for k in ("free", "held", "items")}  # fmt: skip
+    if not shown["ok"] and entry.get("why"):
+        shown["why"] = quoted(entry["why"], WHY_QUOTED)
+    return shown
+
+
 def place(ranking: Any) -> tuple[int, int]:
     """Its place in the one ranking and how many are ranked: ``(rank, of)``, ``(0, 0)`` unranked.
 
@@ -225,14 +265,16 @@ def open_energy_offers(state: Any) -> int:
     Without this line a model advised selling more energy while 214 offers already held
     almost all of it, and gave as reason that a move extends the key.
     """
-    actions = getattr(state, "available_actions", None) or {}
-    offered = actions.get("market_list") if isinstance(actions, dict) else None
-    if not isinstance(offered, dict):
-        return 0
-    try:
-        return max(int(offered.get("open_energy_listings") or 0), 0)
-    except (TypeError, ValueError):
-        return 0
+    count = files.finite(facts_of(state, "market_list").get("open_energy_listings") or 0)
+    return max(int(count), 0) if count is not None else 0
+
+
+def facts_of(state: Any, action: str) -> dict[str, Any]:
+    """What the world says about one of its moves (``available_actions[action]``), always an
+    object: a word or a list in its place is no facts (cos20 #492, sixth review, finding 3)."""
+    actions = getattr(state, "available_actions", None)
+    facts = actions.get(action) if isinstance(actions, dict) else None
+    return facts if isinstance(facts, dict) else {}
 
 
 def time_left(until: str) -> str:

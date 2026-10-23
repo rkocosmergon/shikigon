@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 import advisor
 import connections
 import shikigon_brain as brain
-from conftest import hostile, sends
+from conftest import hostile, sends, version_answer
 from test_sending import ASK, ME, Kernel, _chat
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -143,12 +143,14 @@ def test_every_program_the_brain_starts_runs_in_an_empty_folder(
         folder = Path(kwargs.get("cwd") or ".").resolve()
         empty = folder.is_dir() and not any(folder.iterdir()) and folder != tmp_path
         started.append((argv[0], empty))
-        return SimpleNamespace(returncode=0, stdout="provider  model\nollama  m\n", stderr="")
+        listing = SimpleNamespace(returncode=0, stdout="provider  model\nollama  m\n", stderr="")
+        return version_answer(argv) or listing
 
     connections.installed("pi", run=run)
     connections.agent_models("pi", run=run)
     connections.run_agent({"agent": "pi"}, "question", 5.0, run=run)
-    assert started == [("mise", True), ("pi", True), ("pi", True)]
+    # its version before the listing and before the question (cos20 #492, finding 11)
+    assert started == [("mise", True), ("pi", True), ("pi", True), ("pi", True), ("pi", True)]
 
 
 def test_no_program_is_started_but_through_the_empty_folder() -> None:

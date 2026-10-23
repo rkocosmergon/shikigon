@@ -155,6 +155,9 @@ AGENTS: dict[str, dict[str, Any]] = {
                 "OPENCODE_DISABLE_PROJECT_CONFIG": "1", "OPENCODE_DISABLE_SHARE": "1"},
         "unset": ("OPENCODE_AUTO_SHARE",),
         "forget": ["opencode", "session", "delete"],
+        # The versions it is asked at (``untried``): 1.19, whose source the lines above cite.
+        "version": ["opencode", "--version"],
+        "versions": ("1.19",),
         "model_flag": ["-m", "{model}"],
         "answer": "opencode-json",
         "sign_in": ["opencode", "auth", "login"],
@@ -167,6 +170,10 @@ AGENTS: dict[str, dict[str, Any]] = {
         "argv": ["pi", "-p", "--no-tools", "--no-session", "--no-extensions", "--no-mcp",
                  "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve",
                  "--offline", "--thinking", "off", "--system-prompt", PI_SYSTEM],
+        # 1.2 to 1.4: the options above read the same in all three (``cli/args.ts``), and
+        # ``--version`` answers before any session, extension or network (``main.ts``).
+        "version": ["pi", "--offline", "--version"],
+        "versions": ("1.2", "1.3", "1.4"),
         "model_flag": ["--model", "{model}"],
         "answer": "stdout",
         "sign_in": ["pi"],  # its sign-in is "/login" inside pi
@@ -242,6 +249,46 @@ def agent_env(agent: str) -> dict[str, str]:
     spec = AGENTS.get(agent, {})
     own = {k: v for k, v in os.environ.items() if k not in spec.get("unset", ())}
     return {**own, **spec.get("env", {})}
+
+
+# The versions an agent is asked at (cos20 #492, sixth review, finding 11). ``proven`` says an
+# agent was tried on a device, and that was one version of it; Omarchy keeps every agent at
+# ``latest`` and updates it every four hours (``omarchy-tools.toml``). A later version may read
+# other files, keep other sessions or take options apart differently, and its options are what
+# keeps the talk to itself. So before each start of an agent's program for a listing or a
+# question its version is read, in the same kind of empty folder and environment, and only a
+# version Shikigon was tried with goes on. Read again for each question: it can change between
+# two. The session delete that follows a question runs on the version read for it.
+VERSION = re.compile(r"v?(\d{1,4})\.(\d{1,4})\.\d{1,6}")
+VERSION_S = 10
+
+
+def agent_version(agent: str, run: Callable[..., Any] | None = None) -> str:
+    """What the agent's program says its version is; ``""`` if it says nothing in that form."""
+    argv = AGENTS.get(agent, {}).get("version")
+    if not argv:
+        return ""
+    try:
+        done = in_empty_folder(run or run_in_group, argv, env=agent_env(agent),
+                               capture_output=True, text=True, timeout=VERSION_S, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    said = str(done.stdout or "").strip()
+    return said if int(done.returncode) == 0 and VERSION.fullmatch(said) else ""
+
+
+def untried(agent: str, run: Callable[..., Any] | None = None) -> str:
+    """Why the agent is not asked: its version is not one Shikigon was tried with; empty if it
+    is. The words carry its version only in the form ``x.y.z``, never other text it printed."""
+    spec = AGENTS[agent]
+    tried = spec.get("versions", ())
+    version = agent_version(agent, run)
+    match = VERSION.fullmatch(version)
+    if match and f"{int(match[1])}.{int(match[2])}" in tried:
+        return ""
+    said = f"says {version}" if version else "names no version"
+    versions = ", ".join(f"{v}.x" for v in tried) or "no version of it"
+    return f"{spec['name']} is not asked: it {said}, Shikigon was tried with {versions}"
 
 
 # ---------- the choice ----------------------------------------------------------------------
@@ -457,6 +504,21 @@ async def bounded_body(resp: Any) -> bytes:
     return bytes(body)
 
 
+def may_send(url: str, with_key: bool) -> bool:
+    """The rules before a byte leaves, raised as the door's own sentence: only over https or to
+    this machine (``talk_may_go_to``), a key only over https or to the player's own server
+    (``key_may_go_to``), a port on this machine only while it is the player's (``ours``).
+    ``True`` when the address leads to this machine. Resolves the name: run it in a thread,
+    inside the deadline (``exchange``)."""
+    if not talk_may_go_to(url):
+        raise AgentError(TALK_ONLY_SAFE)
+    if with_key and not key_may_go_to(url):
+        raise AgentError(KEY_ONLY_SAFE)
+    if not ours(url, with_key=with_key):
+        raise NotOurs(NOT_OURS)
+    return on_this_machine(url)
+
+
 async def exchange(method: str, url: str, *, headers: dict[str, str] | None = None,
                    payload: Any = None, timeout: float = 4, seconds: float = ANSWER_SECONDS,
                    transport: Any = None) -> Any:
@@ -475,25 +537,24 @@ async def exchange(method: str, url: str, *, headers: dict[str, str] | None = No
     connected, the same at the socket (``async_peer_check``). A call that carries a key, in a
     header or as a name and password in the address, goes only over https or to the player's
     own server, never to a system account's (H3, K33). ``transport`` stands in for the network
-    in tests."""
+    in tests.
+
+    The checks resolve the name of the address. They run inside the deadline, in a thread:
+    until 0.1.13 they ran before it, in the brain's own loop, and a resolver that did not answer
+    held every advised move and question past its time, the lesson beside the moves with it
+    (cos20 #492, sixth review, finding 7)."""
     import httpx
 
     with_key = "Authorization" in (headers or {}) or credentials_in(url)
-    if not talk_may_go_to(url):
-        raise AgentError(TALK_ONLY_SAFE)
-    if with_key and not key_may_go_to(url):
-        raise AgentError(KEY_ONLY_SAFE)
-    if not ours(url, with_key=with_key):
-        raise NotOurs(NOT_OURS)
-    local = on_this_machine(url)
     sent = {**(headers or {}), **PLAIN}
-    trace = {"trace": async_peer_check(local, with_key)}
-    async with (
-        asyncio.timeout(seconds),
-        httpx.AsyncClient(timeout=timeout, transport=transport, trust_env=not local) as client,
-        client.stream(method, url, headers=sent, json=payload, extensions=trace) as resp,
-    ):
-        body = await bounded_body(resp)
+    async with asyncio.timeout(seconds):
+        local = await asyncio.to_thread(may_send, url, with_key)
+        trace = {"trace": async_peer_check(local, with_key)}
+        async with (
+            httpx.AsyncClient(timeout=timeout, transport=transport, trust_env=not local) as client,
+            client.stream(method, url, headers=sent, json=payload, extensions=trace) as resp,
+        ):
+            body = await bounded_body(resp)
     status = resp.status_code
 
     def raise_for_status() -> None:
@@ -865,14 +926,18 @@ def found(
     get: Callable[..., Any],
     is_installed: Callable[[str], bool] = installed,
     is_own: Callable[[str], bool] = own_server,
+    why_not: Callable[[str], str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Everything that could answer, most likely first: agents, local servers, the config's own."""
+    """Everything that could answer, most likely first: agents, local servers, the config's own.
+    An agent at a version Shikigon was not tried with stands there with the reason (``untried``),
+    the same words the question would end with."""
     rows: list[dict[str, Any]] = []
     for agent, spec in AGENTS.items():
         if spec["proven"] and is_installed(agent):
+            refused = (why_not or untried)(agent)
             rows.append({"id": f"agent:{agent}", "via": "agent", "agent": agent,
                          "name": spec["name"], "sign_in": spec["sign_in"],
-                         "text": f"{spec['name']} — {spec['whose']}"})
+                         "text": refused or f"{spec['name']} — {spec['whose']}"})
     for name, base_url in LOCAL_SERVERS:
         if not is_own(base_url):
             continue
@@ -910,19 +975,51 @@ class TooMuchOutput(subprocess.SubprocessError):
 # agent alone. It ties to the thread that started it, and ``run_in_group`` waits in that thread
 # until the leader is gone. Standard library only, run with ``-I``. argv: the brain's pid, then
 # the agent's command.
+#
+# Before the agent starts, the guard restricts itself and everything it starts with Landlock
+# (cos20 #492, sixth review, finding 10; founder 23.10.2026: through an agent only https): a TCP
+# connection only to port 443. An agent sends the talk wherever its own configuration names
+# for the model, which Shikigon cannot read reliably from outside (pi resolves the address from
+# its catalogue, its models.json and at sending from its credentials). The kernel holds the rule
+# for every agent and every program it starts: plain http to another machine, a model server in
+# the home network or a port on this machine that another user may hold is refused before a
+# byte. Name resolution (UDP) stays open. Without Landlock network rules (ABI < 4, Linux before
+# 6.7) no agent is started. Syscalls 444-446 are the same on x86_64 and aarch64.
+HTTPS_PORT = 443
 GUARD = """
 import ctypes, os, signal, sys
+libc = ctypes.CDLL(None, use_errno=True)
+libc.syscall.restype = ctypes.c_long
 def end(*_):
     os.killpg(0, signal.SIGKILL)
+def only_https(port):
+    class Ruleset(ctypes.Structure):
+        _fields_ = [("handled_access_fs", ctypes.c_uint64), ("handled_access_net", ctypes.c_uint64)]
+    class NetPort(ctypes.Structure):
+        _fields_ = [("allowed_access", ctypes.c_uint64), ("port", ctypes.c_uint64)]
+    connect_tcp = 1 << 1  # LANDLOCK_ACCESS_NET_CONNECT_TCP
+    abi = libc.syscall(444, None, ctypes.c_size_t(0), 1)  # LANDLOCK_CREATE_RULESET_VERSION
+    if abi < 4:
+        sys.exit("shikigon: no agent is started here: Linux gives no Landlock network rules (ABI "
+                 + str(abi) + "), so the agent could reach more than https")
+    rules, rule = Ruleset(0, connect_tcp), NetPort(connect_tcp, port)
+    fd = libc.syscall(444, ctypes.byref(rules), ctypes.c_size_t(ctypes.sizeof(rules)), 0)
+    if (fd < 0
+            or libc.syscall(445, fd, 2, ctypes.byref(rule), 0)  # LANDLOCK_RULE_NET_PORT
+            or libc.prctl(38, 1, 0, 0, 0)  # PR_SET_NO_NEW_PRIVS
+            or libc.syscall(446, fd, 0)):
+        sys.exit("shikigon: no agent is started here: its network could not be limited to https")
+    os.close(fd)
 signal.signal(signal.SIGTERM, end)
-if ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGTERM) != 0:  # PR_SET_PDEATHSIG
+if libc.prctl(1, signal.SIGTERM) != 0:  # PR_SET_PDEATHSIG
     sys.exit("shikigon: the agent's guard could not tie itself to the brain")
 if os.getppid() != int(sys.argv[1]):  # the brain ended before the tie held
     end()
+only_https(int(sys.argv[2]))
 child = os.fork()
 if child == 0:
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
-    os.execvp(sys.argv[2], sys.argv[2:])
+    os.execvp(sys.argv[3], sys.argv[3:])
 code = os.waitstatus_to_exitcode(os.waitpid(child, 0)[1])
 sys.exit(code if code >= 0 else 128 - code)
 """
@@ -933,7 +1030,7 @@ def guarded(argv: list[str], env: dict[str, str] | None) -> list[str]:
     path = (env if env is not None else os.environ).get("PATH")
     if shutil.which(argv[0], path=path) is None:
         raise FileNotFoundError(2, "No such file or directory", argv[0])
-    return [sys.executable, "-I", "-c", GUARD, str(os.getpid()), *argv]
+    return [sys.executable, "-I", "-c", GUARD, str(os.getpid()), str(HTTPS_PORT), *argv]
 
 
 def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str] | None = None,
@@ -1024,9 +1121,10 @@ def _wait_unreaped(pid: int, timeout: float | None, over: threading.Event) -> bo
 
 
 def agent_models(agent: str, run: Callable[..., Any] = run_in_group) -> list[str]:
-    """The models an agent can use, by its own listing command; empty if it has none."""
+    """The models an agent can use, by its own listing command; empty if it has none or is at a
+    version Shikigon was not tried with (``untried``)."""
     argv = AGENTS.get(agent, {}).get("models")
-    if not argv:
+    if not argv or untried(agent, run):
         return []
     try:
         done = in_empty_folder(run, argv, env=agent_env(agent), capture_output=True, text=True,
@@ -1155,11 +1253,14 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
 
     Only an agent proven on a device is called, checked here where it is sent and not only
     where it is offered (threat model §0 rule 5): one never probed may keep tools or MCP
-    servers (cos20 #492, K28).
+    servers (cos20 #492, K28). The same holds for its version, read before each question
+    (``untried``, cos20 #492, sixth review, finding 11).
     """
     spec = AGENTS[str(conf["agent"])]
     if not spec.get("proven"):
         raise AgentError(f"{spec['name']} is not offered yet: it was never tried on a device")
+    if why := untried(str(conf["agent"]), run):
+        raise AgentError(why)
     env = agent_env(str(conf["agent"]))
     argv = agent_argv(conf)
     try:

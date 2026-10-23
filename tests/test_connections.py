@@ -23,6 +23,7 @@ import advisor
 import connections
 import files
 import shikigon_brain as brain
+from conftest import version_answer
 
 OPENCODE_SAMPLE = """\
 {"type":"step_start","timestamp":1791708796549,"sessionID":"ses_x","part":{"id":"prt_1","messageID":"msg_1","sessionID":"ses_x","type":"step-start"}}
@@ -55,8 +56,12 @@ class Commands:
         self.answer = SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
         self.fail = fail
         self.calls: list[tuple[list[str], dict[str, Any]]] = []
+        self.versions: list[tuple[list[str], dict[str, Any]]] = []
 
     def __call__(self, argv: list[str], **kwargs: Any) -> Any:
+        if (said := version_answer(argv)) is not None:
+            self.versions.append((list(argv), kwargs))
+            return said
         self.calls.append((list(argv), kwargs))
         if self.fail is not None:
             raise self.fail
@@ -120,7 +125,7 @@ def test_the_list_names_agents_first_then_what_runs_here_then_the_configs_own() 
 
     conf = {"base_url": "http://model-box.test:11434/v1", "model": "qwen3.5:9b"}
     rows = connections.found(conf, get, is_installed=lambda agent: True,
-                             is_own=lambda url: True)  # Codex is there too
+                             is_own=lambda url: True, why_not=lambda agent: "")  # Codex too
     assert [row["id"] for row in rows] == [
         "agent:opencode", "agent:pi",
         "http:http://localhost:11434/v1", "http:http://model-box.test:11434/v1"]

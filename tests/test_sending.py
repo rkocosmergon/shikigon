@@ -316,12 +316,37 @@ def _sends(call: ast.Call, params: set[str]) -> bool:
     return name == "CosmergonAgent" or (name in params and name in {"get", "post", "delete"})
 
 
-def sending_functions() -> dict[str, bool]:
+def _checked(call: ast.Call, checkers: set[str]) -> bool:
+    """A call of a check, also one handed to a thread (``asyncio.to_thread(may_send, …)``)."""
+    if _name(call) == "to_thread" and call.args:
+        return getattr(call.args[0], "id", "") in checkers
+    return _name(call) in checkers
+
+
+def _checkers(trees: list[ast.AST]) -> set[str]:
+    """``CHECKS`` and every function of the brain that calls one of them: a check moved into a
+    function of its own stays a check, and one taken out of it leaves it none (derived)."""
+    checkers = set(CHECKS)
+    functions = [fn for tree in trees for fn in ast.walk(tree)
+                 if isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef)]
+    while True:
+        more = {fn.name for fn in functions if fn.name not in checkers
+                and any(isinstance(n, ast.Call) and _checked(n, checkers) for n in _own_body(fn))}
+        if not more:
+            return checkers
+        checkers |= more
+
+
+def sending_functions(sources: dict[str, str] | None = None) -> dict[str, bool]:
     """Every function in the brain that opens a connection, and whether it reads the port
     first. Derived from the code, never a list kept by hand."""
+    if sources is None:
+        sources = {p.name: p.read_text(encoding="utf-8") for p in sorted(BRAIN.glob("*.py"))}
+    trees = {name: ast.parse(text) for name, text in sources.items()}
+    checkers = _checkers(list(trees.values()))
     found: dict[str, bool] = {}
-    for path in sorted(BRAIN.glob("*.py")):
-        for fn in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+    for name, tree in trees.items():
+        for fn in ast.walk(tree):
             if not isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
             params = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
@@ -329,8 +354,8 @@ def sending_functions() -> dict[str, bool]:
             sends = [c.lineno for c in calls if _sends(c, params)]
             if not sends:
                 continue
-            checks = [c.lineno for c in calls if _name(c) in CHECKS]
-            found[f"{path.name}:{fn.name}"] = bool(checks) and min(checks) < min(sends)
+            checks = [c.lineno for c in calls if _checked(c, checkers)]
+            found[f"{name}:{fn.name}"] = bool(checks) and min(checks) < min(sends)
     return found
 
 
@@ -344,15 +369,14 @@ def test_every_place_that_sends_reads_the_port_first() -> None:
 
 
 def test_the_guard_turns_red_on_a_place_that_sends_unchecked(tmp_path: Path) -> None:
-    source = (BRAIN / "connections.py").read_text(encoding="utf-8")
+    sources = {p.name: p.read_text(encoding="utf-8") for p in sorted(BRAIN.glob("*.py"))}
+    source = sources["connections.py"]
     unchecked = source.replace(
         "    if not ours(url, with_key=with_key):\n        raise NotOurs(NOT_OURS)\n", "", 1)
     assert unchecked != source
-    tree = ast.parse(unchecked)
-    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef)
-              and n.name == "exchange")
-    calls = [n for n in _own_body(fn) if isinstance(n, ast.Call)]
-    assert any(_sends(c, set()) for c in calls) and not any(_name(c) in CHECKS for c in calls)
+    assert sending_functions(sources)["connections.py:exchange"], "checked as it stands"
+    found = sending_functions({**sources, "connections.py": unchecked})
+    assert found["connections.py:exchange"] is False, "red once the check is gone"
 
 
 def test_no_unbounded_reader_is_handed_on() -> None:
