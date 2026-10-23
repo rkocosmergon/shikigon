@@ -9,6 +9,11 @@ Shikigon is read in one place (``contracts.costs_me``), for its head and for its
 4. the budget compared the payer of a tribute as text: its own id in upper case went past (P4);
 5. the expiry of its key, in a form that is no time, went uncut into every prompt (P5).
 
+The tenth review (the betreuer pass at ``2d168ff``, P1) found the one place reading the escrow of
+a template under the tree's name (``escrow_amount``), not the world's (``escrow``): the head's own
+template with an escrow passed the budget. Its cases are red against ``2d168ff``, but for the
+two with no escrow, which guard the form of the fix.
+
 Each test is red against ``398a512`` (counter-test), except where its docstring says it guards
 the form of a fix.
 """
@@ -36,6 +41,11 @@ from test_sixth_pass import RULES, _budget, _head
 ME = "3f0c9a52-7d1e-4b6a-9c2e-5a8b1d4e6f70"  # this agent, as the world names it
 OTHER = "9b1e2c3d-4f5a-4b6c-8d7e-0f1a2b3c4d5e"
 SPELLINGS = [ME, ME.upper(), ME.replace("-", ""), "{" + ME + "}", "urn:uuid:" + ME]
+# The world's form of a template (cos20 ``core/actions/formen.py``): its escrow is ``escrow``.
+TEMPLATE_FORMS = {**FORMS,
+                  "propose_from_template": [{"params": ["template_id", "mode", "slots", "escrow"]}]}
+TEMPLATE = {"template_id": "T08_NON_AGGRESSION", "mode": "targeted",
+            "slots": {"partner_id": OTHER, "duration": 100}}  # fmt: skip
 
 
 @pytest.fixture(autouse=True)
@@ -80,6 +90,13 @@ def _tribute(payer: str) -> dict[str, Any]:
     ("propose_from_template", {"params": {"template_id": "T08_NON_AGGRESSION"},
                                "escrow_amount": 0}, False),
     ("propose_from_template", {"params": {"template_id": "T06_TRIBUTE"}}, True),
+    # the world reads a template's escrow as ``escrow`` (``vertraege.py:419``), not as the tree
+    # writes it: at the top, under ``params``, not a number, and none (tenth review)
+    ("propose_from_template", {**TEMPLATE, "escrow": 5}, True),
+    ("propose_from_template", {"params": {**TEMPLATE, "template_id": "T07_TRADE_AGREEMENT",
+                                          "escrow": 5}}, True),
+    ("propose_from_template", {**TEMPLATE, "escrow": "lots"}, True),
+    ("propose_from_template", {**TEMPLATE, "escrow": 0}, False),
     ("propose_counter", {"contract_id": "c1", "terms": {}}, True),
     ("accept_contract", {"contract_id": "t-me"}, True),  # a tribute it pays
     ("accept_contract", {"contract_id": "T-ME"}, True),  # the same offer in another spelling
@@ -109,18 +126,31 @@ def test_what_a_contract_costs_this_agent(
     ("propose_contract", {"to_player_id": OTHER, "contract_type": "mercenary", "escrow_amount": 0,
                           "terms": {"target_field_id": "f9", "reward": 1, "duration": 100}}),  # P3
     ("propose_contract", _tribute(ME.upper())),  # P4: its own id in upper case
+    ("propose_from_template", {**TEMPLATE, "escrow": 5000}),  # tenth review: the world's name
 ])  # fmt: skip
 async def test_a_contract_that_costs_this_agent_plays_the_rules(
     action: str, params: dict[str, Any],
 ) -> None:
     _budget()
     answer = _move(action, params)
-    decider = _head(answer, answer, forms=FORMS)
+    decider = _head(answer, answer, forms=TEMPLATE_FORMS)
     move = await decider.decide(_offered(_offer("a-cost", "alliance", cost_per_tick=500),
                                          available_actions={a: {"available": True}
-                                                            for a in FORMS}))  # fmt: skip
+                                                            for a in TEMPLATE_FORMS}))  # fmt: skip
     assert move == RULES, json.dumps(decider.last)
     assert decider.last is not None and "learning budget" in decider.last["fallback"]
+
+
+async def test_a_template_without_escrow_still_goes_out_under_a_budget() -> None:
+    """Guards the form of the fix: a template that pledges nothing is still the head's to write,
+    and it goes out as written, ``strict``."""
+    _budget()
+    answer = _move("propose_from_template", {**TEMPLATE, "escrow": 0})
+    decider = _head(answer, answer, forms=TEMPLATE_FORMS)
+    move = await decider.decide(_offered(available_actions={a: {"available": True}
+                                                            for a in TEMPLATE_FORMS}))  # fmt: skip
+    assert move[0] == "propose_from_template", json.dumps(decider.last)
+    assert move[1]["escrow"] == 0 and move[1]["strict"] is True
 
 
 async def test_a_tribute_paid_to_it_still_goes_out_under_a_budget() -> None:

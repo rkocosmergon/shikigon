@@ -29,6 +29,11 @@ FREE_KINDS = frozenset({"non_aggression", "trade_agreement", "alliance_public", 
 PAID_TO_ACCEPTER = frozenset({"mercenary", "conditional"})
 # The rule tree's templates (2.3.10, ``_resolve_propose_from_template``) by the kind they render to.
 TEMPLATES = {"T07_TRADE_AGREEMENT": "trade_agreement", "T08_NON_AGGRESSION": "non_aggression"}
+# The names the world reads a contract move's escrow under (cos20 ``core/actions/formen.py``):
+# ``escrow_amount`` for propose_contract and accept_contract, ``escrow`` for propose_from_template
+# and propose_counter. Until 0.1.13 only the first was read, and a template the head wrote with an
+# escrow passed as costing nothing (cos20 #492, tenth review).
+ESCROW_FIELDS = ("escrow_amount", "escrow")
 
 
 def same_id(one: Any, other: Any) -> bool:
@@ -75,15 +80,17 @@ def _kind_costs(kind: str, terms: dict[str, Any], accepting: bool, me: str) -> b
 
 
 def costs_me(action: str, params: dict[str, Any], state: Any) -> bool:
-    """True if this contract move costs this agent anything, now or later: its escrow, a tribute
-    it pays, the costs of an alliance, the reward and bombs of a mercenary it hires, a kind the
-    brain does not know. ``False`` for any move that is no contract move."""
+    """True if this contract move costs this agent anything, now or later: its escrow under any
+    name the world reads it by (``ESCROW_FIELDS``), a tribute it pays, the costs of an alliance,
+    the reward and bombs of a mercenary it hires, a kind the brain does not know. ``False`` for any
+    move that is no contract move."""
     if action not in CONTRACT_MOVES:
         return False
     view = _view(params)
-    escrow = files.finite(view.get("escrow_amount") or 0)
-    if escrow is None or escrow > 0:
-        return True
+    for name in ESCROW_FIELDS:
+        escrow = files.finite(view.get(name) or 0)
+        if escrow is None or escrow != 0:
+            return True
     me = str(getattr(state, "agent_id", "") or "")
     if action == "accept_contract":
         offer = _offer(state, view.get("contract_id"))
