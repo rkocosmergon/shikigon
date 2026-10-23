@@ -5,6 +5,9 @@ description = "Shikigon's brain: a Cosmergon agent that wants to play."
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
+    # >=0.27.34: an answer of the world in the wrong form (no JSON, a list for an object, a
+    #   number that is not finite, nesting too deep) ends no reader, Retry-After read by its
+    #   form (cos20 #492, sixth review).
     # >=0.27.33: every answer of the world without control characters (not only the state),
     #   missions() at most 50, refresh_state() raises on 401/403 so a key that ended is told
     #   apart from a world that did not answer (cos20 #492, fifth review).
@@ -20,10 +23,11 @@ dependencies = [
     # 0.26.0 brought mission_word / mission_outcome_text (cos20 #475).
     # [dashboard]: "open terminal" starts cosmergon-dashboard, which needs textual; without
     # the extra the client only prints how to install it (seen in a fresh container, 11.10.2026).
-    "cosmergon-agent[dashboard]>=0.27.33",
-    # >=2.3.9: missions only on fields the server names ready, a contract it cannot accept is
-    #   rejected (cos20 #529).
-    "cosmergon-decider-tree>=2.3.9",
+    "cosmergon-agent[dashboard]>=0.27.34",
+    # >=2.3.10: the facts of the world read in their form, ready_fields as one set (cos20 #492,
+    #   sixth review). >=2.3.9: missions only on fields the server names ready, a contract it
+    #   cannot accept is rejected (cos20 #529).
+    "cosmergon-decider-tree>=2.3.10",
 ]
 
 [project.optional-dependencies]

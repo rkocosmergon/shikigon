@@ -14,15 +14,15 @@ certifi==2026.10.19 \
     # via
     #   httpcore
     #   httpx
-cosmergon-agent==0.27.33 \
-    --hash=sha256:c5c32fa6a8514f0904562329cc1f1ef53af140954208d08a605dacc194b513e9 \
-    --hash=sha256:f0a3314158039582405e3fb978a5e71c0e34a1df24723bda3726f0766ead31df
+cosmergon-agent==0.27.34 \
+    --hash=sha256:2afeb4c904e1b1f8cd08ba2fa9c7a64b16fa18a0f9aada0eee54b2c6e86cdea0 \
+    --hash=sha256:3e22cec36a00fc573d2270f1384986a4d1e3d84843123463b50431924cc8654b
     # via
     #   -r requirements.in
     #   cosmergon-decider-tree
-cosmergon-decider-tree==2.3.9 \
-    --hash=sha256:7fac0d38abaeb24e14abec7b3e4bc8243282f8d14935cbe9fe8c7266cb4b75be \
-    --hash=sha256:ceab6484f31f8c9ed36e08e15b1159ff6d26032555a220f057b8f896e6867e81
+cosmergon-decider-tree==2.3.10 \
+    --hash=sha256:a41e062d8c5750808095f9f9b7c08c62ea41f3305de37c788eb10c5fe9afff86 \
+    --hash=sha256:a6622afd24dd472537c9514615c555775714ca893f0ac4fad3f2d35e56ba7e72
     # via -r requirements.in
 h11==0.16.0 \
     --hash=sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1 \
