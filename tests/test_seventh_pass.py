@@ -22,6 +22,7 @@ import ast
 import functools
 import io
 import json
+import re
 import socket
 import sys
 import time
@@ -263,3 +264,35 @@ def test_every_loop_of_the_brain_is_made_by_run_loop() -> None:
             if isinstance(node, ast.Attribute) and node.attr == "run" and \
                     isinstance(node.value, ast.Name) and node.value.id == "asyncio":
                 pytest.fail(f"{path.name}:{node.lineno} asyncio.run")
+
+
+# --- claims of the README that had no test (cos20 #492, register of claims, threat model §6) ---
+
+
+def test_an_agents_list_of_models_takes_its_version_and_its_listing_time_at_most() -> None:
+    """README: "from your agent 1 MiB within 40 seconds (its version, then its list)"."""
+    seen: list[dict[str, Any]] = []
+
+    def run(argv: list[str], **kwargs: Any) -> Any:
+        seen.append({"argv": list(argv), **kwargs})
+        said = "1.4.0\n" if list(argv) == connections.AGENTS["pi"]["version"] else "p m\nx y\n"
+        return SimpleNamespace(returncode=0, stdout=said, stderr="")
+
+    assert connections.agent_models("pi", run=run) == ["x/y"]
+    assert [s["timeout"] for s in seen] == [connections.VERSION_S, 30]
+    assert connections.VERSION_S + 30 <= 40
+    assert connections.AGENT_OUTPUT_BYTES == 1024 * 1024
+
+
+def test_nothing_is_installed_or_sent_before_the_first_click() -> None:
+    """Guards the form behind README "Nothing is installed and nothing is sent before that
+    click": the wake script starts on the click or the shortcut (``wake``), and otherwise only
+    where a Shikigon already lives here (``root.awake``); the brain runs only then."""
+    source = (ROOT / "qml" / "Service.qml").read_text(encoding="utf-8")
+    lines = source.splitlines()
+    starts = [i for i, line in enumerate(lines) if "waker.running = true" in line]
+    assert len(starts) == 3, starts
+    for i in starts:
+        before = "\n".join(lines[max(0, i - 6):i])
+        assert "function wake(" in before or "root.awake" in before, lines[max(0, i - 6):i + 1]
+    assert re.search(r"wantRunning:\s*awake\b", source)
