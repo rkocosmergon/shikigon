@@ -36,7 +36,6 @@ NAME_CHARS = 64  # a name from the world, as the bar shows it (status.json, the 
 WRITE_TOKENS = 120  # room for one short message
 ECHO = 0.8  # a text this close to the one it answers repeats it
 CONTRACT_MOVES = ("propose_contract", "propose_from_template")
-QUOTE = ("<<<", ">>>")
 NEVER = -1_000_000  # "talked on move NEVER": the first occasion may speak at once
 WORLD_ROOM = "world room"
 # How long an announced proposal waits for its move. The world counts a word that came shortly
@@ -133,7 +132,8 @@ def occasion(
         last = unanswered[-1]
         return Occasion("reply", to=str(last.from_player_id),
                         to_name=str(last.from_name or "an agent")[:NAME_CHARS],
-                        quote=str(last.text), message_id=str(last.id))  # fmt: skip
+                        quote=str(last.text)[:TEXT_CHARS],
+                        message_id=str(last.id))  # fmt: skip
     action, params = choice
     target = contract_target(action, params)
     if target:
@@ -153,11 +153,12 @@ def _targets(state: Any) -> tuple[Any, ...]:
 
 def write_messages(state: Any, occ: Occasion) -> list[dict[str, str]]:
     """What the model is told: the facts of its agent and the occasion. Never the key."""
-    left, right = QUOTE
     if occ.kind == "reply":
-        task = f"{occ.to_name} wrote to it: {left}{occ.quote}{right}\nWrite its answer."
+        task = (f"An agent named {advisor.quoted(occ.to_name, NAME_CHARS)} wrote to it: "
+                f"{advisor.quoted(occ.quote, TEXT_CHARS)}\nWrite its answer.")  # fmt: skip
     elif occ.kind == "announce":
-        task = (f"It is about to propose a {occ.contract} contract to {occ.to_name}. "
+        task = (f"It is about to propose a {occ.contract} contract to the agent named "
+                f"{advisor.quoted(occ.to_name, NAME_CHARS)}. "
                 "Write to them first: announce it and say what both gain.")  # fmt: skip
     else:
         task = "Write a short post for the world room: it is looking for allies, say for what."

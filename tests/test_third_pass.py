@@ -269,16 +269,24 @@ time.sleep(30)
 
 
 def _sleeper(parent: int) -> int | None:
+    """The agent below ``parent``: its child, or since the fourth review the child of the guard
+    between the brain and the agent (``connections.GUARD``)."""
+    parents: dict[int, int] = {}
+    sleepers: list[int] = []
     for entry in Path("/proc").iterdir():
         if not entry.name.isdigit():
             continue
         try:
             cmdline = (entry / "cmdline").read_bytes()
-            ppid = int((entry / "stat").read_text().rsplit(")", 1)[1].split()[1])
+            parents[int(entry.name)] = int(
+                (entry / "stat").read_text().rsplit(")", 1)[1].split()[1])
         except (OSError, ValueError, IndexError):
             continue
-        if b"61.25" in cmdline and ppid == parent:
-            return int(entry.name)
+        if b"61.25" in cmdline:
+            sleepers.append(int(entry.name))
+    for pid in sleepers:
+        if parent in (parents.get(pid), parents.get(parents.get(pid, 0))):
+            return pid
     return None
 
 

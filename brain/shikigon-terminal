@@ -4,6 +4,10 @@
 # its environment: arguments are visible in the process list, and /proc/<pid>/environ keeps a
 # process's starting environment for its whole life (cos20 #492 B7).
 set -euo pipefail
+# Every file the dashboard and its SDK make is the player's alone, as in shikigon-wake: the SDK
+# wrote ~/.cosmergon/config.toml with this shell's umask before it set 0600 (cos20 #492, fourth
+# review, K2; the SDK makes it 0600 from creation since 0.27.32).
+umask 077
 state="${XDG_STATE_HOME:-$HOME/.local/state}/shikigon"
 venv="$HOME/.local/share/shikigon/venv"
 if [ ! -f "$state/credentials.json" ]; then

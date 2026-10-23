@@ -31,10 +31,12 @@ import ipaddress
 import itertools
 import json
 import os
+import re
 import shutil
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -93,7 +95,13 @@ OPENCODE_ADVISOR = {
             "temperature": 0.2,  # as on the direct way; the model's own default made it invent
         },
         "title": {"disable": True},
-    }
+    },
+    # Never shared (cos20 #492, fourth review): OpenCode 1.19 shares a `run` session when the
+    # player's own config says `"share": "auto"` (or `autoshare`), or OPENCODE_AUTO_SHARE is set
+    # (share/session.ts:43). The switch that holds whatever config wins the merge is the
+    # environment's OPENCODE_DISABLE_SHARE (share/share-next.ts:23, see AGENTS); this is the
+    # second layer, and `agent_env` takes OPENCODE_AUTO_SHARE out.
+    "share": "disabled",
 }
 
 # The agents Shikigon can ask without a terminal. ``argv`` is the agent's own documented
@@ -139,8 +147,14 @@ AGENTS: dict[str, dict[str, Any]] = {
         # OpenCode 1.19 reads every opencode.json and .opencode/ from its working folder up to
         # `/` (project.ts:217, config/paths.ts:10-41), and a configured MCP server starts on
         # the first question whatever the agent may do (session/tools.ts:136).
+        # OPENCODE_DISABLE_SHARE: every way to OpenCode's share service returns before the
+        # network (share/share-next.ts:23). Set here, not in the config: an account's or a managed
+        # config is merged over OPENCODE_CONFIG_CONTENT (config/config.ts) and could turn
+        # sharing back on there (cos20 #492, fourth review).
         "env": {"OPENCODE_CONFIG_CONTENT": json.dumps(OPENCODE_ADVISOR),
-                "OPENCODE_DISABLE_PROJECT_CONFIG": "1"},
+                "OPENCODE_DISABLE_PROJECT_CONFIG": "1", "OPENCODE_DISABLE_SHARE": "1"},
+        "unset": ("OPENCODE_AUTO_SHARE",),
+        "forget": ["opencode", "session", "delete"],
         "model_flag": ["-m", "{model}"],
         "answer": "opencode-json",
         "sign_in": ["opencode", "auth", "login"],
@@ -182,7 +196,7 @@ def is_placeholder(path: Path) -> bool:
         return False
 
 
-def installed(agent: str, run: Callable[..., Any] = subprocess.run) -> bool:
+def installed(agent: str, run: Callable[..., Any] | None = None) -> bool:
     """True if the agent's real program is here. Omarchy's own rule (omarchy-default-agent):
     anything at the command's path that is not the stub is the user's install; a stub counts
     only if mise already holds the program. The command itself is never started."""
@@ -193,9 +207,9 @@ def installed(agent: str, run: Callable[..., Any] = subprocess.run) -> bool:
         return True
     if shutil.which("mise") is None:
         return False
-    try:
-        done = in_empty_folder(run, ["mise", "where", agent], capture_output=True, timeout=10,
-                               check=False)
+    try:  # in a group of its own: a timeout ends mise and what it started (K14)
+        done = in_empty_folder(run or run_in_group, ["mise", "where", agent],
+                               capture_output=True, timeout=10, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
     return int(done.returncode) == 0
@@ -222,9 +236,12 @@ def in_empty_folder(run: Callable[..., Any], argv: list[str], **kwargs: Any) -> 
 
 
 def agent_env(agent: str) -> dict[str, str]:
-    """The environment an agent's command runs in: the player's own, and what Shikigon sets
-    for this agent (``AGENTS[...]["env"]``), for the question and for the model listing alike."""
-    return {**os.environ, **AGENTS.get(agent, {}).get("env", {})}
+    """The environment an agent's command runs in: the player's own, without what would send
+    the talk elsewhere (``AGENTS[...]["unset"]``), and what Shikigon sets for this agent
+    (``AGENTS[...]["env"]``), for the question and for the model listing alike."""
+    spec = AGENTS.get(agent, {})
+    own = {k: v for k, v in os.environ.items() if k not in spec.get("unset", ())}
+    return {**own, **spec.get("env", {})}
 
 
 # ---------- the choice ----------------------------------------------------------------------
@@ -816,6 +833,40 @@ class TooMuchOutput(subprocess.SubprocessError):
     """An agent that printed past ``AGENT_OUTPUT_BYTES``."""
 
 
+# The leader of every agent's group, between the brain and the agent (cos20 #492, fourth review,
+# K14). When the brain ends, also by SIGKILL, which reaches no handler of the brain (the
+# terminal's deadline, Quickshell tearing down a Process), the kernel sends this leader SIGTERM
+# (PR_SET_PDEATHSIG) and it ends the whole group: the agent and everything the agent started.
+# The signal is not inherited over fork, so set on the agent itself it would have ended the
+# agent alone. It ties to the thread that started it, and ``run_in_group`` waits in that thread
+# until the leader is gone. Standard library only, run with ``-I``. argv: the brain's pid, then
+# the agent's command.
+GUARD = """
+import ctypes, os, signal, sys
+def end(*_):
+    os.killpg(0, signal.SIGKILL)
+signal.signal(signal.SIGTERM, end)
+if ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGTERM) != 0:  # PR_SET_PDEATHSIG
+    sys.exit("shikigon: the agent's guard could not tie itself to the brain")
+if os.getppid() != int(sys.argv[1]):  # the brain ended before the tie held
+    end()
+child = os.fork()
+if child == 0:
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    os.execvp(sys.argv[2], sys.argv[2:])
+code = os.waitstatus_to_exitcode(os.waitpid(child, 0)[1])
+sys.exit(code if code >= 0 else 128 - code)
+"""
+
+
+def guarded(argv: list[str], env: dict[str, str] | None) -> list[str]:
+    """``argv`` behind ``GUARD``. A program that is not there fails here, as ``Popen`` did."""
+    path = (env if env is not None else os.environ).get("PATH")
+    if shutil.which(argv[0], path=path) is None:
+        raise FileNotFoundError(2, "No such file or directory", argv[0])
+    return [sys.executable, "-I", "-c", GUARD, str(os.getpid()), *argv]
+
+
 def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str] | None = None,
                  input: str | None = None, timeout: float | None = None,
                  capture_output: bool = True, text: bool = True, check: bool = False) -> Any:
@@ -829,11 +880,13 @@ def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str]
     is ended while its leader is not yet reaped, so its number cannot belong to anyone else.
     A child that opens a session of its own (``setsid``) leaves the group; that stays named
     (threat model K14). While it runs, the group stands in ``GROUPS``: when the brain itself is
-    stopped, ``end_groups`` ends it too (``shikigon_brain.end_with_its_agents``)."""
+    stopped, ``end_groups`` ends it too (``shikigon_brain.end_with_its_agents``). The group's
+    leader is ``GUARD``: when the brain ends without a word (SIGKILL), the guard ends the group."""
     del capture_output, check  # always captured, never raised on the exit code
     stdin = subprocess.PIPE if input is not None else subprocess.DEVNULL
-    with subprocess.Popen(argv, cwd=cwd, env=env, stdin=stdin, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE, start_new_session=True) as proc:
+    with subprocess.Popen(guarded(argv, env), cwd=cwd, env=env, stdin=stdin,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          start_new_session=True) as proc:
         GROUPS.add(proc.pid)
         try:  # out of GROUPS before the leader is reaped: its number may then be anyone's
             out, err, over = bytearray(), bytearray(), threading.Event()
@@ -986,6 +1039,42 @@ def opencode_text(output: str) -> str:
     return "\n".join(texts).strip()
 
 
+SESSION_ID = re.compile(r"[A-Za-z0-9_]{1,128}")  # OpenCode's session ids: ``ses_`` and letters
+
+
+def opencode_session(output: str) -> str:
+    """The session ``opencode run --format json`` names in its events; empty if none or odd.
+
+    Every event line carries ``sessionID`` (OpenCode 1.19 ``run.ts:678-684``). An id that is not
+    letters, digits and ``_`` is not taken: it becomes an argument of the next command."""
+    for line in output.splitlines():
+        try:
+            event = files.loads(line)
+        except ValueError:
+            continue
+        found = event.get("sessionID") if isinstance(event, dict) else None
+        if isinstance(found, str) and SESSION_ID.fullmatch(found):
+            return found
+    return ""
+
+
+def forget(agent: str, output: str, run: Callable[..., Any]) -> None:
+    """Delete the session the agent kept of this question (cos20 #492, fourth review).
+
+    ``opencode run`` stores every session under ``~/.local/share/opencode``: the question, the
+    talk before it, the situation, other players' messages. They stayed after "Remove". Now the
+    brain deletes its session once the answer is read (``opencode session delete``, 1.19
+    ``cli/cmd/session.ts:52``; it finds a session by its id from any folder). A failed delete
+    leaves the session where OpenCode keeps it; the README names that place."""
+    argv: list[str] = list(AGENTS.get(agent, {}).get("forget") or [])
+    session = opencode_session(output) if argv else ""
+    if not session:
+        return
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        in_empty_folder(run, [*argv, session], env=agent_env(agent), capture_output=True,
+                        text=True, timeout=30, check=False)
+
+
 def last_line(text: str) -> str:
     lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
     return lines[-1][:200] if lines else ""
@@ -1018,6 +1107,7 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
         answer = opencode_text(done.stdout)
     else:
         answer = done.stdout.strip()
+    forget(str(conf["agent"]), done.stdout, run)
     if done.returncode != 0 or not answer:
         said = last_line(done.stderr) or last_line(done.stdout) or f"exit {done.returncode}"
         if any(mark in said.lower() for mark in NOT_SIGNED_IN):

@@ -33,6 +33,12 @@ ANSWER_PATIENCE = 3  # a question waits this many times ``timeout_s``: a person 
 
 Send = Callable[[list[dict[str, str]], int], Awaitable[str]]
 
+# What a string of the world may fill in a prompt (cos20 #492, fourth review, K35/K6). The SDK
+# reads up to 8 MiB an answer; a configured world put that much into every question on the
+# player's model allowance. A fact is a line, a name a name.
+FACT_CHARS = 300
+QUOTE = ("<<<", ">>>")  # around text another player wrote; the system prompts name these marks
+
 MOVE_SYSTEM = (
     "You advise a player of Cosmergon, an economy game built on Conway's Game of Life. "
     "The game's rules have already picked the moves that are sound right now. "
@@ -128,6 +134,24 @@ async def proposals(
     return found
 
 
+def cut(value: Any, chars: int) -> str:
+    """``value`` as text of at most ``chars`` characters; a cut ends in "…". Not text: as JSON."""
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+    return text if len(text) <= chars else text[: chars - 1] + "…"
+
+
+def quoted(value: Any, chars: int) -> str:
+    """Another player's text for a prompt: between ``QUOTE``, cut to ``chars``, the marks out.
+
+    The one way such a text enters a prompt. ``<`` and ``>`` in the text become ``‹`` and ``›``:
+    a message or contract terms with ``>>>`` in them ended the quote, and what followed reached
+    the model as the brain's own words (cos20 #492, fourth review). Names of other players go
+    through here too; outside the quote a name could carry a sentence of its own.
+    """
+    inner = cut(value, chars).replace("<", "‹").replace(">", "›")
+    return f"{QUOTE[0]}{inner}{QUOTE[1]}"
+
+
 def place(ranking: Any) -> tuple[int, int]:
     """Its place in the one ranking and how many are ranked: ``(rank, of)``, ``(0, 0)`` unranked.
 
@@ -146,7 +170,7 @@ def standing(state: Any) -> list[str]:
     if ranking is None:
         return []
     lines = []
-    goal = str(getattr(ranking, "ziel", "") or "")
+    goal = cut(getattr(ranking, "ziel", "") or "", FACT_CHARS)
     if goal:
         lines.append(f"Goal of the game: {goal}")
     rang, of = place(ranking)
@@ -166,20 +190,22 @@ def facts(state: Any) -> str:
     if state is None:
         return "The world did not answer just now; nothing is known about the agent's state."
     situation = getattr(getattr(state, "world_briefing", None), "situation", None)
+    name = cut(getattr(state, "agent_name", "") or "", 64)
+    persona = cut(getattr(state, "persona_type", "") or "", 64)
     lines = [
-        f"Agent: {getattr(state, 'agent_name', '')} ({getattr(state, 'persona_type', '')})",
+        f"Agent: {name} ({persona})",
         f"Energy: {round(float(getattr(state, 'energy', 0.0)), 1)}",
         f"Fields: {len(getattr(state, 'fields', []) or [])}",
-        f"Compass: {getattr(state, 'compass_preset', None) or 'autonomous'}",
+        f"Compass: {cut(getattr(state, 'compass_preset', None) or 'autonomous', 64)}",
         *standing(state),
     ]
     if situation is not None:
-        lines.append(f"Energy trend: {situation.energy_trend}")
+        lines.append(f"Energy trend: {cut(situation.energy_trend, 64)}")
         if situation.active_catastrophe:
-            lines.append(f"Catastrophe: {situation.active_catastrophe}")
+            lines.append(f"Catastrophe: {cut(situation.active_catastrophe, FACT_CHARS)}")
     step = getattr(state, "next_step", None)
     if step:
-        lines.append(f"The server's advice: {step.get('next', '')}")
+        lines.append(f"The server's advice: {cut(step.get('next', ''), FACT_CHARS)}")
     offers = open_energy_offers(state)
     if offers:
         lines.append(

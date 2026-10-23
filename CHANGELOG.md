@@ -2,7 +2,7 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## 0.1.13 (2026-10-22)
+## 0.1.13 (2026-10-23)
 
 - **Nothing goes over plain http to another machine,** also without a key. Your question, the
   talk so far and the situation went in plain text to any http address that wanted no key; on a
@@ -19,15 +19,33 @@ What changed for someone who uses Shikigon. Newest first.
   its own, up to `/`: another user's `/tmp/opencode.json` could start a program of theirs as you.
   Now the folder lies in Shikigon's own state folder, and OpenCode reads no project
   configuration at all.
-- **Your agent ends when the brain does.** Stopped by the bar (a change of "advise on moves")
-  or a closed terminal, the brain now ends the agent it was asking, instead of leaving it to run
-  to its own end.
+- **Your agent ends when the brain does,** and with it everything your agent started. Stopped
+  by the bar (a change of "advise on moves") or a closed terminal, the brain now ends the agent
+  it was asking, instead of leaving it to run to its own end. Killed without a word (the
+  terminal's time limit, a reload of the shell), the brain could not; now a small guard between
+  the brain and each agent ends the agent's whole group then. The terminal waits longer than the
+  brain for an answer (300 s) and asks it to stop before it kills it (`cosmergon-agent` 0.27.32).
+- **OpenCode shares nothing and keeps nothing.** If your OpenCode was set to share sessions
+  (`"share": "auto"`, `autoshare`, `OPENCODE_AUTO_SHARE`), every call of Shikigon's was shared
+  with OpenCode's share service, your question and the situation with it. Now sharing is off for
+  these calls whatever your OpenCode, an account or a managed config says, and Shikigon deletes
+  the session of each question once it has the answer.
+- **Another player's text stays inside its quote.** A message or contract terms with `>>>` in
+  them ended the quote around them, and what followed reached the model as the brain's own words.
+  Now `<` and `>` in such a text become `‹` and `›`, and the names of other players stand inside
+  the quote too.
+- **What the world sends fills a prompt only so far:** each of its sentences a line, its rules
+  12,000 characters, a message 280. A configured world could put up to 8 MiB into every question
+  on your model's allowance.
 - **Every file it keeps is yours alone (0600),** made so from the start. A file an earlier version
   left readable for others is renewed once, so a program that opened it then reads nothing more.
 - **Smaller fixes:** a world's sentence on stderr comes without control characters, also in a
   terminal; the echo check of a message compares no more than the message; the README no longer
   says pi looks back with a tool. The terminal shows the server's advice and your partner code as
-  text (`cosmergon-agent` 0.27.31).
+  text (`cosmergon-agent` 0.27.31). Hints go to `notify-send` after `--`, so an agent named
+  `--icon=…` is a title, not an option. The terminal makes its files for you alone (`umask 077`).
+  The README says what "Remove" leaves (`~/.cosmergon`, a session of OpenCode's), that your agent
+  sends on over its own connection, and that `K` in the terminal shows the key.
 
 - **Every key goes only to the address it was given for.** A key named by `api_key_env` went to
   any address you picked in the panel afterwards; now it goes only to the `base_url` of the same
@@ -55,7 +73,10 @@ What changed for someone who uses Shikigon. Newest first.
   kept it there for the client's whole life, readable for you and root. Now it goes over a file
   descriptor (`--api-key-fd`, `cosmergon-agent` 0.27.30). A sentence the world sent with a
   refusal went into the terminal's log as markup, with its control characters; now every
-  foreign text there is text.
+  foreign text there is text. With `cosmergon-agent` 0.27.32 that holds for the numbers too
+  (tick, rank, how many are ranked): they are read as numbers, so text in their place cannot
+  reach the terminal. The terminal opens only https addresses in your browser, and its settings
+  (`~/.cosmergon`) are yours alone from the first byte.
 
 ## 0.1.12 (2026-10-22)
 

@@ -822,6 +822,10 @@ RULE_PARTS = ("actions", "conway_rules", "economy", "tournaments", "player_tiers
 # a sentence on every action) would grow it again and leave no action "other"; the head learns
 # what its moves did from each answer's ``energy_effect`` instead.
 PROGRAM_ONLY = ("use_case", "requires", "effects", "forms", "your_effect")
+# The rules in a prompt, at most: cosmergon.com's came to 6,191 characters (23.10.2026), and a
+# configured world could send up to 8 MiB into every question (cos20 #492, fourth review, K35).
+# Twice today's, so the 4,000-token window above still holds them; a cut ends in "…".
+RULES_CHARS = 12_000
 
 
 def chat_path() -> Path:
@@ -858,7 +862,7 @@ def world_rules(cfg: dict[str, Any], get: Callable[..., Any]) -> str:
     }
     rules["actions"] = {name: body for name, body in actions.items() if body}
     rules["other_actions"] = sorted(name for name, body in actions.items() if not body)
-    return json.dumps(rules)
+    return advisor.cut(json.dumps(rules), RULES_CHARS)
 
 
 def world_forms(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:

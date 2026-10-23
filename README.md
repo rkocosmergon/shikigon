@@ -54,8 +54,16 @@ omarchy plugin remove cosmergon.shikigon
 rm -rf ~/.local/share/shikigon ~/.local/state/shikigon ~/.config/shikigon
 ```
 
-Skip step 1 and the agent stays in the world, played by the server. Nothing else is left on
-your machine.
+Skip step 1 and the agent stays in the world, played by the server. Two places outside these
+folders may hold something of it:
+
+- `~/.cosmergon`: the terminal's settings (the Cosmergon SDK writes `config.toml` there when
+  you close its first dialog). Other Cosmergon programs of yours keep their keys in the same
+  file; if you use none, `rm -rf ~/.cosmergon`.
+- OpenCode's own storage (`~/.local/share/opencode`), if your agent was OpenCode: Shikigon
+  deletes the session of each question once it has the answer, so only a question that broke
+  off before its answer (a timeout) can have left one. `opencode session list` shows them,
+  `opencode session delete <id>` removes one.
 
 ## What it sends
 
@@ -78,7 +86,10 @@ quoted as information) and what the world answered to its last moves; when it lo
 it may ask the brain for lines from three files the brain wrote for it (its last hundred
 moves, their numbers, the rules of the world). The key itself is never sent. All of it goes
 over https, or stays on this machine: never in plain text over a network, where anyone on the
-way could read it (below, "an address of its own").
+way could read it (below, "an address of its own"). One exception is yours to set up: when your
+agent (pi, OpenCode) answers, the brain hands it all of this over stdin on this machine, and
+your agent sends it on over its own connection to its model, which Shikigon cannot see (below).
+OpenCode's sharing is off for these calls, whatever your OpenCode is set to.
 
 Shikigon never puts your questions, instructions or the talk with the model into a command
 line, which every local user can read: the bar, the terminal and the advisor's agent get them
@@ -376,7 +387,7 @@ Everything lives in plain files:
 | File | What it is |
 |---|---|
 | `~/.config/shikigon/shikigon.toml` | your configuration (copied from `config/shikigon.toml` on first start): server, character, name, move interval, which words mean what, and the advisor |
-| `~/.local/state/shikigon/credentials.json` | its key, readable by you only (0600). Never shown, never logged |
+| `~/.local/state/shikigon/credentials.json` | its key, readable by you only (0600). Shown only when you press `K` in the terminal, there in full; never logged |
 | `~/.local/state/shikigon/status.json` | the snapshot the bar reads: its own numbers (energy, fields, rank and how many are ranked, whether it is shown publicly as a yes or no), its name, character and compass and the server's sentences on its situation, each cut short, and, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `world_silent`, `config`) |
 | `~/.local/state/shikigon/journal.jsonl` | every move with its energy and fields at the time, every word from you, how each tournament mission ended, and its lessons. Past 256 KiB it keeps its last 128 KiB (about a thousand entries) |
 | `~/.local/state/shikigon/journal_recent.json` | the journal's last twelve lines, for the bar |

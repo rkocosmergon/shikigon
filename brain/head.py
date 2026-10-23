@@ -57,7 +57,6 @@ CONTRACT_ANSWERS = ("accept_contract", "reject_contract")
 OWN_FORM = frozenset({"start_mission", *CONTRACT_ANSWERS, "wait"})
 FORM_CHARS = 700  # the forms of one move in the situation (market_list has one per kind)
 Forms = dict[str, list[dict[str, Any]]]
-QUOTE = ("<<<", ">>>")
 _NOISE = {"sichtbarkeits_schwelle", "cost_by_cube_size", "reference_prices", "mission_types"}
 
 HEAD_SYSTEM = (
@@ -197,8 +196,8 @@ def contracts_in(state: Any) -> list[str]:
     for c in active:
         who = f"agent {c['partner_id']}" if c.get("partner_id") else "an open call"
         end = f"until tick {c['ends_at_tick']}" if c.get("ends_at_tick") else "without end"
-        lines.append(f"- {c.get('contract_type')} with {who}, {end}, terms {QUOTE[0]}"
-                     f"{_short(c.get('terms') or {}, 160)}{QUOTE[1]}")
+        lines.append(f"- {c.get('contract_type')} with {who}, {end}, terms "
+                     f"{advisor.quoted(c.get('terms') or {}, 160)}")
     kinds = {c.get("contract_type") for c in active}
     if kinds - {"custom"}:
         lines.append("  the world books tribute, costs and rewards itself: never transfer them")
@@ -220,8 +219,8 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
     offers = []
     for c in tuple(getattr(state, "pending_contracts", None) or ())[:5]:
         offers.append(f"- contract_id {c.get('contract_id')}: {c.get('contract_type')} from "
-                      f"{c.get('from_player_id')}, terms {QUOTE[0]}"
-                      f"{_short(c.get('terms') or {}, 160)}{QUOTE[1]}")
+                      f"{c.get('from_player_id')}, terms "
+                      f"{advisor.quoted(c.get('terms') or {}, 160)}")
     if offers:
         parts.append("Contracts offered to you:\n" + "\n".join(offers))
     inside = contracts_in(state)
@@ -506,9 +505,9 @@ class HeadDecider:
         self._allowed -= blocked
         if self._again < HEAD_RETRIES:
             self._again += 1
-            said = _short(refused.get("why") or "no reason given", 200)
+            said = advisor.quoted(refused.get("why") or "no reason given", 200)
             self._talk.append({"role": "user", "content": (
-                f"The world refused {refused.get('action')}: {QUOTE[0]}{said}{QUOTE[1]}. "
+                f"The world refused {refused.get('action')}: {said}. "
                 "Choose again from the moves offered.")})
             move, why_not = await self._ask()
             if move is not None:
