@@ -88,8 +88,9 @@ moves, their numbers, the rules of the world). The key itself is never sent. Wha
 sends goes over https, or stays on this machine: never in plain text over a network, where
 anyone on the way could read it (below, "an address of its own"). When your agent (pi) answers,
 the brain hands it all of this over stdin on this machine, and your agent sends it on over its
-own connection to its model: Shikigon lets the agent connect only to port 443, the port of
-https. The kernel sees the port, not the encryption: an address your agent's own setup writes as
+own connection to its model: Shikigon lets the agent open TCP connections only to port 443, the
+port of https; UDP stays open, for name resolution. The kernel sees the port, not the
+encryption: an address your agent's own setup writes as
 `http://…:443` would still go in plain text (below, "A coding agent you already use"). pi adds
 none of your files to it: Shikigon starts it with a system prompt of its own and an appended
 line of its own, so pi's `SYSTEM.md` and `APPEND_SYSTEM.md`, its context files (`AGENTS.md`,
@@ -119,7 +120,8 @@ On your desktop, the bar runs inside the shell and touches only this:
   pi for its version (`--version`, again before each question), and asks the model servers on
   ports 11434 and 1234 of this machine for their models. When you let your agent take over,
   the brain calls it on every move, and every five moves for a look back; it gets no tool,
-  reads only lines the brain hands it (below), and reaches no port but 443.
+  reads only lines the brain hands it (below), and opens TCP connections to no port but 443
+  (UDP stays open, for name resolution).
 - **Files:** its folder above, and only small files there: the status, the last twelve journal
   lines, the last three exchanges of the talk and its lessons, which the brain keeps small for
   it; how far **wake** got (`setup.json`, one sentence) and which hints were shown
@@ -190,9 +192,10 @@ shows **WHO ANSWERS?**, one list:
   name `/` tells its model nothing of you. It never reads the agent's credentials; it runs your
   program as you. Starting
   the agent adds a few seconds to each answer. Your agent, and everything it starts, may
-  connect only to port 443, the port of https: before the agent starts, Shikigon asks the
-  kernel to hold it to that (Landlock, Linux 6.7 or later), and on a kernel without it no
-  question goes to an agent. The kernel sees the port, not the encryption: an address your
+  open TCP connections only to port 443, the port of https: before the agent starts, Shikigon
+  asks the kernel to hold it to that (Landlock, Linux 6.7 or later), and on a kernel without it
+  no question goes to an agent. The rule Shikigon sets covers TCP only: UDP stays open, because
+  the agent resolves names over it. The kernel sees the port, not the encryption: an address your
   agent's own setup writes as `http://…:443` would still go in plain text. A model server on
   this machine or in your home is not reached through your agent; pick it here directly (the
   next two points). Shikigon asks only the versions of pi it was tried with (1.2.0, 1.3.0 and

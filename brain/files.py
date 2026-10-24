@@ -190,21 +190,35 @@ def _keep_last(path: Path, keep_bytes: int) -> None:
         handle.truncate()
 
 
+# What ``tail`` reads at most. A line of the talk holds an answer whole (cos20 #468): from an agent
+# up to 1 MiB, written as JSON escapes up to six times that.
+TAIL_BYTES = 16 * 1024 * 1024
+
+
 def tail(path: Path, count: int, line_bytes: int = LINE_BYTES) -> list[dict[str, Any]]:
     """The last ``count`` lines that hold a JSON object, oldest first, read from the file's end.
 
-    A line that is not one (cut by a crash, or read while the file was being cut) is skipped.
+    ``line_bytes`` is a first guess at a line's length: the window grows until it holds ``count``
+    whole lines, the file's start or ``TAIL_BYTES``. Until 0.1.14 it stayed at the guess, and one
+    long line pushed the lines before it out: an answer of 50,000 characters emptied the talk the
+    bar shows, one of 20,000 the talk the next question is given, long refusals the head's last
+    moves (cos20 #566, F5, F7). A line that is not one (cut by a crash, or read while the file was
+    being cut) is skipped.
     """
     if not path.exists():
         return []
     with path.open("rb") as handle:
         handle.seek(0, os.SEEK_END)
         end = handle.tell()
-        block = min(end, line_bytes * count)
-        handle.seek(end - block)
-        lines = handle.read().decode("utf-8", "replace").splitlines()
-    if block < end:
-        lines = lines[1:]  # the first line may be cut
+        block = min(end, line_bytes * count, TAIL_BYTES)
+        while True:
+            handle.seek(end - block)
+            lines = handle.read(block).decode("utf-8", "replace").splitlines()
+            if block < end:
+                lines = lines[1:]  # the first line may be cut
+            if len(lines) >= count or block >= min(end, TAIL_BYTES):
+                break
+            block = min(end, 2 * block, TAIL_BYTES)
     entries: list[dict[str, Any]] = []
     for line in lines[-count:]:
         try:

@@ -608,7 +608,9 @@ class HeadDecider:
         """A new choice after the world said no; ``None`` when this tick has had enough.
 
         The head hears the world's answer and chooses again, at most ``HEAD_RETRIES`` times;
-        then the rules play once, unless theirs was the refused move.
+        then the rules play once, unless theirs was the refused move. That holds also where its
+        new move goes to the rules (``_take``, the learning budget): until 0.1.14 the rules' move
+        went out there unchecked, the one just refused among them (cos20 #566, F6).
         """
         if self.last is None:
             return None
@@ -626,8 +628,11 @@ class HeadDecider:
                 "Choose again from the moves offered.")})
             move, why_not = await self._ask()
             if move is not None:
-                return self._take(move)
-            self.last["fallback"] = why_not[:WHY_CHARS]
+                choice = self._take(move)
+                if not self.last.get("fallback"):
+                    return choice  # its own move goes out
+            else:
+                self.last["fallback"] = why_not[:WHY_CHARS]
         rules = self._rules
         if rules[0] == refused.get("action") or rules[0] in blocked:
             return None

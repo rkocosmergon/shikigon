@@ -282,6 +282,7 @@ def register(
         raise SystemExit("The world's answer to the registration could not be read.") from None
     if not (isinstance(agent_id, str) and agent_id and isinstance(api_key, str) and api_key):
         raise SystemExit("The world's answer to the registration named no agent and no key.")
+    leave_the_old_one(state_dir())
     creds = {
         "agent_id": agent_id,
         "api_key": api_key,
@@ -290,6 +291,32 @@ def register(
     }
     write_private(credentials_path(), creds)
     return {"agent_id": creds["agent_id"], "expires_at": creds["expires_at"]}
+
+
+def agent_paths(home: Path) -> list[Path]:
+    """What belongs to the agent that lives here, not to the player: its moves, what it learned
+    from them, the day its learning budget is measured against, its words, the missions it saw,
+    its snapshot. The talk with the advisor is the player's (cos20 #468), as are the choice of
+    advisor, its counter of calls and the bar's hints."""
+    import head
+    import lessons
+    import speech
+
+    return [home / lessons.JOURNAL_FILE, home / BAR_JOURNAL, home / lessons.LESSONS_FILE,
+            home / lessons.REVIEW_FOLDER, home / head.BUDGET_FILE, speech.memo_path(home),
+            home / seen_path().name, home / "status.json"]  # fmt: skip
+
+
+def leave_the_old_one(home: Path) -> None:
+    """A new Shikigon starts with nothing of the one that lived here (README: "a new Shikigon
+    starts without lessons"). Until 0.1.14 ``register --new`` kept it all: the new one was told
+    the old one's lessons and moves, measured its learning budget against the old one's day, and
+    proposed the contract the old one had announced to the old one's partner (cos20 #566, F1)."""
+    for path in agent_paths(home):
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink(missing_ok=True)
 
 
 def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
@@ -811,16 +838,23 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
     transfer as the rules' line), the latter only for the move it chose: a word written in its
     place gives nothing. Until 0.1.13 only the world's booking counted, and a world that sends
     none left the rest whole all day, for every transfer up to it (cos20 #492, eleventh review,
-    K45)."""
+    K45).
+
+    Only the move that went out counts, and only if it is the one the head chose: after a
+    refusal the rules can play (``fallback``), and a word can stand in its place (``speech``).
+    Until 0.1.14 ``own`` of the refused move stayed, and the rules' move was booked as the head's
+    loss: a field the rules built after a refused transfer used up the day's budget (cos20 #566,
+    F2)."""
     import head
     import lessons
 
     if not (advice.get("head") and last.get("ok")):
         return
+    if advice.get("fallback") or last.get("action") != advice.get("choice"):
+        return  # what went out is not the move the head chose
     effect = lessons.own_effect(last) if advice.get("own") else None
     loss = -effect if effect is not None else 0.0
-    if last.get("action") == advice.get("choice"):
-        loss = max(loss, files.finite(advice.get("gives")) or 0.0)
+    loss = max(loss, files.finite(advice.get("gives")) or 0.0)
     head.budget_spend(state_dir(), loss)
 
 
@@ -1001,7 +1035,7 @@ async def ask(
     learned = lessons.latest_text(state_dir())
     if learned:
         context += "\nWhat it learned from its own last moves:\n" + learned
-    conf = advisor.settings(cfg, state_dir())
+    conf = advisor_settings(cfg)
     turn = await advisor.answer(
         conf, state_dir(), question, context, chat_tail(CHAT_KEPT), send
     )
@@ -1030,23 +1064,36 @@ def decider_name(cfg: dict[str, Any], conf: dict[str, Any]) -> str:
 BUILT_IN = ("tree", "advised", "head")
 
 
+def advisor_settings(cfg: dict[str, Any]) -> dict[str, Any]:
+    """``advisor.settings`` as every caller in the brain reads them: the one place the day's
+    limit is set. While the head has taken over, its limit (``head_max_per_day``, the player's
+    to set, cos20 #527 D4) is the one limit, for every call on the one counter: a move, a look
+    back, a question, a word, the dry run. Until 0.1.14 two callers set it by hand, and a question
+    and the dry run were cut at ``max_per_day`` while the panel showed no limit (cos20 #566, F4)."""
+    import advisor
+
+    conf = advisor.settings(cfg, state_dir())
+    if decider_name(cfg, conf) == "head":
+        conf = {**conf, "max_per_day": conf.get("head_max_per_day", 0)}
+    return conf
+
+
 def advisor_now(cfg: dict[str, Any]) -> dict[str, Any]:
     """Who answers and how often it advises, for the panel."""
     import advisor
 
-    conf = advisor.settings(cfg, state_dir())
+    conf = advisor_settings(cfg)
     name = decider_name(cfg, conf)
     advise: int | str = advisor.every(conf) if name == "advised" else 0
-    limit_key = "max_per_day"
-    if name == "head":  # the head plays every move; a limit is the player's to set (#527 D4)
-        advise, limit_key = "head", "head_max_per_day"
+    if name == "head":  # the head plays every move
+        advise = "head"
     return {
         "picked": advisor.configured(conf),
         "label": advisor.who(conf) if advisor.configured(conf) else "",
         "via": str(conf.get("via") or "http"),
         "advise": advise,
         "calls": advisor.calls_today(state_dir()),
-        "limit": int(conf.get(limit_key, 0) or 0),
+        "limit": int(conf.get("max_per_day", 0) or 0),
     }
 
 
@@ -1064,7 +1111,7 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
     import connections
 
     home = state_dir()
-    conf = advisor.settings(cfg, home)
+    conf = advisor_settings(cfg)
     # The bar sends an address, a model and a key on stdin as one JSON line: an address can
     # carry a name and a password, and arguments stand in every local user's process list
     # (cos20 #492 F3). Arguments still work at a terminal for an agent (``agent:pi``), never for
@@ -1140,7 +1187,7 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
     import advisor
     import speech
 
-    conf = advisor.settings(cfg, state_dir())
+    conf = advisor_settings(cfg)
     name = "advised" if advised else decider_name(cfg, conf)
     if name in BUILT_IN:
         import contracts
@@ -1158,8 +1205,6 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
                 return asyncio.to_thread(world_forms, cfg, connections.bounded_get)
 
             inner = head.HeadDecider(inner, conf, state_dir(), forms=forms)
-            # one counter, one limit: the head's, which is the player's to set (D4)
-            conf = {**conf, "max_per_day": conf.get("head_max_per_day", 0)}
         if advised or not speech.wanted(conf):  # a dry run plays and says nothing
             return inner
         key = (load_credentials() or {}).get("api_key", "")
@@ -1180,7 +1225,7 @@ async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
     import lessons
 
     home = state_dir()
-    conf = advisor.settings(cfg, home)
+    conf = advisor_settings(cfg)
     if not advisor.configured(conf):
         return None
     send = send or advisor.sender(conf, home, patience=advisor.ANSWER_PATIENCE)
@@ -1191,7 +1236,6 @@ async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
         import connections
         import reading
 
-        conf = {**conf, "max_per_day": conf.get("head_max_per_day", 0)}
         secret = (load_credentials() or {}).get("api_key", "")
         world = await asyncio.to_thread(world_rules, cfg, connections.bounded_get)
         # it reads through the brain, never with a tool of its own (cos20 #492, K28)
@@ -1222,10 +1266,8 @@ def learning_next(cfg: dict[str, Any], state: Any, learning: Any) -> Any:
         return learning
     if learning is not None and not learning.cancelled() and learning.exception() is not None:
         print(f"learning failed: {learning.exception()!r}"[:200], file=sys.stderr)
-    import advisor
-
     every = lessons.LEARN_EVERY
-    conf = advisor.settings(cfg, state_dir())
+    conf = advisor_settings(cfg)
     if decider_name(cfg, conf) == "head":  # it has taken over: it looks back often (#527)
         every = max(1, int(conf.get("review_every", 5) or 5))
     if lessons.due(lessons.journal_tail(state_dir()), every):
