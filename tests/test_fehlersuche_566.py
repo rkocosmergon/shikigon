@@ -257,6 +257,14 @@ def test_f7_the_head_is_told_its_last_five_moves(home: Path) -> None:
 # F4: the limit while its agent has taken over
 
 
+def test_f4_the_brain_reads_the_advisor_settings_in_one_place() -> None:
+    """``advisor_settings`` sets the limit of the head mode; a caller of ``advisor.settings``
+    beside it would cut a call at ``max_per_day`` again (F4)."""
+    calls = [path.name for path in BRAIN.glob("*.py")
+             for _ in re.finditer(r"\badvisor\.settings\(", path.read_text())]
+    assert calls == ["shikigon_brain.py"], calls
+
+
 def test_f4_a_question_in_head_mode_follows_the_head_limit(home: Path) -> None:
     connections.choose(home, {"via": "http", **ADDRESS, "advise": "head"})
     cfg = shikigon_brain.load_config()  # shipped: max_per_day 500, head_max_per_day 0
