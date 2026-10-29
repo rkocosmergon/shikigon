@@ -2,8 +2,25 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## 0.1.14 (not yet released)
+## 0.1.14 (2026-10-29)
 
+- **Wake a new one starts clean.** After **wake a new one** the new Shikigon was told the old
+  one's lessons and look back, measured its learning budget against the old one's total, read
+  the old one's last moves as its own and could play a move the old one had announced. Now
+  nothing of the old agent is carried over: its moves, lessons, look back, learning budget,
+  words and snapshot go with it. Your talk, your advisor and its daily count stay yours.
+- **The learning budget counts only the head's own moves.** When the world refused a move and
+  the rules played instead, that move was counted against the head's budget; and a rules' move
+  refused a moment before could go out a second time with the head's next one. Neither happens
+  now.
+- **One daily limit while the head has taken over.** A question and the dry run followed the
+  advisor's limit instead of the head's; now every call follows the head's limit while it plays.
+- **Long answers keep the talk.** A long answer could empty the talk shown in the bar, and long
+  refusals could hide the head's last moves from it. The bar and the head now see the lines they
+  are meant to see.
+- **The README says what the kernel holds.** Your agent may open TCP connections only to port
+  443; UDP stays open, because the agent resolves names over it. The README said "connect only
+  to port 443" before.
 - **A model server with a CA of your own.** Shikigon checked https only against the
   certificates it brings along (certifi), so a server in your home with a certificate from your
   own CA (Caddy's `tls internal`, for instance) could not be reached directly, and the panel
