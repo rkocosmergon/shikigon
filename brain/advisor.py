@@ -526,6 +526,8 @@ async def answer(
 
         own_words = (connections.AgentError, connections.NotOurs)
         said = str(exc) if isinstance(exc, own_words) else type(exc).__name__
+        if connections.untrusted(exc):  # what the player can mend, in words (cos20 #599)
+            said = connections.UNTRUSTED
         turn["why"] = f"no answer ({said})"[:220]
         return turn
     turn["ms"] = int((time.monotonic() - started) * 1000)

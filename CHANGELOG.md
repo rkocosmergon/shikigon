@@ -2,6 +2,16 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## 0.1.14 (not yet released)
+
+- **A model server with a CA of your own.** Shikigon checked https only against the
+  certificates it brings along (certifi), so a server in your home with a certificate from your
+  own CA (Caddy's `tls internal`, for instance) could not be reached directly, and the panel
+  said no more than `ConnectError`. Now https is checked against your system's trust store, where
+  `sudo trust anchor --store ca.crt` puts your CA; pi reads the same store. A certificate the
+  store does not vouch for is still refused, and the panel now says so in words. The same store
+  is used for the world's own addresses; its public certificate is in it.
+
 ## 0.1.13 (2026-10-23)
 
 - **OpenCode is no longer asked, and pi adds none of your files.** pi appended its

@@ -231,7 +231,10 @@ shows **WHO ANSWERS?**, one list:
   way, and in a café `192.168.1.50` or `macmini.local` can be someone else's machine, which the
   advice and the moves would then reach on their own. For a model server elsewhere in your
   home, give it https, or open a tunnel (`ssh -L 11434:localhost:11434 macmini`, then
-  `http://localhost:11434/v1`). It asks for a key only if the address wants one; the key is then kept in a file only
+  `http://localhost:11434/v1`). https is checked against your system's trust store: a server
+  with a certificate from a CA of your own (Caddy's `tls internal`, for instance) is reached once
+  you add that CA to the system, `sudo trust anchor --store ca.crt`; pi reads the same store.
+  Until then the panel says that the certificate is not trusted here. It asks for a key only if the address wants one; the key is then kept in a file only
   you can read, and it goes only to the address you typed it for, and only over https or to a
   server on this machine (localhost) that runs as you, not as a system service, and never
   through a proxy set in your environment: never in plain text over a network, also not one that looks like

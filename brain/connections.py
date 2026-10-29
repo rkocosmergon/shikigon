@@ -39,6 +39,7 @@ import re
 import shutil
 import signal
 import socket
+import ssl
 import subprocess
 import sys
 import threading
@@ -498,7 +499,15 @@ async def exchange(method: str, url: str, *, headers: dict[str, str] | None = No
     The checks resolve the name of the address. They run inside the deadline, in a thread:
     until 0.1.13 they ran before it, in the brain's own loop, and a resolver that did not answer
     held every advised move and question past its time, the lesson beside the moves with it
-    (cos20 #492, sixth review, finding 7)."""
+    (cos20 #492, sixth review, finding 7).
+
+    https is checked against the system's trust store (cos20 #599), where Arch keeps a CA the
+    player added (``trust anchor --store``); until 0.1.14 against certifi alone, and a model
+    server with a CA of the player's own was not reached. ``ssl.create_default_context`` reads
+    OpenSSL's default places (``/etc/ssl/cert.pem``, ``/etc/ssl/certs``, or ``SSL_CERT_FILE`` /
+    ``SSL_CERT_DIR``); the Python of Arch and the one mise or uv bring (python-build-standalone)
+    have the same ones (measured 29.10.2026). One per call: it costs what httpx's own certifi
+    context did (6.7 against 7.0 ms on the device), and a CA added counts at once."""
     import httpx
 
     with_key = "Authorization" in (headers or {}) or credentials_in(url)
@@ -506,8 +515,10 @@ async def exchange(method: str, url: str, *, headers: dict[str, str] | None = No
     async with asyncio.timeout(seconds):
         local = await asyncio.to_thread(may_send, url, with_key)
         trace = {"trace": async_peer_check(local, with_key)}
+        verify = ssl.create_default_context()
         async with (
-            httpx.AsyncClient(timeout=timeout, transport=transport, trust_env=not local) as client,
+            httpx.AsyncClient(timeout=timeout, transport=transport, trust_env=not local,
+                              verify=verify) as client,
             client.stream(method, url, headers=sent, json=payload, extensions=trace) as resp,
         ):
             body = await bounded_body(resp)
@@ -635,6 +646,8 @@ def models_at(base_url: str, get: Callable[..., Any], key: str = "") -> dict[str
     except (AgentError, NotOurs) as exc:  # the door's own sentence (the rules above, again)
         return {"ok": False, "models": [], "why": str(exc)}
     except Exception as exc:  # noqa: BLE001 — any failure is the same answer: not reachable
+        if untrusted(exc):  # the one failure the player can mend here (cos20 #599)
+            return {"ok": False, "models": [], "why": UNTRUSTED}
         # the host alone: an address can carry a name and a password (https://me:pw@…)
         why = f"no answer from {short_host(base_url)} ({type(exc).__name__})"
         return {"ok": False, "models": [], "why": why}
@@ -795,12 +808,34 @@ NOT_OURS = ("that address is on this machine, and its port is not yours right no
             "user listens there or took the connection, or nothing listens): nothing was sent")
 NOT_OURS_SHORT = "its port on this machine is not yours right now"  # the panel's move line
 
+# A server whose certificate the system's store does not vouch for (cos20 #599): said in words,
+# because the player who runs a model server with a CA of their own learns here what to do.
+UNTRUSTED = ("its certificate is not trusted on this machine (a CA of your own: "
+             "sudo trust anchor --store <ca.crt>)")
+UNTRUSTED_SHORT = "its certificate is not trusted on this machine"  # the panel's move line
+
+
+def untrusted(exc: BaseException) -> bool:
+    """True if ``exc`` or what it came from is a certificate the store does not vouch for.
+
+    httpx raises ``ConnectError``; the ``ssl.SSLCertVerificationError`` stands behind it."""
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        if isinstance(cur, ssl.SSLCertVerificationError):
+            return True
+        seen.add(id(cur))
+        cur = cur.__cause__ or cur.__context__
+    return False
+
 
 def failed_why(exc: BaseException) -> str:
     """What a failed call is called on the panel: an agent's own words, the port that is not
-    the player's in words, anything else by its kind."""
+    the player's or a certificate not trusted in words, anything else by its kind."""
     if isinstance(exc, AgentError):
         return str(exc)
+    if untrusted(exc):
+        return UNTRUSTED_SHORT
     return NOT_OURS_SHORT if isinstance(exc, NotOurs) else type(exc).__name__
 
 
