@@ -135,7 +135,7 @@ def test_every_program_the_brain_starts_runs_in_the_neutral_folder(
     stub.parent.mkdir()
     stub.write_text('#!/bin/bash\nmise use -g --quiet "pi" || exit 1\n')  # Omarchy's placeholder
     monkeypatch.setattr(connections.shutil, "which",
-                        lambda cmd: {"pi": str(stub), "mise": "/usr/bin/mise"}.get(cmd))
+                        lambda cmd, **_: {"pi": str(stub), "mise": "/usr/bin/mise"}.get(cmd))
     monkeypatch.chdir(tmp_path)  # a working folder with something in it
     started: list[tuple[str, bool]] = []
 
@@ -147,6 +147,7 @@ def test_every_program_the_brain_starts_runs_in_the_neutral_folder(
         return version_answer(argv) or listing
 
     connections.installed("pi", run=run)
+    stub.write_text("\x7fELF" + "x" * 5000)  # mise installed it: no stub is started
     connections.agent_models("pi", run=run)
     connections.run_agent({"agent": "pi"}, "question", 5.0, run=run)
     # its version before the listing and before the question (cos20 #492, finding 11)

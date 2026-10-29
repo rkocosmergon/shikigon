@@ -22,7 +22,8 @@ Three rules this file keeps (cos20 #451, concept 10.5d):
    above it (``mise`` does) reads none of another user; and the folder's name names nobody, so
    an agent that tells its model where it runs (pi does) tells it nothing of the player.
 2. Looking at what is installed never starts a placeholder. On Omarchy the agents' commands
-   are stubs that install the agent the first time they run.
+   are stubs that install the agent the first time they run. No other start does either: every
+   one passes ``guarded``, which refuses a stub (cos20 #492, twelfth review, B2).
 3. An agent's allowance is the player's: no advice on every move through an agent.
 """
 
@@ -147,13 +148,33 @@ class AgentError(Exception):
 
 
 def is_placeholder(path: Path) -> bool:
-    """Omarchy's stub: a small script that runs ``mise use -g`` and then the real program."""
+    """Omarchy's stub: a small script that runs ``mise use -g`` and then the real program.
+    One that cannot be read counts as a stub: what cannot be told apart is not started (until
+    0.1.14 it counted as the user's install, cos20 #492, twelfth review, B2)."""
     try:
         if path.is_symlink() or path.stat().st_size > 2048:
             return False
         return any(line.startswith("mise use -g") for line in path.read_text().splitlines())
-    except (OSError, UnicodeDecodeError):
+    except UnicodeDecodeError:  # not a script, so not the stub
         return False
+    except OSError:
+        return True
+
+
+class Placeholder(OSError):
+    """The command is Omarchy's stub: starting it would install the program without a click."""
+
+
+def placeholder_why(agent: str) -> str:
+    """Why the agent is not asked, if its command is the stub on the path it would run with;
+    empty if it is not."""
+    spec = AGENTS[agent]
+    command = (spec.get("version") or [agent])[0]
+    found = shutil.which(command, path=agent_env(agent).get("PATH"))
+    if found is None or not is_placeholder(Path(found)):
+        return ""
+    return (f"{spec['name']} is not asked: Omarchy's placeholder stands in its place, and "
+            f"starting it would install {spec['name']}")
 
 
 def installed(agent: str, run: Callable[..., Any] | None = None) -> bool:
@@ -238,6 +259,8 @@ def untried(agent: str, run: Callable[..., Any] | None = None) -> str:
     """Why the agent is not asked: its version is not one Shikigon was tried with; empty if it
     is. The words carry its version only in the form ``x.y.z``, never other text it printed."""
     spec = AGENTS[agent]
+    if why := placeholder_why(agent):  # reading its version would start it
+        return why
     tried = spec.get("versions", ())
     version = agent_version(agent, run)
     match = VERSION.fullmatch(version)
@@ -1067,10 +1090,16 @@ sys.exit(code if code >= 0 else 128 - code)
 
 
 def guarded(argv: list[str], env: dict[str, str] | None) -> list[str]:
-    """``argv`` behind ``GUARD``. A program that is not there fails here, as ``Popen`` did."""
+    """``argv`` behind ``GUARD``. A program that is not there fails here, as ``Popen`` did, and
+    so does Omarchy's stub: every program the brain starts passes here (its version, its model
+    list, a question, ``mise``), so none of them installs anything. Until 0.1.14 only
+    ``installed`` looked (cos20 #492, twelfth review, B2)."""
     path = (env if env is not None else os.environ).get("PATH")
-    if shutil.which(argv[0], path=path) is None:
+    found = shutil.which(argv[0], path=path)
+    if found is None:
         raise FileNotFoundError(2, "No such file or directory", argv[0])
+    if is_placeholder(Path(found)):
+        raise Placeholder(1, "Omarchy's placeholder, which would install it", argv[0])
     return [sys.executable, "-I", "-c", GUARD, str(os.getpid()), str(HTTPS_PORT), *argv]
 
 

@@ -76,8 +76,9 @@ Nothing goes to any model unless you pick one (below). Then that one, and only t
 receives: your Shikigon's name, persona, energy, number of fields, compass, the goal of the game,
 its place in the ranking and its own total energy, what the world says
 about its situation (energy trend, a catastrophe, the server's advice for the next step), how
-long its key is still valid, its last moves, the proposed moves or your question with your
-last two questions and their answers, the public rules of the world, and its own lessons. When
+many of its own energy offers stand unsold on the market, how long its key is still valid,
+its last moves, the proposed moves or your question with your last two questions and their
+answers, the public rules of the world, and its own lessons. When
 it writes to another agent (below), the model also receives what that agent wrote to it, or
 the name of the agent it is about to make a contract with. When your agent has taken over
 (below), it also receives every move the world offers right now with what each needs, the
@@ -118,10 +119,11 @@ On your desktop, the bar runs inside the shell and touches only this:
   model's agent (pi) or Omarchy's agent setup. When you press **ask**, the brain looks for who
   could answer: it asks `mise` where pi is, if Omarchy's placeholder stands in its place, asks
   pi for its version (`--version`, again before each question), and asks the model servers on
-  ports 11434 and 1234 of this machine for their models. When you let your agent take over,
-  the brain calls it on every move, and every five moves for a look back; it gets no tool,
-  reads only lines the brain hands it (below), and opens TCP connections to no port but 443
-  (UDP stays open, for name resolution).
+  ports 11434 and 1234 of this machine for their models. Where the placeholder stands in pi's
+  place, pi is not started at all, not even for its version: the placeholder would install it
+  without your click. When you let your agent take over, the brain calls it on every move, and
+  every five moves for a look back; it gets no tool, reads only lines the brain hands it
+  (below), and opens TCP connections to no port but 443 (UDP stays open, for name resolution).
 - **Files:** its folder above, and only small files there: the status, the last twelve journal
   lines, the last three exchanges of the talk and its lessons, which the brain keeps small for
   it; how far **wake** got (`setup.json`, one sentence) and which hints were shown
@@ -314,7 +316,8 @@ its last moves (`this move: -214,612`), and when it looks back, each kind of mov
 effect beside the change of total energy that followed it from all causes.
 
 **What it may lose is up to you.** `learning_budget_pct` (default 5) is the share of its total
-energy at the start of the UTC day that its own moves may lose in a day. Each move your agent
+energy at the start of the UTC day that its own moves may lose in a day, counted as each move
+gives or books it when it is made. Each move your agent
 writes itself is checked before it goes out for what it gives to another agent. It goes out if
 the world's own word for it says it gives nothing (placing cells, a field, a mission without a
 reward, a pact without escrow), or if what it gives has a number the rest covers: energy by
@@ -324,7 +327,9 @@ offer of any other agent), buying another agent's offer, a contract that costs
 your Shikigon anything (an escrow, a tribute it pays, an alliance with costs per tick, a
 mercenary it hires), a breach, and any move the world adds later, until Shikigon knows it. An
 offer on the market below its worth is not counted: the move itself loses nothing, what it
-costs comes later, when someone buys. What a move that goes out gives counts against the
+costs comes later, when someone buys. Nor is what a move costs later: the bombs a mission it
+started uses on its way, or a field it gives up, which leaves its total energy without the world
+booking it in that move. What a move that goes out gives counts against the
 budget as checked, or as the world books it if that is more, also where the world books
 nothing. A world that does not state its total
 energy (one that ranks by something else) leaves nothing to measure a gift against: then every

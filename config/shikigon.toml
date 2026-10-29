@@ -52,7 +52,8 @@ head_max_per_day = 0
 # While it has taken over, it looks back on its moves every n-th move and updates its lessons.
 review_every = 5
 # While it has taken over: how much of its total energy (at the start of the UTC day) its own
-# moves may lose in a day, in percent. A move of its own that gives something to another agent
+# moves may lose in a day, in percent, counted when each move is made (the bombs a mission uses
+# later and a field given up are not). A move of its own that gives something to another agent
 # goes out only if the rest covers it and its value can be said beforehand; else, and once the
 # rest is used up, the rule tree plays instead until the day ends. 0 = no limit.
 learning_budget_pct = 5

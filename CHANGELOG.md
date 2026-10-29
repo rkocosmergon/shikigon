@@ -28,6 +28,14 @@ What changed for someone who uses Shikigon. Newest first.
   `sudo trust anchor --store ca.crt` puts your CA; pi reads the same store. A certificate the
   store does not vouch for is still refused, and the panel now says so in words. The same store
   is used for the world's own addresses; its public certificate is in it.
+- **Omarchy's placeholder is never started.** Where Omarchy's placeholder for pi stood in pi's
+  place, the brain still asked it for its version before each question, and the placeholder
+  installs pi when it runs. Now no start of the agent's program goes past it: pi is not asked,
+  and the panel says why.
+- **The README says what the learning budget counts.** It counts what each move gives or books
+  when it is made. The bombs a mission uses later and a field given up are not counted; the
+  README promised the whole loss of a day before. The model's list in the README now also names
+  the count of its own unsold energy offers, which it was always told.
 
 ## 0.1.13 (2026-10-23)
 

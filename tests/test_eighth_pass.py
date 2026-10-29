@@ -72,10 +72,11 @@ def test_no_program_tells_its_model_where_the_player_lives(
     stub.parent.mkdir()
     stub.write_text('#!/bin/bash\nmise use -g --quiet "pi" || exit 1\n')  # Omarchy's placeholder
     monkeypatch.setattr(connections.shutil, "which",
-                        lambda cmd: {"pi": str(stub), "mise": "/usr/bin/mise"}.get(cmd))
+                        lambda cmd, **_: {"pi": str(stub), "mise": "/usr/bin/mise"}.get(cmd))
     seen: list[dict[str, Any]] = []
     run = _record(seen)
     connections.installed("pi", run=run)  # mise
+    stub.write_text("\x7fELF" + "x" * 5000)  # mise installed it: no stub is started
     connections.agent_models("pi", run=run)  # its version, its list
     connections.run_agent({"agent": "pi"}, "question", 5.0, run=run)  # its version, the question
     assert [s["argv"][0] for s in seen] == ["mise", "pi", "pi", "pi", "pi"]

@@ -335,6 +335,10 @@ GIVES_NOTHING = frozenset({
     "burn_plague", "place_deployable", "pickup_drop", "terminal_query", "set_compass",
     "set_tournament_compass", "abandon_field", "message", "say",
 })  # fmt: skip
+# Gives nothing to another agent is not loses nothing: a field given up (``abandon_field``) leaves
+# the total energy, and a mission (``start_mission``) uses bombs on later ticks, neither booked in
+# the move. The budget counts the move as it is made, and the README says so (cos20 #492,
+# twelfth review, B1; founder 29.10.2026: the promise is narrowed, the head keeps its missions).
 # Transfers: checked against the rest also as a rules' line. Energy gives a number, its amount;
 # goods give none the brain could stand behind (``given_value``).
 TRANSFERS = frozenset({"transfer_energy", "transfer_inventory", "remit_to_owner"})
