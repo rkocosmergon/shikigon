@@ -57,6 +57,14 @@ What changed for someone who uses Shikigon. Newest first.
   place, the brain still asked it for its version before each question, and the placeholder
   installs pi when it runs. Now no start of the agent's program goes past it: pi is not asked,
   and the panel says why.
+- **The program checked is the program started.** The brain checked the file it found for pi,
+  then started pi by its name; when that file failed to start, as in the middle of an update,
+  the next `pi` on the path ran, and on Omarchy that is the placeholder. And pi's version was
+  read from one start and the question went to the next, so an update between the two could
+  answer with a version never tried; under mise the name is a shim that picks its version only
+  as it starts. Now pi is found once, as one file (where mise holds it, the one `mise which pi`
+  names, in the folder of its version), its version is read from that file and the question
+  goes to that file, by its path.
 - **The README says what the learning budget counts.** It counts what each move gives or books
   when it is made. The bombs a mission uses later and a field given up are not counted; the
   README promised the whole loss of a day before. The model's list in the README now also names

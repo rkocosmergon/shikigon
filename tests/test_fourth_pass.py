@@ -37,6 +37,7 @@ import connections
 import head
 import shikigon_brain as brain
 import speech
+from conftest import fake_mise
 from test_advisor import _state
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -56,8 +57,9 @@ KILLED = """
 import sys, threading, time
 sys.path.insert(0, {brain!r})
 import connections
+sh = connections.program("sh", None)
 threading.Thread(target=lambda: connections.run_in_group(
-    ["sh", "-c", "sleep 61.47 & sleep 61.48; wait"], timeout=120), daemon=True).start()
+    [sh, "-c", "sleep 61.47 & sleep 61.48; wait"], timeout=120), daemon=True).start()
 time.sleep(30)
 """
 
@@ -119,11 +121,16 @@ def test_a_killed_brain_takes_its_agent_and_what_the_agent_started(tmp_path: Pat
 
 
 def test_the_guard_passes_the_agents_exit_on_and_a_missing_program_fails_as_before() -> None:
-    """Guards the form of the fix: the guard between brain and agent changes no answer."""
-    assert connections.run_in_group(["sh", "-c", "echo hi; exit 3"]).returncode == 3
-    assert connections.run_in_group(["sh", "-c", "echo hi"]).stdout == "hi\n"
-    assert connections.run_in_group(["sh", "-c", "kill -9 $$"]).returncode == 128 + 9
+    """Guards the form of the fix: the guard between brain and agent changes no answer. A
+    program that is not there fails where it is looked for (``program``), and a name is never
+    started (cos20 #492, fifteenth review, B1)."""
+    sh = connections.program("sh", None)
+    assert connections.run_in_group([sh, "-c", "echo hi; exit 3"]).returncode == 3
+    assert connections.run_in_group([sh, "-c", "echo hi"]).stdout == "hi\n"
+    assert connections.run_in_group([sh, "-c", "kill -9 $$"]).returncode == 128 + 9
     with pytest.raises(FileNotFoundError):
+        connections.program("shikigon-no-such-program-4th", None)
+    with pytest.raises(connections.Unchecked):
         connections.run_in_group(["shikigon-no-such-program-4th"])
 
 
@@ -131,8 +138,9 @@ def test_mise_runs_in_a_group_of_its_own(monkeypatch: pytest.MonkeyPatch, tmp_pa
     stub = tmp_path / "pi"
     stub.write_text("mise use -g pi\nexec pi\n")
     stub.chmod(0o755)
+    mise = fake_mise(tmp_path / "usr")
     monkeypatch.setattr(connections.shutil, "which", lambda name, **_: str(stub) if name == "pi"
-                        else "/usr/bin/mise")
+                        else str(mise))
     seen: list[list[str]] = []
 
     def grouped(argv: list[str], **_: Any) -> Any:
@@ -141,7 +149,7 @@ def test_mise_runs_in_a_group_of_its_own(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     monkeypatch.setattr(connections, "run_in_group", grouped)
     assert connections.installed("pi") is True
-    assert seen == [["mise", "where", "pi"]], "mise went through run_in_group"
+    assert seen == [[str(mise), "where", "pi"]], "mise went through run_in_group"
 
 
 def test_the_terminal_waits_longer_than_the_brain_and_asks_before_it_kills() -> None:

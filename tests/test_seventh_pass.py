@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 import connections
 import head
 import shikigon_brain as brain
-from conftest import hostile
+from conftest import hostile, is_command
 from test_advisor import _state
 from test_head import _move
 from test_sixth_pass import RULES, _agent_on_path, _budget, _head, _offering, _registered
@@ -275,11 +275,12 @@ def test_an_agents_list_of_models_takes_its_version_and_its_listing_time_at_most
 
     def run(argv: list[str], **kwargs: Any) -> Any:
         seen.append({"argv": list(argv), **kwargs})
-        said = "1.4.0\n" if list(argv) == connections.AGENTS["pi"]["version"] else "p m\nx y\n"
+        said = "1.4.0\n" if is_command(argv, connections.AGENTS["pi"]["version"]) else "p m\nx y\n"
         return SimpleNamespace(returncode=0, stdout=said, stderr="")
 
     assert connections.agent_models("pi", run=run) == ["x/y"]
-    assert [s["timeout"] for s in seen] == [connections.VERSION_S, 30]
+    assert [s["timeout"] for s in seen][1:] == [30]
+    assert 0 < seen[0]["timeout"] <= connections.VERSION_S  # finding it and its version share it
     assert connections.VERSION_S + 30 <= 40
     assert connections.AGENT_OUTPUT_BYTES == 1024 * 1024
 

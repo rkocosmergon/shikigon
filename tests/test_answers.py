@@ -191,13 +191,15 @@ def test_json_is_read_in_one_place() -> None:
 
 
 def test_an_agent_that_prints_past_its_limit_is_stopped() -> None:
-    eight_mb = [sys.executable, "-c", "import sys; sys.stdout.write('x' * 8_000_000)"]
+    python = os.path.realpath(sys.executable)
+    eight_mb = [python, "-c", "import sys; sys.stdout.write('x' * 8_000_000)"]
     with pytest.raises(connections.TooMuchOutput):
         connections.run_in_group(eight_mb, timeout=30)
 
 
 def test_what_an_agent_left_running_ends_with_its_answer() -> None:
-    done = connections.run_in_group(["sh", "-c", "sleep 60 & echo $!"], timeout=10)
+    sh = connections.program("sh", None)
+    done = connections.run_in_group([sh, "-c", "sleep 60 & echo $!"], timeout=10)
     pid = int(done.stdout.strip())
     for _ in range(40):
         stat = Path(f"/proc/{pid}/stat")
@@ -211,7 +213,7 @@ def test_what_an_agent_left_running_ends_with_its_answer() -> None:
 
 def test_an_agent_that_runs_too_long_still_times_out() -> None:
     with pytest.raises(subprocess.TimeoutExpired):
-        connections.run_in_group(["sleep", "10"], timeout=0.3)
+        connections.run_in_group([connections.program("sleep", None), "10"], timeout=0.3)
 
 
 # --- S10: no Python of the scripts reads modules from the folder it runs in -------------------

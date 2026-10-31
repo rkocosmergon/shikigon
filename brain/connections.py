@@ -23,7 +23,8 @@ Three rules this file keeps (cos20 #451, concept 10.5d):
    an agent that tells its model where it runs (pi does) tells it nothing of the player.
 2. Looking at what is installed never starts a placeholder. On Omarchy the agents' commands
    are stubs that install the agent the first time they run. No other start does either: every
-   one passes ``guarded``, which refuses a stub (cos20 #492, twelfth review, B2).
+   one starts the file ``program`` found and checked, by its path, and ``guarded`` refuses a
+   stub, a name and a link (cos20 #492, twelfth review, B2; fifteenth review, B1, B2).
 3. An agent's allowance is the player's: no advice on every move through an agent.
 """
 
@@ -170,15 +171,59 @@ class Placeholder(OSError):
 
 
 def placeholder_why(agent: str) -> str:
-    """Why the agent is not asked, if its command is the stub on the path it would run with;
-    empty if it is not."""
-    spec = AGENTS[agent]
-    command = (spec.get("version") or [agent])[0]
-    found = shutil.which(command, path=agent_env(agent).get("PATH"))
-    if found is None or not is_placeholder(Path(found)):
-        return ""
-    return (f"{spec['name']} is not asked: Omarchy's placeholder stands in its place, and "
-            f"starting it would install {spec['name']}")
+    """Why the agent is not asked when Omarchy's stub stands in its program's place."""
+    name = AGENTS[agent]["name"]
+    return (f"{name} is not asked: Omarchy's placeholder stands in its place, and starting it "
+            f"would install {name}")
+
+
+def _checked(found: str, command: str) -> Path:
+    """``found`` where it really lies, if it is no stub and a file."""
+    if is_placeholder(Path(found)):
+        raise Placeholder(1, "Omarchy's placeholder, which would install it", command)
+    try:
+        real = Path(found).resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise FileNotFoundError(2, "No such file or directory", command) from None
+    if not real.is_file():
+        raise FileNotFoundError(2, "No such file or directory", command)
+    return real
+
+
+def program(command: str, env: dict[str, str] | None,
+            run: Callable[..., Any] | None = None, timeout: float | None = None) -> str:
+    """The one file a start of ``command`` runs: found on ``env``'s path, read where it really
+    lies, never Omarchy's stub (``Placeholder``). The caller checks and starts exactly this path,
+    so nothing is looked up again between the check and the start (cos20 #492, fifteenth review,
+    B1: until then GUARD started the name, and ``execvp`` goes on to the next folder on the path
+    when the first file fails to start; on the device that is the stub in ``~/.local/bin``).
+
+    A shim of mise (``…/mise/shims/pi`` → ``mise``) picks its version only when it starts, and
+    may install one (``not_found_auto_install``). So the program behind it is asked of
+    ``mise which`` (which installs nothing, mise ``src/cli/which.rs``) and that file is the one
+    started: it lies in the folder of its version (``…/installs/pi/1.4.0/…``), and an update
+    puts the next version in a folder of its own. The version read from it is the version that
+    answers (B2: until then the version was read from one start and the question went to the
+    next, by name). ``mise which`` gets ``timeout`` seconds (``VERSION_S``)."""
+    found = shutil.which(command, path=(env if env is not None else os.environ).get("PATH"))
+    if found is None:
+        raise FileNotFoundError(2, "No such file or directory", command)
+    real = _checked(found, command)
+    if real.name != "mise" or command == "mise":
+        return str(real)
+    try:  # the shim's program, by the mise the shim is
+        done = in_neutral_folder(run or run_in_group, [str(real), "which", command], env=env,
+                                 capture_output=True, text=True, check=False,
+                                 timeout=VERSION_S if timeout is None else timeout)
+    except (OSError, subprocess.SubprocessError):
+        raise FileNotFoundError(2, "mise names no program for it", command) from None
+    said = str(done.stdout or "").strip()
+    if int(done.returncode) != 0 or not os.path.isabs(said) or "\n" in said:
+        raise FileNotFoundError(2, "mise names no program for it", command)
+    behind = _checked(said, command)
+    if behind.name == "mise":
+        raise FileNotFoundError(2, "mise names no program for it", command)
+    return str(behind)
 
 
 def installed(agent: str, run: Callable[..., Any] | None = None) -> bool:
@@ -190,10 +235,8 @@ def installed(agent: str, run: Callable[..., Any] | None = None) -> bool:
         return False
     if not is_placeholder(Path(found)):
         return True
-    if shutil.which("mise") is None:
-        return False
     try:  # in a group of its own: a timeout ends mise and what it started (K14)
-        done = in_neutral_folder(run or run_in_group, ["mise", "where", agent],
+        done = in_neutral_folder(run or run_in_group, [program("mise", None), "where", agent],
                                  capture_output=True, timeout=10, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
@@ -240,39 +283,70 @@ def agent_env(agent: str) -> dict[str, str]:
 # keeps the talk to itself. So before each start of an agent's program for a listing or a
 # question its version is read, in the same folder and environment, and only a version Shikigon
 # was tried with goes on, the whole of it: until 0.1.13 any 1.4.x passed for 1.4.0 (eighth
-# review, finding 4). Read again for each question: it can change between two.
+# review, finding 4). Read again for each question: it can change between two. It is read from
+# the file the question then starts (``program``), not from a start by name (fifteenth review,
+# B2).
 VERSION = re.compile(r"v?(\d{1,4})\.(\d{1,4})\.(\d{1,6})")
 VERSION_S = 10
 
 
-def agent_version(agent: str, run: Callable[..., Any] | None = None) -> str:
-    """What the agent's program says its version is; ``""`` if it says nothing in that form."""
+def agent_program(agent: str, run: Callable[..., Any] | None = None,
+                  timeout: float = VERSION_S) -> str:
+    """The file the agent's command runs (``program``), in the agent's environment."""
+    spec = AGENTS[agent]
+    return program((spec.get("version") or spec["argv"])[0], agent_env(agent), run, timeout)
+
+
+def agent_version(agent: str, run: Callable[..., Any] | None = None, path: str | None = None,
+                  timeout: float = VERSION_S) -> str:
+    """What the agent's program at ``path`` says its version is; ``""`` if it says nothing in
+    that form within ``timeout`` seconds."""
     argv = AGENTS.get(agent, {}).get("version")
-    if not argv:
+    if not argv or timeout <= 0:
         return ""
     try:
+        argv = [path or agent_program(agent, run, timeout), *argv[1:]]
         done = in_neutral_folder(run or run_in_group, argv, env=agent_env(agent),
-                                 capture_output=True, text=True, timeout=VERSION_S, check=False)
+                                 capture_output=True, text=True, timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError):
         return ""
     said = str(done.stdout or "").strip()
     return said if int(done.returncode) == 0 and VERSION.fullmatch(said) else ""
 
 
-def untried(agent: str, run: Callable[..., Any] | None = None) -> str:
+def untried(agent: str, run: Callable[..., Any] | None = None, path: str | None = None,
+            timeout: float = VERSION_S) -> str:
     """Why the agent is not asked: its version is not one Shikigon was tried with; empty if it
-    is. The words carry its version only in the form ``x.y.z``, never other text it printed."""
+    is. ``path`` is the file that is then started (``checked_program``), ``""`` if none was
+    found; without it the file is found here. The words carry its version only in the form
+    ``x.y.z``, never other text it printed."""
+    if path is None:
+        return checked_program(agent, run)[1]
     spec = AGENTS[agent]
-    if why := placeholder_why(agent):  # reading its version would start it
-        return why
     tried = spec.get("versions", ())
-    version = agent_version(agent, run)
+    version = agent_version(agent, run, path, timeout) if path else ""
     match = VERSION.fullmatch(version)
     if match and f"{int(match[1])}.{int(match[2])}.{int(match[3])}" in tried:
         return ""
     said = f"says {version}" if version else "names no version"
     versions = ", ".join(tried) or "no version of it"
     return f"{spec['name']} is not asked: it {said}, Shikigon was tried with {versions}"
+
+
+def checked_program(agent: str, run: Callable[..., Any] | None = None) -> tuple[str, str]:
+    """The file a listing or a question of ``agent`` starts, and why it is not asked (``""`` if
+    it is): found once, its version read from it, and started as it is. Two lookups of the name
+    could be two programs; an update every four hours lies between them sooner or later.
+    Finding it (``mise which`` behind a shim) and reading its version share ``VERSION_S``, so a
+    list of models still takes 40 seconds at most (README)."""
+    end = time.monotonic() + VERSION_S
+    try:
+        path = agent_program(agent, run, VERSION_S)
+    except Placeholder:
+        return "", placeholder_why(agent)
+    except (OSError, subprocess.SubprocessError):
+        return "", untried(agent, run, "")
+    return path, untried(agent, run, path, end - time.monotonic())
 
 
 # ---------- the choice ----------------------------------------------------------------------
@@ -1087,42 +1161,43 @@ only_https(int(sys.argv[2]))
 child = os.fork()
 if child == 0:
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
-    os.execvp(sys.argv[3], sys.argv[3:])
+    os.execv(sys.argv[3], sys.argv[3:])
 code = os.waitstatus_to_exitcode(os.waitpid(child, 0)[1])
 sys.exit(code if code >= 0 else 128 - code)
 """
 
 
+class Unchecked(OSError):
+    """A start of something ``program`` did not find: a name, or a path that is a link."""
+
+
 def guarded(argv: list[str], env: dict[str, str] | None) -> list[str]:
-    """``argv`` behind ``GUARD``. A program that is not there fails here, as ``Popen`` did, and
-    so does Omarchy's stub: every program the brain starts passes here (its version, its model
-    list, a question, ``mise``), so none of them installs anything. Until 0.1.14 only
-    ``installed`` looked (cos20 #492, twelfth review, B2)."""
-    path = (env if env is not None else os.environ).get("PATH")
-    found = shutil.which(argv[0], path=path)
-    if found is None:
-        raise FileNotFoundError(2, "No such file or directory", argv[0])
-    if is_placeholder(Path(found)):
-        raise Placeholder(1, "Omarchy's placeholder, which would install it", argv[0])
+    """``argv`` behind ``GUARD``, which starts exactly ``argv[0]`` (``os.execv``, no search).
+    Every program the brain starts passes here (its version, its model list, a question,
+    ``mise``), and only as the file ``program`` found and checked: a path where it really lies,
+    never a name and never a link (a shim of mise is one), else ``Unchecked``. Omarchy's stub is
+    refused here too (``Placeholder``), so none of them installs anything. Until 0.1.14 GUARD
+    started the name, and ``execvp`` went on along the path past a file that failed to start
+    (cos20 #492, fifteenth review, B1)."""
+    first = argv[0] if argv else ""
+    if not os.path.isabs(first) or os.path.realpath(first) != first:
+        raise Unchecked(1, "started only as the file program() found", first[:80])
+    if is_placeholder(Path(first)):
+        raise Placeholder(1, "Omarchy's placeholder, which would install it", first)
     return [sys.executable, "-I", "-c", GUARD, str(os.getpid()), str(HTTPS_PORT), *argv]
 
 
 def sign_in_argv(agent: str) -> list[str]:
-    """The command that lets the player sign in to ``agent``, its program as the one path found
-    here and checked here: the caller runs exactly this path, so nothing is looked up a second
-    time between the check and the start (K11). Omarchy's stub raises ``Placeholder`` and a
-    program that is not there ``FileNotFoundError``, as in ``guarded``. Until 0.1.14 the bar
-    started the agent's command by its name, past every check (cos20 #492, thirteenth review)."""
+    """The command that lets the player sign in to ``agent``, its program as the one file
+    ``program`` found and checked: the caller runs exactly this path, so nothing is looked up a
+    second time between the check and the start (K11). Omarchy's stub raises ``Placeholder`` and
+    a program that is not there ``FileNotFoundError``. Until 0.1.14 the bar started the agent's
+    command by its name, past every check (cos20 #492, thirteenth review)."""
     spec = AGENTS.get(agent)
     if not spec or not spec.get("proven"):
         raise FileNotFoundError(2, "Shikigon does not sign in to it", agent)
     argv = list(spec["sign_in"])
-    found = shutil.which(argv[0], path=agent_env(agent).get("PATH"))
-    if found is None:
-        raise FileNotFoundError(2, "No such file or directory", argv[0])
-    if is_placeholder(Path(found)):
-        raise Placeholder(1, "Omarchy's placeholder, which would install it", argv[0])
-    return [found, *argv[1:]]
+    return [program(argv[0], agent_env(agent)), *argv[1:]]
 
 
 def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str] | None = None,
@@ -1226,10 +1301,11 @@ def agent_listing(agent: str, run: Callable[..., Any] = run_in_group) -> dict[st
     argv = AGENTS.get(agent, {}).get("models")
     if not argv:
         return {"ok": False, "models": [], "why": "it has no list of models to ask"}
-    if why := untried(agent, run):
+    path, why = checked_program(agent, run)
+    if why:
         return {"ok": False, "models": [], "why": why}
     try:
-        done = in_neutral_folder(run, argv, env=agent_env(agent), capture_output=True,
+        done = in_neutral_folder(run, [path, *argv[1:]], env=agent_env(agent), capture_output=True,
                                  text=True, timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return {"ok": True, "models": []}
@@ -1304,18 +1380,20 @@ def run_agent(conf: dict[str, Any], prompt: str, timeout: float,
 
     Only an agent proven on a device is called, checked here where it is sent and not only
     where it is offered (threat model §0 rule 5): one never probed may keep tools or MCP
-    servers (cos20 #492, K28). The same holds for its version, read before each question
-    (``untried``, cos20 #492, sixth review, finding 11).
+    servers (cos20 #492, K28). The same holds for its version, read before each question from
+    the file the question then starts (``checked_program``, cos20 #492, sixth review, finding 11;
+    fifteenth review, B2).
     """
     spec = AGENTS.get(str(conf.get("agent")))
     if spec is None:  # OpenCode, picked under 0.1.12 and no longer asked from here
         raise AgentError(f"{str(conf.get('agent'))[:40]} is not asked from here: pick who answers")
     if not spec.get("proven"):
         raise AgentError(f"{spec['name']} is not offered yet: it was never tried on a device")
-    if why := untried(str(conf["agent"]), run):
+    path, why = checked_program(str(conf["agent"]), run)
+    if why:
         raise AgentError(why)
     env = agent_env(str(conf["agent"]))
-    argv = agent_argv(conf)
+    argv = [path, *agent_argv(conf)[1:]]
     try:
         done = in_neutral_folder(run, argv, env=env, capture_output=True, text=True,
                                  timeout=timeout, check=False, input=prompt)

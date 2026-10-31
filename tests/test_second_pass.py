@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 import advisor
 import connections
 import shikigon_brain as brain
-from conftest import hostile, sends, version_answer
+from conftest import fake_mise, hostile, sends, version_answer
 from test_sending import ASK, ME, Kernel, _chat
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -134,8 +134,9 @@ def test_every_program_the_brain_starts_runs_in_the_neutral_folder(
     stub = tmp_path / "bin" / "pi"
     stub.parent.mkdir()
     stub.write_text('#!/bin/bash\nmise use -g --quiet "pi" || exit 1\n')  # Omarchy's placeholder
+    mise = fake_mise(tmp_path / "usr")
     monkeypatch.setattr(connections.shutil, "which",
-                        lambda cmd, **_: {"pi": str(stub), "mise": "/usr/bin/mise"}.get(cmd))
+                        lambda cmd, **_: {"pi": str(stub), "mise": str(mise)}.get(cmd))
     monkeypatch.chdir(tmp_path)  # a working folder with something in it
     started: list[tuple[str, bool]] = []
 
@@ -151,7 +152,8 @@ def test_every_program_the_brain_starts_runs_in_the_neutral_folder(
     connections.agent_models("pi", run=run)
     connections.run_agent({"agent": "pi"}, "question", 5.0, run=run)
     # its version before the listing and before the question (cos20 #492, finding 11)
-    assert started == [("mise", True), ("pi", True), ("pi", True), ("pi", True), ("pi", True)]
+    pi = str(stub.resolve())
+    assert started == [(str(mise), True), (pi, True), (pi, True), (pi, True), (pi, True)]
 
 
 def test_no_program_is_started_but_through_the_neutral_folder() -> None:

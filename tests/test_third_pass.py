@@ -249,7 +249,8 @@ import sys, threading, time
 sys.path.insert(0, {brain!r})
 import connections, shikigon_brain as brain
 getattr(brain, "end_with_its_agents", lambda: None)()
-threading.Thread(target=lambda: connections.run_in_group(["sleep", "61.25"], timeout=120),
+sleep = connections.program("sleep", None)
+threading.Thread(target=lambda: connections.run_in_group([sleep, "61.25"], timeout=120),
                  daemon=True).start()
 time.sleep(30)
 """

@@ -423,14 +423,15 @@ except OSError as exc:
 def test_an_agent_reaches_no_port_but_the_one_of_https() -> None:
     """On a kernel with Landlock network rules (ABI 4, Linux 6.7): the test container on
     Hetzner (6.8) and the device (7.2) have them."""
+    python = os.path.realpath(sys.executable)
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         listener.listen()
         port = listener.getsockname()[1]  # a model server on this machine, as Ollama's
-        done = connections.run_in_group([sys.executable, "-I", "-c", CONNECT, str(port)],
+        done = connections.run_in_group([python, "-I", "-c", CONNECT, str(port)],
                                         timeout=30)  # fmt: skip
         assert done.stdout.strip() == "refused by the kernel", (done.stdout, done.stderr)
-    done = connections.run_in_group([sys.executable, "-I", "-c", CONNECT, "443"], timeout=30)
+    done = connections.run_in_group([python, "-I", "-c", CONNECT, "443"], timeout=30)
     assert done.stdout.strip().startswith("not there"), "443 may be reached; nobody listens"
 
 
@@ -453,7 +454,7 @@ exec(guard)
 
 def test_without_landlock_no_agent_is_started_and_the_guard_says_why(tmp_path: Path) -> None:
     started = tmp_path / "started"
-    argv = connections.guarded(["touch", str(started)], None)
+    argv = connections.guarded([connections.program("touch", None), str(started)], None)
     guard, rest = argv[3], argv[4:]  # [python, -I, -c, GUARD, pid, port, agent…]
     rest[0] = str(os.getpid())  # its brain is this test
     done = subprocess.run([sys.executable, "-I", "-c", NO_LANDLOCK, guard, *rest],

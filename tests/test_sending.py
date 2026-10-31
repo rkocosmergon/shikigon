@@ -534,7 +534,7 @@ def _alive(pid: int) -> bool:
 
 def test_on_a_timeout_the_agent_ends_with_everything_it_started(tmp_path: Path) -> None:
     pidfile = tmp_path / "child"
-    argv = ["sh", "-c", f"sleep 30 & echo $! > {pidfile}; wait"]
+    argv = [connections.program("sh", None), "-c", f"sleep 30 & echo $! > {pidfile}; wait"]
     with pytest.raises(subprocess.TimeoutExpired):
         connections.run_in_group(argv, input="", timeout=0.5)
     child = int(pidfile.read_text())

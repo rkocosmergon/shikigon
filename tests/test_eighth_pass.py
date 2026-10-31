@@ -37,7 +37,7 @@ import head
 import lessons
 import reading
 import shikigon_brain as brain
-from conftest import version_answer
+from conftest import fake_mise, is_command, version_answer
 from test_advisor import CONF, _state
 from test_effect import _transfer_forms
 from test_head import LESSON, Replies, StubTree, _forms, _move, _played, _sell_state
@@ -71,15 +71,16 @@ def test_no_program_tells_its_model_where_the_player_lives(
     stub = tmp_path / "bin" / "pi"
     stub.parent.mkdir()
     stub.write_text('#!/bin/bash\nmise use -g --quiet "pi" || exit 1\n')  # Omarchy's placeholder
+    mise = fake_mise(tmp_path / "usr")
     monkeypatch.setattr(connections.shutil, "which",
-                        lambda cmd, **_: {"pi": str(stub), "mise": "/usr/bin/mise"}.get(cmd))
+                        lambda cmd, **_: {"pi": str(stub), "mise": str(mise)}.get(cmd))
     seen: list[dict[str, Any]] = []
     run = _record(seen)
     connections.installed("pi", run=run)  # mise
     stub.write_text("\x7fELF" + "x" * 5000)  # mise installed it: no stub is started
     connections.agent_models("pi", run=run)  # its version, its list
     connections.run_agent({"agent": "pi"}, "question", 5.0, run=run)  # its version, the question
-    assert [s["argv"][0] for s in seen] == ["mise", "pi", "pi", "pi", "pi"]
+    assert [s["argv"][0] for s in seen] == [str(mise), *[str(stub.resolve())] * 4]
     assert {s["cwd"] for s in seen} == {"/"}, "pi names its working folder to its model"
     home = str(files.state_dir().parent.parent.parent)
     assert not any(home in s["cwd"] for s in seen)
@@ -165,7 +166,7 @@ async def test_without_a_total_a_move_that_gives_nothing_still_goes_out() -> Non
 @pytest.mark.parametrize("says", ["1.4.1", "1.2.9", "v1.3.12", "1.4.10"])
 def test_a_release_never_read_is_not_asked(says: str) -> None:
     def run(argv: list[str], **kw: Any) -> Any:
-        assert argv == connections.AGENTS["pi"]["version"], "nothing but its version is started"
+        assert is_command(argv, connections.AGENTS["pi"]["version"]), "nothing but its version"
         return SimpleNamespace(returncode=0, stdout=says + "\n", stderr="")
 
     why = connections.untried("pi", run)

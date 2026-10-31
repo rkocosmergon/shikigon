@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import json as _json
+import os
 import sys
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator
@@ -36,10 +37,16 @@ REAL_OURS: Callable[..., bool] | None = getattr(connections, "ours", None)
 TRIED = {"pi": "1.4.0"}
 
 
+def is_command(argv: list[str], command: list[str]) -> bool:
+    """``argv`` is ``command`` as the brain starts it: its program as the file ``program`` found
+    (a path), the rest as written."""
+    return bool(argv) and Path(argv[0]).name == command[0] and list(argv[1:]) == command[1:]
+
+
 def version_answer(argv: list[str]) -> SimpleNamespace | None:
     """The answer to ``argv`` if it is an agent's version command, else ``None``."""
     for agent, spec in connections.AGENTS.items():
-        if spec.get("version") and list(argv) == spec["version"]:
+        if spec.get("version") and is_command(argv, spec["version"]):
             return SimpleNamespace(returncode=0, stdout=TRIED[agent] + "\n", stderr="")
     return None
 
@@ -47,6 +54,28 @@ def version_answer(argv: list[str]) -> SimpleNamespace | None:
 @pytest.fixture(autouse=True)
 def _ports_are_the_players(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(connections, "ours", lambda base_url, *_, **__: True, raising=False)
+
+
+def fake_mise(folder: Path) -> Path:
+    """A ``mise`` in ``folder`` that is a file, as ``program`` wants one; it does nothing."""
+    folder.mkdir(parents=True, exist_ok=True)
+    mise = folder / "mise"
+    mise.write_text("#!/bin/sh\nexit 0\n")
+    mise.chmod(0o755)
+    return mise.resolve()
+
+
+@pytest.fixture(autouse=True)
+def _pi_is_installed(tmp_path_factory: pytest.TempPathFactory,
+                    monkeypatch: pytest.MonkeyPatch) -> Path:
+    """pi as the player installed it, first on the path: every start finds a file (``program``),
+    as on the device. A test of a stub, a shim or no pi sets its own path."""
+    folder = tmp_path_factory.mktemp("pi-installed")
+    pi = folder / "pi"
+    pi.write_text("#!/bin/sh\nexit 0\n")
+    pi.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{folder.resolve()}:{os.environ.get('PATH', '/usr/bin:/bin')}")
+    return pi.resolve()
 
 
 @pytest.fixture

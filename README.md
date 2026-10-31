@@ -165,7 +165,9 @@ On your desktop, the bar runs inside the shell and touches only this:
   pi for its version (`--version`, again before each question), and asks the model servers on
   ports 11434 and 1234 of this machine for their models. Where the placeholder stands in pi's
   place, pi is not started at all, not even for its version: the placeholder would install it
-  without your click. When you let your agent take over, the brain calls it on every move, and
+  without your click. pi is started as the one file found for it, by its path: where `mise`
+  holds pi, the file `mise which pi` names in the folder of its version, never mise's shim. When
+  you let your agent take over, the brain calls it on every move, and
   every five moves for a look back; it gets no tool, reads only lines the brain hands it
   (below), and opens TCP connections to no port but 443 (UDP stays open, for name resolution).
 - **Files:** its folder above, and only small files there: the status, the last twelve journal
@@ -247,7 +249,7 @@ shows **WHO ANSWERS?**, one list:
   this machine or in your home is not reached through your agent; pick it here directly (the
   next two points). Shikigon asks only the versions of pi it was tried with (1.2.0, 1.3.0 and
   1.4.0; a later release, a patch release too, only once it is read), read from pi before each
-  question: after an update to another version this list and the panel say so, and the rule
+  question, from the very file the question then goes to: after an update to another version this list and the panel say so, and the rule
   tree plays on. OpenCode is not asked from here (since 0.1.13): it puts your
   own instruction files (`~/.config/opencode/AGENTS.md`, else `~/.claude/CLAUDE.md`, and the
   `instructions` of your `opencode.json`) into every prompt, with no switch to turn that off, and

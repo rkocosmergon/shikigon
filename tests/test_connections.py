@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 import advisor
 import connections
 import shikigon_brain as brain
-from conftest import version_answer
+from conftest import fake_mise, is_command, version_answer
 
 # `pi --list-models` on the device (pi 1.2.0, 14.10.2026): its first two lines as printed,
 # without their trailing blanks; the third is a provider's model in the same columns, as pi
@@ -75,8 +75,9 @@ def _on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, content
     path = tmp_path / "bin" / name
     path.parent.mkdir(exist_ok=True)
     path.write_text(content)
-    monkeypatch.setattr(connections.shutil, "which", lambda cmd: {
-        name: str(path), "mise": "/usr/bin/mise"}.get(cmd))
+    mise = fake_mise(tmp_path / "usr")
+    monkeypatch.setattr(connections.shutil, "which", lambda cmd, **_: {
+        name: str(path), "mise": str(mise)}.get(cmd))
     return path
 
 
@@ -93,7 +94,8 @@ def test_a_placeholder_is_never_started_only_mise_is_asked(
     there = Commands(returncode=0)
     assert connections.installed("codex", run=there) is True
     for commands in (not_there, there):
-        assert [argv for argv, _ in commands.calls] == [["mise", "where", "codex"]]
+        assert [argv for argv, _ in commands.calls] == [
+            [connections.program("mise", None), "where", "codex"]]
 
 
 def test_a_program_of_the_users_own_counts_and_a_missing_one_does_not(
@@ -130,7 +132,7 @@ def test_pis_models_come_from_its_table() -> None:
     commands = Commands(stdout=PI_MODELS_SAMPLE)
     assert connections.agent_models("pi", run=commands) == [
         "ollama-macmini/qwen3.5:9b-64k", "anthropic/claude-sonnet-5-5"]
-    assert commands.calls[0][0] == ["pi", "--offline", "--list-models"]
+    assert is_command(commands.calls[0][0], ["pi", "--offline", "--list-models"])
     assert connections.table_models("provider  model\n") == [], "a header alone is no model"
 
 

@@ -80,13 +80,19 @@ def _placeholder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def test_no_start_of_an_agents_program_runs_omarchys_placeholder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The one place every start passes: its version, its list, a question."""
+    """The one place every start passes: its version, its list, a question. Since the fifteenth
+    review the stub is refused where the program is found (``program``) and again at the start
+    (``guarded``), whether it comes as a name or as its path."""
     mark = _placeholder(tmp_path, monkeypatch)
-    for argv in (["pi", "--offline", "--version"], ["pi", "--list-models"], ["pi", "-p"]):
+    with pytest.raises(connections.Placeholder):
+        connections.program("pi", None)
+    stub = str((tmp_path / "bin" / "pi").resolve())
+    for rest in (["--offline", "--version"], ["--list-models"], ["-p"]):
         with pytest.raises(connections.Placeholder):
-            connections.guarded(argv, None)
-        with pytest.raises(OSError):
-            connections.run_in_group(argv, timeout=5)
+            connections.guarded([stub, *rest], None)
+        for first in (stub, "pi"):
+            with pytest.raises(OSError):
+                connections.run_in_group([first, *rest], timeout=5)
     assert not mark.exists(), "the placeholder ran"
 
 
