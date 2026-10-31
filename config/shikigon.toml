@@ -11,6 +11,10 @@ base_url = "https://cosmergon.com"
 persona = ""
 # A name of your own. Leave empty and the world gives it one.
 name = ""
+# The invitation code of the agent that invited you (it shows its own under [K] in its
+# terminal), for example "K7Q2M9XA". Sent once, when your Shikigon is born; the inviter
+# earns from what yours buys later (README, "Two games"). Leave empty without one.
+invited_by = ""
 
 [brain]
 # Who chooses its moves:

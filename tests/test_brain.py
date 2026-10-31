@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import stat
 import sys
 from pathlib import Path
@@ -114,6 +115,58 @@ def test_registration_always_names_the_source_and_skips_empty_choices() -> None:
     assert body == {"source": "shikigon"}
     body = brain.registration_body({"character": {"persona": "trader", "name": "Gary"}})
     assert body == {"source": "shikigon", "persona": "trader", "agent_name": "Gary"}
+
+
+def test_an_invitation_code_goes_with_the_birth_in_capitals_and_its_channel() -> None:
+    """0.1.14 W3 (cos20 #492, #603): ``invited_by`` is the registration with a code."""
+    body = brain.registration_body({"character": {"invited_by": " k7q2m9xa "}})
+    assert body == {"source": "shikigon", "referral_code": "K7Q2M9XA",
+                    "referral_channel": "shikigon"}  # fmt: skip
+    assert "referral_code" not in brain.registration_body({"character": {"invited_by": ""}})
+
+
+@pytest.mark.parametrize("code", ["K7Q2/bluesky", "K7Q", "K7Q2M9XA K7Q2M9XA", "ÄBCD1234", "x" * 13])
+def test_an_invitation_code_of_another_form_ends_register_before_anything_is_sent(
+    code: str,
+) -> None:
+    sent: list[Any] = []
+
+    def post(url: str, json: dict[str, Any], timeout: int) -> Any:
+        sent.append(json)
+        raise AssertionError("nothing may be sent")
+
+    cfg = {"world": {"base_url": "https://example.test"}, "character": {"invited_by": code}}
+    with pytest.raises(SystemExit, match="invited_by is not an invitation code"):
+        brain.register(cfg, post)
+    assert sent == [] and brain.load_credentials() is None
+
+
+@pytest.mark.parametrize(("accepted", "said"),
+                         [(True, "counted"), (False, "not recognised by the world"),
+                          (None, "not recognised by the world")])  # fmt: skip
+def test_register_says_whether_the_world_knew_the_invitation(accepted: Any, said: str) -> None:
+    class Resp:
+        status_code = 201
+
+        def json(self) -> dict[str, Any]:
+            return {"agent_id": "a-1", "api_key": "AGENT-a-1:secret", "expires_at": "x",
+                    "referral_accepted": accepted}  # fmt: skip
+
+    cfg = {"world": {"base_url": "https://example.test"}, "character": {"invited_by": "K7Q2M9XA"}}
+    shown = brain.register(cfg, lambda url, json, timeout: Resp())
+    assert shown["invitation"] == said
+    assert brain.load_credentials()["api_key"] == "AGENT-a-1:secret"  # the agent lives either way
+
+
+def test_the_brain_has_no_way_to_spend_money() -> None:
+    """README "Two games": Shikigon spends no money and holds no means of payment. No money
+    route of the world, no x402 header, no SDK purchase, no wallet in any of its programs."""
+    brain_dir = Path(brain.__file__).resolve().parent
+    money = re.compile(r"/produkte|/billing|x402|x-payment|\.buy\(|eth_account|\bsigner\b")
+    scripts = [brain_dir / "shikigon-wake", brain_dir / "shikigon-terminal"]
+    for path in [*brain_dir.glob("*.py"), *scripts]:
+        found = money.findall(path.read_text(encoding="utf-8").lower())
+        assert not found, (path.name, found)
 
 
 def test_register_keeps_the_key_private_and_never_returns_it() -> None:

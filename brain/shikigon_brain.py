@@ -129,6 +129,21 @@ def load_credentials() -> dict[str, str] | None:
     return data if isinstance(data, dict) else None
 
 
+INVITE_FORM = re.compile(r"[A-Z0-9]{4,12}")  # the world's codes: eight of A-Z0-9 (31.10.2026)
+INVITE_CHANNEL = "shikigon"  # the way the inviter reached this one (cos20 #543, #603)
+
+
+def invite_code(cfg: dict[str, Any]) -> str:
+    """``[character] invited_by``, in capitals; empty without one. A code of another form ends
+    ``register`` with a sentence before anything is sent: passed over in silence, the inviter
+    would never learn that the invitation did not count (cos20 #492, 0.1.14 W3)."""
+    code = str(cfg.get("character", {}).get("invited_by") or "").strip().upper()
+    if code and not INVITE_FORM.fullmatch(code):
+        raise SystemExit("invited_by is not an invitation code: letters and digits, as the "
+                         "inviting agent was given it (for example K7Q2M9XA).")
+    return code
+
+
 def registration_body(cfg: dict[str, Any]) -> dict[str, Any]:
     """What the server is told when a new Shikigon is born; empty choices stay unset."""
     character = cfg.get("character", {})
@@ -137,6 +152,9 @@ def registration_body(cfg: dict[str, Any]) -> dict[str, Any]:
         body["persona"] = character["persona"]
     if character.get("name"):
         body["agent_name"] = character["name"]
+    if code := invite_code(cfg):
+        body["referral_code"] = code
+        body["referral_channel"] = INVITE_CHANNEL
     return body
 
 
@@ -290,7 +308,11 @@ def register(
         "world": connections.origin(url),  # the key goes to this world only (H3)
     }
     write_private(credentials_path(), creds)
-    return {"agent_id": creds["agent_id"], "expires_at": creds["expires_at"]}
+    born = {"agent_id": creds["agent_id"], "expires_at": creds["expires_at"]}
+    if invite_code(cfg):  # the world says whether it knew the code; the agent lives either way
+        counted = data.get("referral_accepted") is True
+        born["invitation"] = "counted" if counted else "not recognised by the world"
+    return born
 
 
 def agent_paths(home: Path) -> list[Path]:
@@ -1039,7 +1061,11 @@ async def ask(
     turn = await advisor.answer(
         conf, state_dir(), question, context, chat_tail(CHAT_KEPT), send
     )
-    files.append(chat_path(), turn)  # kept whole: the talk is the player's (cos20 #468)
+    # Every exchange is kept, the talk is the player's (cos20 #468); the answer as long as the bar
+    # shows it: until 0.1.14 a model's answer went in uncut and the terminal read it whole
+    # (cos20 #492, twelfth review, B5).
+    turn["a"] = advisor.cut(turn.get("a", ""), ANSWER_CHARS)
+    files.append(chat_path(), turn)
     show_talk()
     return turn
 

@@ -5,6 +5,8 @@ description = "Shikigon's brain: a Cosmergon agent that wants to play."
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
+    # >=0.28.2: the shop in the terminal ([S], agent.buy) and the catalog the README names
+    #   (cos20 #603, #609, #610); 0.28.1 no paid request sent twice (cos20 #606).
     # >=0.27.34: an answer of the world in the wrong form (no JSON, a list for an object, a
     #   number that is not finite, nesting too deep) ends no reader, Retry-After read by its
     #   form (cos20 #492, sixth review).
@@ -23,7 +25,7 @@ dependencies = [
     # 0.26.0 brought mission_word / mission_outcome_text (cos20 #475).
     # [dashboard]: "open terminal" starts cosmergon-dashboard, which needs textual; without
     # the extra the client only prints how to install it (seen in a fresh container, 11.10.2026).
-    "cosmergon-agent[dashboard]>=0.27.34",
+    "cosmergon-agent[dashboard]>=0.28.2",
     # >=2.3.10: the facts of the world read in their form, ready_fields as one set (cos20 #492,
     #   sixth review). >=2.3.9: missions only on fields the server names ready, a contract it
     #   cannot accept is rejected (cos20 #529).

@@ -8,21 +8,21 @@ anyio==4.15.1 \
     --hash=sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101 \
     --hash=sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94
     # via httpx
-certifi==2026.10.19 \
-    --hash=sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae \
-    --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
+certifi==2026.10.23 \
+    --hash=sha256:a9895e6e2758b371e0545e321a3a8fd1fcfd9829ada8824a936dfb16aaaf36cd \
+    --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
     # via
     #   httpcore
     #   httpx
-cosmergon-agent==0.27.34 \
-    --hash=sha256:2afeb4c904e1b1f8cd08ba2fa9c7a64b16fa18a0f9aada0eee54b2c6e86cdea0 \
-    --hash=sha256:3e22cec36a00fc573d2270f1384986a4d1e3d84843123463b50431924cc8654b
+cosmergon-agent==0.28.2 \
+    --hash=sha256:403ad58033dbac6618c3e0bca252ae5777c6913ec30b8bcb4ffd0726c0b39ca5 \
+    --hash=sha256:73e0d9ea8ebc32c95a8b1030a337da793b1bd36f939e2226aef470a38a35ae39
     # via
     #   -r requirements.in
     #   cosmergon-decider-tree
-cosmergon-decider-tree==2.3.10 \
-    --hash=sha256:a41e062d8c5750808095f9f9b7c08c62ea41f3305de37c788eb10c5fe9afff86 \
-    --hash=sha256:a6622afd24dd472537c9514615c555775714ca893f0ac4fad3f2d35e56ba7e72
+cosmergon-decider-tree==2.3.11 \
+    --hash=sha256:4173849ab56b2c060b807231345c9dd9dd8af59313c2278f91791806af80664a \
+    --hash=sha256:dc54c6da1e1b55926192ce32d40456d156ce8b9026363321d31b692e49c7be5a
     # via -r requirements.in
 h11==0.16.0 \
     --hash=sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1 \

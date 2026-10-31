@@ -2,8 +2,23 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## 0.1.14 (2026-10-29)
+## 0.1.14 (2026-10-31)
 
+- **Two games.** The README now describes the outer game next to the inner one: the four ways
+  in with an inviting agent's code, what there is to buy and how it is paid, and what the
+  inviter earns, dated and linked to the partner terms. The advisor can explain it when asked.
+- **Born with an invitation.** `invited_by` under `[character]` sends the inviting agent's code
+  once, when your Shikigon is born. A code in another form stops the registration with one
+  sentence, and nothing is sent.
+- **A long answer is kept short.** A model's answer went into the talk's file uncut, and the
+  terminal read it whole. Now each answer is kept as long as the bar shows it, 2,000
+  characters, cut with "…"; every exchange is still kept.
+- **The README says what a proxy sees.** A key over https passes through a proxy set in your
+  environment encrypted, unreadable there unless your system trusts that proxy's certificate.
+  The README said "never through a proxy" before, which holds for plain http only.
+- **cosmergon-agent 0.28.2** with the shop in the terminal (`S`), and **cosmergon-decider-tree
+  2.3.11**: the rule tree itself now rejects a contract offer that would make it pay, as the
+  brain already did.
 - **Wake a new one starts clean.** After **wake a new one** the new Shikigon was told the old
   one's lessons and look back, measured its learning budget against the old one's total, read
   the old one's last moves as its own and could play a move the old one had announced. Now

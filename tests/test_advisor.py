@@ -480,6 +480,15 @@ async def test_without_a_model_the_question_says_what_is_missing_and_calls_nothi
     assert model.asked == []
 
 
+async def test_a_long_answer_is_kept_as_long_as_the_bar_shows_it() -> None:
+    """Twelfth review B5 (cos20 #492): a model's 50,000 characters went into chat.jsonl uncut,
+    and the terminal read them whole. Each exchange is kept, the answer cut with "…"."""
+    turn = await brain.ask(FakeAgent(_state()), CFG, "Tell me all.", "", Model("x" * 50_000))
+    kept = [json.loads(line) for line in brain.chat_path().read_text().splitlines()]
+    assert len(kept) == 1 and len(kept[0]["a"]) == brain.ANSWER_CHARS
+    assert kept[0]["a"].endswith("…") and turn["a"] == kept[0]["a"]
+
+
 async def test_a_silent_or_failing_model_is_said_in_words() -> None:
     agent = FakeAgent(_state())
     silent = await brain.ask(agent, CFG, "What now?", "", Model(""))
