@@ -223,7 +223,8 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
   only for a Shikigon of that world; one of another world keeps its key out of it.
 - **The first hours:** a few short desktop notifications walk a new player through it: that it
   is awake and what its first move could be, a free tournament slot when one is open, the
-  compass, **ask**, and its first field won. Each comes once, at least ten minutes apart.
+  compass, **ask**, and its first field won. Each comes once, at least ten minutes apart; only
+  the one for its first field comes at once, as soon as the field is its own.
 - **If its key ended** (a free agent ends a day after its last move, for example after a
   weekend with the machine off), the panel says so and offers **wake a new one**.
 

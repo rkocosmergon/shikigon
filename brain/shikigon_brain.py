@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import functools
 import json
 import os
@@ -1063,7 +1064,8 @@ async def ask(
     )
     # Every exchange is kept, the talk is the player's (cos20 #468); the answer as long as the bar
     # shows it: until 0.1.14 a model's answer went in uncut and the terminal read it whole
-    # (cos20 #492, twelfth review, B5).
+    # (cos20 #492, twelfth review, B5), and the question too (thirteenth review, Kür 4).
+    turn["q"] = str(turn.get("q", ""))[:QUESTION_CHARS]
     turn["a"] = advisor.cut(turn.get("a", ""), ANSWER_CHARS)
     files.append(chat_path(), turn)
     show_talk()
@@ -1148,7 +1150,7 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
     where = str(given.get("where") or (rest[0] if rest else ""))
     if what == "models" and where:
         if where.startswith("agent:"):
-            return {"ok": True, "models": connections.agent_models(where[6:])}
+            return connections.agent_listing(where[6:])
         key = connections.secret_for(home, conf, where)
         return connections.models_at(where, connections.bounded_get, key)
     if what == "key":  # never as an argument, so it never stands in a process list
@@ -1405,7 +1407,48 @@ def _parser() -> argparse.ArgumentParser:
     who = sub.add_parser("advisor", help="who answers: list, try and take a connection")
     who.add_argument("what", nargs="?", default="list")
     who.add_argument("rest", nargs="*")
+    sub.add_parser("sign-in", help="start an agent's own program to sign in there").add_argument(
+        "agent")
     return parser
+
+
+# The umask the brain was started with; ``__main__`` sets its own to 077 (K2) and keeps this one
+# for the program ``sign_in`` hands the terminal to.
+INHERITED_UMASK = 0o022
+
+
+def start_program(path: str, argv: list[str]) -> None:
+    """Become the program at ``path``, with the umask the brain was started with."""
+    os.umask(INHERITED_UMASK)
+    os.execv(path, argv)
+
+
+def sign_in(agent: str, start: Callable[[str, list[str]], Any] = start_program) -> str:
+    """Start ``agent``'s own program in this terminal, where the player signs in (pi: ``/login``);
+    the bar opens the terminal for it. On success it does not return. Otherwise it says why:
+    Omarchy's stub stands in the program's place (starting it would install it), or the program
+    is not there. The path checked is the path started (``connections.sign_in_argv``). The
+    program gets this process's environment and the umask the brain was started with, not
+    the brain's own 077: the player may go on working in it."""
+    import connections
+
+    try:
+        argv = connections.sign_in_argv(agent)
+    except connections.Placeholder:
+        return connections.placeholder_why(agent) or "Omarchy's placeholder stands in its place"
+    except FileNotFoundError:
+        return f"{CONTROL.sub('', agent)[:WORD_CHARS]} cannot be signed in to from here"
+    start(argv[0], argv)
+    return ""
+
+
+def _sign_in(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
+    """``sign-in``: what ``sign_in`` says, readable before the terminal closes."""
+    print(sign_in(args.agent))
+    if sys.stdin is not None and sys.stdin.isatty():
+        with contextlib.suppress(EOFError):
+            input("Press Enter to close this window.")
+    return 1
 
 
 def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
@@ -1484,6 +1527,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace, dict[str, Any]], int]] = {
     **dict.fromkeys(("register", "learn", "forget"), _account),
     **dict.fromkeys(("tick", "run", "advise"), _moves),
     **dict.fromkeys(("ask", "instruct"), _words),
+    "sign-in": _sign_in,
 }
 
 
@@ -1537,7 +1581,7 @@ def main(argv: list[str] | None = None) -> int:
     return COMMANDS[args.command](args, load_config())
 
 if __name__ == "__main__":
-    os.umask(0o077)  # every file and folder it makes is the player's alone (K2)
+    INHERITED_UMASK = os.umask(0o077)  # what it makes is the player's alone (K2)
     sys.stderr = CutLines(sys.stderr)
     end_with_its_agents()
     sys.exit(main())

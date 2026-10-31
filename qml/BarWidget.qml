@@ -181,8 +181,8 @@ BarWidget {
     if (step === "who") takeRow(whoList[pick])
     else if (step === "models") tryPicked(modelList.shown[pick])
     else if (step === "failed") {
-      if (pick === 1 && pickedRow && pickedRow.sign_in) {
-        service.openSignIn(pickedRow.sign_in)
+      if (pick === 1 && pickedRow && pickedRow.sign_in && pickedRow.agent) {
+        service.openSignIn(pickedRow.agent)
         close()
       }
       else toStep("who")
@@ -667,7 +667,10 @@ BarWidget {
             }
             Line { visible: root.modelList.more > 0; color: root.dim
                    text: "and " + root.modelList.more + " more: name one in the config file" }
-            Line { visible: root.modelList.shown.length === 0; color: root.dim; text: "asking…" }
+            Line { visible: text !== ""; color: root.dim
+                   text: Model.modelsNote(root.pickedRow && root.pickedRow.models ? { ok: true }
+                                            : (root.service ? root.service.models : null),
+                                          root.modelList.shown.length) }
           }
 
           // --- one real question before a connection is taken ---
@@ -685,7 +688,7 @@ BarWidget {
               spacing: Style.space(6)
               PickButton { at: 0; width: (parent.width - parent.spacing) / 2; label: "back" }
               PickButton {
-                visible: !!(root.pickedRow && root.pickedRow.sign_in)
+                visible: !!(root.pickedRow && root.pickedRow.sign_in && root.pickedRow.agent)
                 at: 1
                 width: (parent.width - parent.spacing) / 2
                 label: "open " + (root.pickedRow ? (root.pickedRow.name || "it") : "it")

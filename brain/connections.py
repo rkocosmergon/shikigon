@@ -1103,6 +1103,24 @@ def guarded(argv: list[str], env: dict[str, str] | None) -> list[str]:
     return [sys.executable, "-I", "-c", GUARD, str(os.getpid()), str(HTTPS_PORT), *argv]
 
 
+def sign_in_argv(agent: str) -> list[str]:
+    """The command that lets the player sign in to ``agent``, its program as the one path found
+    here and checked here: the caller runs exactly this path, so nothing is looked up a second
+    time between the check and the start (K11). Omarchy's stub raises ``Placeholder`` and a
+    program that is not there ``FileNotFoundError``, as in ``guarded``. Until 0.1.14 the bar
+    started the agent's command by its name, past every check (cos20 #492, thirteenth review)."""
+    spec = AGENTS.get(agent)
+    if not spec or not spec.get("proven"):
+        raise FileNotFoundError(2, "Shikigon does not sign in to it", agent)
+    argv = list(spec["sign_in"])
+    found = shutil.which(argv[0], path=agent_env(agent).get("PATH"))
+    if found is None:
+        raise FileNotFoundError(2, "No such file or directory", argv[0])
+    if is_placeholder(Path(found)):
+        raise Placeholder(1, "Omarchy's placeholder, which would install it", argv[0])
+    return [found, *argv[1:]]
+
+
 def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str] | None = None,
                  input: str | None = None, timeout: float | None = None,
                  capture_output: bool = True, text: bool = True, check: bool = False) -> Any:
@@ -1193,19 +1211,30 @@ def _wait_unreaped(pid: int, timeout: float | None, over: threading.Event) -> bo
 def agent_models(agent: str, run: Callable[..., Any] = run_in_group) -> list[str]:
     """The models an agent can use, by its own listing command; empty if it has none or is at a
     version Shikigon was not tried with (``untried``)."""
+    return list(agent_listing(agent, run)["models"])
+
+
+def agent_listing(agent: str, run: Callable[..., Any] = run_in_group) -> dict[str, Any]:
+    """What ``advisor models agent:<name>`` answers: the agent's models, or why it is not asked
+    (the words of ``untried``). Until 0.1.14 an agent that is not asked answered an empty list,
+    as one without a model would, and the panel said "asking…" without end (cos20 #492,
+    thirteenth review, Kür 6)."""
     argv = AGENTS.get(agent, {}).get("models")
-    if not argv or untried(agent, run):
-        return []
+    if not argv:
+        return {"ok": False, "models": [], "why": "it has no list of models to ask"}
+    if why := untried(agent, run):
+        return {"ok": False, "models": [], "why": why}
     try:
         done = in_neutral_folder(run, argv, env=agent_env(agent), capture_output=True,
                                  text=True, timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
-        return []
+        return {"ok": True, "models": []}
     names = table_models(done.stdout)  # pi's listing, the one agent that has one
     # What the player set up themselves first; the agent's own catalogue after it. The panel
     # shows the first eight (on the device eleven catalogue models stood before the player's).
     names = clean_names(names)
-    return sorted(names, key=lambda name: (name.startswith(f"{agent}/"), names.index(name)))
+    return {"ok": True, "models": sorted(
+        names, key=lambda name: (name.startswith(f"{agent}/"), names.index(name)))}
 
 
 def table_models(listing: str) -> list[str]:

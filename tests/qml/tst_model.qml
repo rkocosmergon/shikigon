@@ -214,6 +214,30 @@ TestCase {
     compare(Model.marauderLines(undefined), [])
   }
 
+  // Thirteenth review (cos20 #492, K35): a world's block of 8 KiB could name some 700 bodies, each
+  // with its own HP, and each became a line, found by a search over all lines before it.
+  function test_a_world_naming_hundreds_of_marauders_fills_no_more_than_a_few_lines() {
+    var many = []
+    for (var i = 0; i < 700; i++) many.push({ hp: i })
+    var lines = Model.marauderLines(many)
+    compare(lines.length, Model.MARAUDER_LINES + 1)
+    compare(lines[0], "1 Marauder between missions · HP 0")
+    compare(lines[Model.MARAUDER_LINES], "and 696 more Marauders")
+    compare(Model.marauderLines("seven"), [], "a word in place of the list")
+    compare(Model.marauderLines({ length: 1e9 }), [], "an object with a length is no list")
+  }
+
+  // Thirteenth review (cos20 #492): "asking…" stood there without end for an agent the brain
+  // does not ask, and for one that names no model.
+  function test_the_model_step_says_why_it_shows_no_model() {
+    compare(Model.modelsNote({ pending: true, ok: false, models: [] }, 0), "asking…")
+    compare(Model.modelsNote(null, 0), "asking…")
+    compare(Model.modelsNote({ ok: false, models: [], why: "pi is not asked: a placeholder" }, 0),
+            "pi is not asked: a placeholder")
+    compare(Model.modelsNote({ ok: true, models: [] }, 0), "it names no model")
+    compare(Model.modelsNote({ ok: true, models: ["a/b"] }, 1), "")
+  }
+
   function test_journal_shows_a_tournament_missions_end() {
     var lines = Model.journalLines([
       { mission: "collecting", text: "no mega bomb crate left there", ok: false },

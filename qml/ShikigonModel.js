@@ -254,18 +254,30 @@ function marauderText(body) {
 
 // The Marauders, grouped, each line readable on its own (no heading needed — the panel is
 // short of height): "3 Marauders on a mission · HP 100", "1 Marauder between missions · HP 100".
+// At most MARAUDER_LINES lines, the rest counted in one: an agent has four bodies (body_slot
+// 0..3), and the server's block, up to 8 KiB, could name hundreds with each its own HP. Until
+// 0.1.14 each became a line of the panel, found by a search over all lines before it
+// (cos20 #492, thirteenth review, K35).
+var MARAUDER_LINES = 4
+
+function marauderPhrase(count, text) {
+  return count + (count === 1 ? " Marauder " : " Marauders ") + text
+}
+
 function marauderLines(bodies) {
-  var counts = []
-  var list = (bodies || []).filter(function(b) { return b && typeof b === "object" })
+  var counts = Object.create(null)
+  var order = []
+  var list = (Array.isArray(bodies) ? bodies : [])
+    .filter(function(b) { return b && typeof b === "object" })
   for (var i = 0; i < list.length; i++) {
     var text = marauderText(list[i])
-    var known = counts.filter(function(c) { return c.text === text })[0]
-    if (known) known.count++
-    else counts.push({ text: text, count: 1 })
+    if (counts[text] === undefined) { counts[text] = 0; order.push(text) }
+    counts[text]++
   }
-  return counts.map(function(c) {
-    return c.count + (c.count === 1 ? " Marauder " : " Marauders ") + c.text
-  })
+  var lines = order.slice(0, MARAUDER_LINES).map(function(t) { return marauderPhrase(counts[t], t) })
+  var rest = order.slice(MARAUDER_LINES).reduce(function(n, t) { return n + counts[t] }, 0)
+  if (rest > 0) lines.push("and " + rest + (rest === 1 ? " more Marauder" : " more Marauders"))
+  return lines
 }
 
 // The brain's mood -> the eye shape of the pet's robo eyes.
@@ -432,6 +444,16 @@ function whoNext(row) {
   if (row.id === "address") return "address"
   if (row.model) return "trying"
   return "models"
+}
+
+// What the step "which model?" says while it shows no model: that it is still asking, why the
+// agent is not asked (the brain's words), or that there is none. Until 0.1.14 it said "asking…"
+// for all three, without end for an agent that is not asked (cos20 #492, thirteenth review).
+function modelsNote(said, shown) {
+  if (shown > 0) return ""
+  if (!said || said.pending) return "asking…"
+  if (said.ok === false) return String(said.why || "no answer")
+  return "it names no model"
 }
 
 // At most `limit` models fit the panel; the rest is named as a count.

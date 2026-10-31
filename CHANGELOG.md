@@ -12,7 +12,8 @@ What changed for someone who uses Shikigon. Newest first.
   sentence, and nothing is sent.
 - **A long answer is kept short.** A model's answer went into the talk's file uncut, and the
   terminal read it whole. Now each answer is kept as long as the bar shows it, 2,000
-  characters, cut with "…"; every exchange is still kept.
+  characters, cut with "…"; every exchange is still kept. A question is kept as long as
+  the bar shows it too, 500 characters.
 - **The README says what a proxy sees.** A key over https passes through a proxy set in your
   environment encrypted, unreadable there unless your system trusts that proxy's certificate.
   The README said "never through a proxy" before, which holds for plain http only.
@@ -42,7 +43,9 @@ What changed for someone who uses Shikigon. Newest first.
   said no more than `ConnectError`. Now https is checked against your system's trust store, where
   `sudo trust anchor --store ca.crt` puts your CA; pi reads the same store. A certificate the
   store does not vouch for is still refused, and the panel now says so in words. The same store
-  is used for the world's own addresses; its public certificate is in it.
+  is used when the brain itself calls the world (waking, forgetting, the world's rules); its
+  public certificate is in it. The moves go through the Cosmergon client, which checks the world
+  against the certificates it brings along (certifi), as before.
 - **Omarchy's placeholder is never started.** Where Omarchy's placeholder for pi stood in pi's
   place, the brain still asked it for its version before each question, and the placeholder
   installs pi when it runs. Now no start of the agent's program goes past it: pi is not asked,
@@ -51,6 +54,17 @@ What changed for someone who uses Shikigon. Newest first.
   when it is made. The bombs a mission uses later and a field given up are not counted; the
   README promised the whole loss of a day before. The model's list in the README now also names
   the count of its own unsold energy offers, which it was always told.
+- **Signing in starts no placeholder.** **open pi to sign in** in the panel started pi by its
+  name, past the check for Omarchy's placeholder. Now the brain starts it in that terminal,
+  the very program it checked, and where the placeholder stands it says so instead.
+- **The panel says why an agent lists no model.** For an agent Shikigon does not ask
+  (Omarchy's placeholder, a version it was not tried with) the panel said "asking…" without
+  end. Now it says why, and "it names no model" for one without any.
+- **At most four lines of Marauders.** In a tournament the panel shows at most four lines
+  of Marauders and counts the rest in one more.
+- **The advisor knows where your key is shown.** Its notes said the key is never shown; the
+  terminal shows it in full when you press `K`, as the README says. The README now also
+  says that the hint for the first field comes at once, not ten minutes after the last.
 
 ## 0.1.13 (2026-10-23)
 

@@ -280,8 +280,13 @@ Item {
   function openAgentSetup() {
     Quickshell.execDetached(["omarchy-menu", "summon", "setup.default.agent"])
   }
-  function openSignIn(argv) {
-    Quickshell.execDetached(["omarchy-launch-tui", "--app-id=org.omarchy.agent"].concat(argv))
+  // The agent's own program, for its sign-in, started by the brain in that terminal: the brain
+  // checks the path it starts, so Omarchy's placeholder never runs from here (until 0.1.14 the
+  // bar started the agent by its name, cos20 #492, thirteenth review). `agent` is a name from the
+  // brain's own list.
+  function openSignIn(agent) {
+    Quickshell.execDetached(["omarchy-launch-tui", "--app-id=org.omarchy.agent"]
+                            .concat(brainCommand(["sign-in", String(agent)])))
   }
 
   function parsed(text, fallback) {
