@@ -117,7 +117,8 @@ def endless_timers(source: str) -> list[str]:
 PANEL_FILES = ("journal_recent.json", "talk.json", "lessons.json")
 
 # H5 (cos20 #492 F5): the only files the bar reads. Each is written by the brain, which bounds
-# its size (status: server blocks to 8 KiB; journal_recent: 12 lines; talk: 3 exchanges, cut;
+# its size (status: server blocks to 8 KiB; journal_recent: 12 lines, only the texts the bar
+# shows, each cut (``bar_line``, cos20 #492 fourteenth review); talk: 3 exchanges, cut;
 # lessons: 3, in the server's lengths; setup: one cut sentence; tips, advisor: its own small
 # facts). journal.jsonl and chat.jsonl grow and are never read here.
 BAR_FILES = PANEL_FILES + ("status.json", "setup.json", "tips.json", "advisor.json")

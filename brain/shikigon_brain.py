@@ -532,10 +532,30 @@ def journal(*entries: dict[str, Any]) -> None:
     show_journal()
 
 
+# What the bar reads of a journal line (``ShikigonModel.journalLine``), each text cut. A move the
+# world named goes into its line several times, uncut (action, words, the head's choice, its
+# tries); until 0.1.14 the bar got the line whole, a world's name of any length in each of those
+# fields (cos20 #492, fourteenth review, Kür 2). A field added to the journal later reaches the
+# bar only once it stands here.
+BAR_JOURNAL_TEXTS = ("instruction", "preset", "learned", "why", "mission", "text", "words",
+                     "kind", "action")
+
+
+def bar_line(entry: dict[str, Any]) -> dict[str, Any]:
+    """A journal line as the bar shows it: its texts cut to ``SENTENCE_CHARS``, nothing else."""
+    line: dict[str, Any] = {"at": entry["at"] if isinstance(entry.get("at"), int) else 0}
+    for key in BAR_JOURNAL_TEXTS:
+        if key in entry:
+            line[key] = None if entry[key] is None else short(entry[key], SENTENCE_CHARS)
+    if "ok" in entry:
+        line["ok"] = entry["ok"] is not False
+    return line
+
+
 def show_journal() -> None:
     """The journal's last lines for the bar."""
     lines = files.tail(state_dir() / "journal.jsonl", BAR_LINES, line_bytes=1024)
-    files.write_json(state_dir() / BAR_JOURNAL, lines)
+    files.write_json(state_dir() / BAR_JOURNAL, [bar_line(line) for line in lines])
 
 
 def show_talk() -> None:

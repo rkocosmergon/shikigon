@@ -38,6 +38,10 @@ BRIEF_CHARS = 8000  # the whole situation; a small model reads it in a few secon
 FACTS_CHARS = 300  # what the world says about one move
 PARAMS_BYTES = 1024  # parameters of one move, as JSON
 WHY_CHARS = 120
+# A move's name, as the world gives it: the longest it has is 22 characters (cos20
+# ``app/schemas/actions.py`` ``VALID_ACTIONS``, 31.10.2026). A longer one is no move: it would go
+# uncut into the journal (cos20 #492, fourteenth review, Kür 2).
+MOVE_NAME_CHARS = 32
 HEAD_TOKENS = 220  # room for one move in JSON
 # How long a move waits for the head. The advisor's 20 s were too short: on the device a head's
 # answer took 18-19 s (a longer situation than the advisor's three proposals, 19.10.2026), and
@@ -145,6 +149,8 @@ def offered(state: Any, blocked: frozenset[str]) -> dict[str, Any]:
     moves: dict[str, Any] = {}
     actions = getattr(state, "available_actions", None)
     for action, facts in (actions if isinstance(actions, dict) else {}).items():
+        if len(str(action)) > MOVE_NAME_CHARS:
+            continue
         if action not in blocked and possible(str(action), facts, state):
             moves[str(action)] = facts
     if getattr(state, "pending_contracts", None):

@@ -150,14 +150,18 @@ class AgentError(Exception):
 def is_placeholder(path: Path) -> bool:
     """Omarchy's stub: a small script that runs ``mise use -g`` and then the real program.
     One that cannot be read counts as a stub: what cannot be told apart is not started (until
-    0.1.14 it counted as the user's install, cos20 #492, twelfth review, B2)."""
+    0.1.14 it counted as the user's install, cos20 #492, twelfth review, B2). A link is read
+    where it points: until 0.1.14 any link counted as the user's install, also one to the stub
+    (fourteenth review, Kür 3). A dead link or a loop cannot be read (a loop raises
+    ``RuntimeError`` before Python 3.13)."""
     try:
-        if path.is_symlink() or path.stat().st_size > 2048:
+        real = path.resolve(strict=True)
+        if real.stat().st_size > 2048:
             return False
-        return any(line.startswith("mise use -g") for line in path.read_text().splitlines())
+        return any(line.startswith("mise use -g") for line in real.read_text().splitlines())
     except UnicodeDecodeError:  # not a script, so not the stub
         return False
-    except OSError:
+    except (OSError, RuntimeError):
         return True
 
 

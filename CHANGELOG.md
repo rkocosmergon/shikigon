@@ -14,6 +14,13 @@ What changed for someone who uses Shikigon. Newest first.
   terminal read it whole. Now each answer is kept as long as the bar shows it, 2,000
   characters, cut with "…"; every exchange is still kept. A question is kept as long as
   the bar shows it too, 500 characters.
+- **The bar reads only short journal lines.** A move named by the world went whole into the
+  journal and into what the bar reads of it, several times in one line. Now the head is offered
+  no move by a name longer than any the world has, and the bar gets only the texts of a line it
+  shows, each cut at 200 characters.
+- **A link to Omarchy's placeholder is the placeholder.** A command found as a link counted as
+  your own install, also one that pointed to the stub. Now a link is read where it points, and
+  one that leads nowhere is not started.
 - **The README says what a proxy sees.** A key over https passes through a proxy set in your
   environment encrypted, unreadable there unless your system trusts that proxy's certificate.
   The README said "never through a proxy" before, which holds for plain http only.

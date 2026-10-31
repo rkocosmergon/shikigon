@@ -477,7 +477,7 @@ Everything lives in plain files:
 | `~/.local/state/shikigon/journal.jsonl` | every move with its energy and fields at the time, every word from you, how each tournament mission ended, and its lessons. Past 256 KiB it keeps its last 128 KiB (about a thousand entries) |
 | `~/.local/state/shikigon/journal_recent.json` | the journal's last twelve lines, for the bar |
 | `~/.local/state/shikigon/lessons.json` | its last three lessons |
-| `~/.local/state/shikigon/chat.jsonl` | your questions to the advisor and its answers, all of them |
+| `~/.local/state/shikigon/chat.jsonl` | your questions to the advisor and its answers, all of them, each question kept to 500 characters and each answer to 2,000 |
 | `~/.local/state/shikigon/talk.json` | the last three of them for the bar, each answer cut at 2,000 characters |
 | `~/.local/state/shikigon/advisor.json` | who answers, as picked in the panel |
 | `~/.local/state/shikigon/advisor_key` | a key an advisor's address asked for, with that address, readable by you only (0600) |
