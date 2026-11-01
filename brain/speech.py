@@ -184,9 +184,14 @@ def usable(text: str, quote: str, key: str) -> str | None:
     return said
 
 
+def carrier(occ: Occasion) -> str:
+    """The move that would carry its word: a message to one agent, or a post in the world room."""
+    return "message" if occ.to else "say"
+
+
 def move(occ: Occasion, said: str) -> tuple[str, dict[str, Any]]:
-    """The move that carries the text: a message to one agent, or a post in the world room."""
-    if occ.to:
+    """The move that carries the text (``carrier``)."""
+    if carrier(occ) == "message":
         return "message", {"to": occ.to, "text": said}
     return "say", {"message": said, "room": "world"}
 
@@ -230,6 +235,7 @@ class TalkingDecider:
         self.send = send or advisor.sender(conf, home)
         self.last: dict[str, Any] | None = None
         self._then = False  # this move is the proposal it announced: the inner did not choose
+        self._word = False  # this move is its own word: the inner did not choose it either
 
     async def _inner_choice(
         self, state: Any, blocked: frozenset[str]
@@ -246,7 +252,7 @@ class TalkingDecider:
         memo = load(self.home)
         then, memo["then"] = announced(memo, blocked), None  # played now or never
         memo["moves"] += 1
-        self._then = then is not None
+        self._then, self._word = then is not None, False
         if then is not None:  # the word went out: now the proposal it announced, no model call
             files.write_json(memo_path(self.home), memo)
             self.last = None
@@ -254,7 +260,9 @@ class TalkingDecider:
         choice = await self._inner_choice(state, blocked)
         self.last = getattr(self.inner, "last", None)
         occ = occasion(state, choice, memo, gap(self.conf))
-        if occ is None or advisor.limit_reached(self.conf, self.home):
+        # A paused carrier: no word, its move would be held back and the call spent for nothing
+        # (until 0.1.14 the tick waited, and the proposal went out unannounced; cos20 #620).
+        if occ is None or carrier(occ) in blocked or advisor.limit_reached(self.conf, self.home):
             files.write_json(memo_path(self.home), memo)
             return choice
         said = await self._write(state, occ)
@@ -265,6 +273,7 @@ class TalkingDecider:
             return choice
         self.last = {**(self.last or {}), "speech": {
             "kind": occ.kind, "to": occ.to_name or WORLD_ROOM, "text": said[:120]}}  # fmt: skip
+        self._word = True
         return move(occ, said)
 
     async def again(
@@ -276,7 +285,17 @@ class TalkingDecider:
         Not after the proposal it announced: the inner decider did not choose on this move, and
         its again would choose from the moves, the state and the talk of the move before. Until
         0.1.14 a move the world no longer offered went out that way (cos20 #612, F2). The
-        refusal ends the move; on the next one the inner decider chooses afresh."""
+        refusal ends the move; on the next one the inner decider chooses afresh.
+
+        Nor after its own word: the inner did not choose that move either. A refused word
+        announced nothing, so the proposal is not played from the memo: the inner chooses it
+        afresh on the next move. Until 0.1.14 the head played it at once and the memo played it
+        again, two offers for the one announced (cos20 #619)."""
+        if self._word:
+            memo = load(self.home)
+            memo["then"] = None
+            files.write_json(memo_path(self.home), memo)
+            return None
         inner = getattr(self.inner, "again", None)
         if inner is None or self._then:
             return None
