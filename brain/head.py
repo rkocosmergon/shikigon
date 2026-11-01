@@ -271,10 +271,10 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
     if other:
         parts.append("Other moves the world offers now (take them only as one of the rules' "
                      "lines below, unchanged):\n" + "\n".join(other))
-    if suggested:
+    rules = [rule for a, p in suggested if (rule := advisor.rule_line(a, p)) is not None]
+    if rules:
         parts.append("The rules would play (copy one exactly, or write one of your own moves):\n"
-                     + "\n".join(json.dumps({"action": a, "params": p}, ensure_ascii=False)
-                                  for a, p in suggested))
+                     + "\n".join(rules))
     text = "\n\n".join(parts)
     if len(text) > BRIEF_CHARS:
         text = text[: BRIEF_CHARS - 40] + "\n[cut: the situation was longer]"

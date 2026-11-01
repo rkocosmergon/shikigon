@@ -24,7 +24,16 @@ What changed for someone who uses Shikigon. Newest first.
   prompt as they came, line breaks and quote marks included; so did its name, character and
   compass, the server's sentences in every prompt, and what the head was told back about a move
   it wrote, the fields of a mission's schema there uncut. Now each is one line, cut, with the
-  marks taken out, as another player's text already was.
+  marks taken out, as another player's text already was. The rules' moves carry the world's ids
+  too (a contract offered, a partner, a field): in the advisor's list of moves they are shown
+  the same way; in the head's prompt, where a line is taken only as it stands, a move of the
+  rules is shown as one line of plain characters without the marks, of at most 400, or not at
+  all, and then only the rules play it.
+- **A program is looked up only in the absolute folders of your `PATH`.** An entry like `.` or
+  an empty one found pi, or mise, in the folder the brain was started from.
+- **The README's “Remove” names the folders of `XDG_STATE_HOME` and `XDG_CONFIG_HOME`.** Set to
+  an absolute folder, they hold the state with the keys and your talk; step 3 named only the
+  default folders.
 - **The README says that a SOCKS proxy does not work.** With `ALL_PROXY=socks5://…` in your
   environment advice, head and moves end in an error; Shikigon ships without SOCKS support.
 - **Two games.** The README now describes the outer game next to the inner one: the four ways

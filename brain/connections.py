@@ -190,6 +190,16 @@ def _checked(found: str, command: str) -> Path:
     return real
 
 
+def on_path(command: str, path: str | None) -> str | None:
+    """``command`` as found on ``path`` (None: this process's PATH), in its absolute folders
+    only. An empty or relative entry (``.``, ``::``) is a folder of wherever the brain was
+    started, which another user may write; ``shutil.which`` looked there until 0.1.14 (cos20
+    #492, betreuer pass 32a20f5, B4). The one way a program is looked up."""
+    given = os.environ.get("PATH", os.defpath) if path is None else path
+    folders = [folder for folder in given.split(os.pathsep) if os.path.isabs(folder)]
+    return shutil.which(command, path=os.pathsep.join(folders)) if folders else None
+
+
 def program(command: str, env: dict[str, str] | None,
             run: Callable[..., Any] | None = None, timeout: float | None = None) -> str:
     """The one file a start of ``command`` runs: found on ``env``'s path, read where it really
@@ -205,7 +215,7 @@ def program(command: str, env: dict[str, str] | None,
     puts the next version in a folder of its own. The version read from it is the version that
     answers (B2: until then the version was read from one start and the question went to the
     next, by name). ``mise which`` gets ``timeout`` seconds (``VERSION_S``)."""
-    found = shutil.which(command, path=(env if env is not None else os.environ).get("PATH"))
+    found = on_path(command, (env if env is not None else os.environ).get("PATH"))
     if found is None:
         raise FileNotFoundError(2, "No such file or directory", command)
     real = _checked(found, command)
@@ -230,7 +240,7 @@ def installed(agent: str, run: Callable[..., Any] | None = None) -> bool:
     """True if the agent's real program is here. Omarchy's own rule (omarchy-default-agent):
     anything at the command's path that is not the stub is the user's install; a stub counts
     only if mise already holds the program. The command itself is never started."""
-    found = shutil.which(agent)
+    found = on_path(agent, None)
     if found is None:
         return False
     if not is_placeholder(Path(found)):

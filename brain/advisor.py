@@ -172,6 +172,26 @@ def word(value: Any, chars: int = MOVE_WORD_CHARS) -> str:
     return text.replace("<", "‹").replace(">", "›")
 
 
+RULE_LINE_CHARS = 400  # the longest line of the rule tree 2.3.11 is about 250 (a template, ids)
+
+
+def rule_line(action: str, params: dict[str, Any]) -> str | None:
+    """A move of the rules as the line the head copies, or None: then it is not shown.
+
+    The line is taken only as it stands (``head._same``), so it is never cut or changed: it is
+    JSON in printable ASCII (``ensure_ascii``: a line break or U+2028 in an id stays escaped),
+    and a line with ``<``, ``>``, another unprintable sign or over ``RULE_LINE_CHARS`` stays
+    out. Its move is still the rules' own. The world's ids in it (a contract offered, a partner,
+    a field) stood there with the quote marks and line breaks they came with until 0.1.14
+    (cos20 #492, betreuer pass 32a20f5, B1)."""
+    try:
+        line = json.dumps({"action": action, "params": params})
+    except (TypeError, ValueError):
+        return None
+    held = len(line) <= RULE_LINE_CHARS and line.isprintable() and not {"<", ">"} & set(line)
+    return line if held else None
+
+
 def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
     """One move of the journal as a model may read it: the one way from the journal into a prompt.
 
@@ -310,9 +330,12 @@ def time_left(until: str) -> str:
 def move_messages(
     state: Any, options: list[tuple[str, dict]], learned: str = ""
 ) -> list[dict[str, str]]:
-    """The proposals for the model; ``learned`` is its newest lesson (lessons.py), if any."""
+    """The proposals for the model; ``learned`` is its newest lesson (lessons.py), if any.
+
+    Picked by number, so each is shown like any word of the world (``word``): the ids in them
+    kept the quote marks until 0.1.14 (cos20 #492, betreuer pass 32a20f5, B2)."""
     moves = "\n".join(
-        f"{number}. {action} {json.dumps(params)[:160]}"
+        f"{number}. {word(action)} {word(params, 160)}"
         for number, (action, params) in enumerate(options, start=1)
     )
     lesson = f"\n\nWhat it learned from its own last moves:\n{learned}" if learned else ""

@@ -97,6 +97,11 @@ omarchy plugin remove cosmergon.shikigon
 rm -rf ~/.local/share/shikigon ~/.local/state/shikigon ~/.config/shikigon
 ```
 
+If `XDG_STATE_HOME` or `XDG_CONFIG_HOME` is set to an absolute folder, the state (with the
+agent's key, the advisor's key and your talk) and the configuration lie there instead: remove
+`$XDG_STATE_HOME/shikigon` and `$XDG_CONFIG_HOME/shikigon` as well. An empty or relative value
+counts as unset.
+
 Skip step 1 and the agent stays in the world, played by the server. Two places outside these
 folders may hold something of it:
 
