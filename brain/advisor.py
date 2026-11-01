@@ -149,8 +149,16 @@ def quoted(value: Any, chars: int) -> str:
     the model as the brain's own words (cos20 #492, fourth review). Names of other players go
     through here too; outside the quote a name could carry a sentence of its own.
     """
-    inner = cut(value, chars).replace("<", "‹").replace(">", "›")
-    return f"{QUOTE[0]}{inner}{QUOTE[1]}"
+    return f"{QUOTE[0]}{unmarked(cut(value, chars))}{QUOTE[1]}"
+
+
+def unmarked(text: str) -> str:
+    """``text`` without the quote marks of the system prompts: ``<`` and ``>`` become ``‹`` and
+    ``›``. The one place they are taken out, for another player's text (``quoted``), the world's
+    words (``word``) and the world's rules (``world_rules``): until 0.1.14 the rules reached the
+    advisor and the head's look back with the marks in them (cos20 #492, betreuer pass
+    0f44aeb, B2)."""
+    return text.replace("<", "‹").replace(">", "›")
 
 
 MOVE_WORD_CHARS, WHY_QUOTED = 40, 120
@@ -168,8 +176,7 @@ def word(value: Any, chars: int = MOVE_WORD_CHARS) -> str:
     as the brain's own (cos20 #492, betreuer pass 0563e7c, B2); the facts of every prompt and
     what the head is told back about its move did so until the pass at ead8263 (B2, B3).
     """
-    text = "".join(c if c.isprintable() else " " for c in cut(value, chars))
-    return text.replace("<", "‹").replace(">", "›")
+    return unmarked("".join(c if c.isprintable() else " " for c in cut(value, chars)))
 
 
 RULE_LINE_CHARS = 400  # the longest line of the rule tree 2.3.11 is about 250 (a template, ids)

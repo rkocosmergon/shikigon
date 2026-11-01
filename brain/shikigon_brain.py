@@ -1092,7 +1092,9 @@ def world_info(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:
 def world_rules(cfg: dict[str, Any], get: Callable[..., Any]) -> str:
     """The rules as the server itself states them; empty if unreachable. Each action is taken
     only as an object: until 0.1.13 an ``actions`` that was a list or a word ended ``ask`` with a
-    traceback."""
+    traceback. The quote marks are taken out (``advisor.unmarked``) for both readers, ``ask``
+    and the head's look back (``review/world.txt``): until 0.1.14 they stood there as the world
+    wrote them (cos20 #492, betreuer pass 0f44aeb, B2)."""
     import advisor
 
     info = world_info(cfg, get)
@@ -1107,7 +1109,7 @@ def world_rules(cfg: dict[str, Any], get: Callable[..., Any]) -> str:
     }
     rules["actions"] = {name: body for name, body in actions.items() if body}
     rules["other_actions"] = sorted(name for name, body in actions.items() if not body)
-    return advisor.cut(json.dumps(rules), RULES_CHARS)
+    return advisor.unmarked(advisor.cut(json.dumps(rules), RULES_CHARS))
 
 
 def world_forms(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:

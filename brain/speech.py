@@ -36,6 +36,11 @@ NAME_CHARS = 64  # a name from the world, as the bar shows it (status.json, the 
 WRITE_TOKENS = 120  # room for one short message
 ECHO = 0.8  # a text this close to the one it answers repeats it
 CONTRACT_MOVES = ("propose_contract", "propose_from_template")
+# The moves that carry a word (``carrier``): this module alone writes them, behind ``wanted``
+# and ``usable``. The head never takes one (``head.NEVER_ITS_OWN``): until 0.1.14 it wrote one
+# wherever the world offered it, past ``speak = false`` and every check of the text (cos20
+# #492, betreuer pass 0f44aeb, B1).
+MOVES = frozenset({"message", "say"})
 NEVER = -1_000_000  # "talked on move NEVER": the first occasion may speak at once
 WORLD_ROOM = "world room"
 # How long an announced proposal waits for its move. The world counts a word that came shortly

@@ -30,6 +30,7 @@ from typing import Any
 import advisor
 import contracts
 import files
+import speech
 
 HEAD_RETRIES = 2  # new choices after the world said no, in one tick
 SUGGESTED = 3  # moves of the rules shown as ready lines
@@ -49,6 +50,11 @@ HEAD_TOKENS = 220  # room for one move in JSON
 # the first move in head mode fell back with "did not answer". A move comes every ~70 s.
 HEAD_WAIT_S = 45.0
 OPERATOR_SWITCHES = frozenset({"pause", "resume"})  # the player's controls, never a game move
+# Its words go out through ``speech`` only (``speech.MOVES``), which ``speak = false`` switches
+# off; the talking stays there while the head plays (cos20 #507, 19.10.2026). Until 0.1.14 the
+# head wrote ``message``/``say`` itself wherever the world offered them (cos20 #492, betreuer
+# pass 0f44aeb, B1).
+NEVER_ITS_OWN = OPERATOR_SWITCHES | speech.MOVES
 CONTRACT_ANSWERS = ("accept_contract", "reject_contract")
 # The moves whose form the world states, so the head may write their parameters itself: a
 # mission (its type and schema in the state), an answer to an offered contract, waiting. Any
@@ -124,7 +130,7 @@ def form_lines(forms: list[dict[str, Any]]) -> list[str]:
 def possible(action: str, facts: Any, state: Any) -> bool:
     """Whether the world says this move can work now; the same marks the SDK's ``turn`` reads
     (``cosmergon_agent.play_turn.possible``), on the brain's typed state."""
-    if action in OPERATOR_SWITCHES:
+    if action in NEVER_ITS_OWN:
         return False
     if not isinstance(facts, dict):
         return True
@@ -354,7 +360,8 @@ GIVES_NOTHING = frozenset({
     "market_list",  # stays its own until bought; an offer below its worth is the README's exception
     "market_cancel", "reject_contract", "cancel_mission", "claim_field", "shoot_spore",
     "burn_plague", "place_deployable", "pickup_drop", "terminal_query", "set_compass",
-    "set_tournament_compass", "abandon_field", "message", "say",
+    "set_tournament_compass", "abandon_field",
+    # not ``message``/``say``: never its own move (``NEVER_ITS_OWN``)
 })  # fmt: skip
 # Gives nothing to another agent is not loses nothing: a field given up (``abandon_field``) leaves
 # the total energy, and a mission (``start_mission``) uses bombs on later ticks, neither booked in
@@ -431,6 +438,8 @@ def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     if not isinstance(data, dict):
         return None, "the answer was not a JSON object"
     action = str(data.get("action") or "")
+    if action in speech.MOVES:
+        return None, "your words go out through the brain's speech, never as a move of yours"
     if action in OPERATOR_SWITCHES or action not in allowed:
         return None, f"'{_short(action, 40)}' is not among the moves offered now"
     params = data.get("params") or {}

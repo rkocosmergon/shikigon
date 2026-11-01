@@ -4,6 +4,13 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.14 (2026-10-31)
 
+- **When your agent has taken over, it writes no word of its own.** A world that offered
+  `message` or `say` as moves let your agent write them itself, also with `speak = false`, and
+  past every check of the text. Now its words go out only the way the README describes, through
+  the brain's speech, and `speak = false` switches them off.
+- **The rules of the world stand in a prompt without the quote marks.** The rules went into your
+  questions and into what your agent reads when it looks back with `<` and `>` as the world wrote
+  them. Now they become `‹` and `›` there too.
 - **Your config and your state come from your home, always.** With `XDG_CONFIG_HOME` set but
   empty (or to a relative path), the brain read and wrote `shikigon/shikigon.toml` in whatever
   folder it was started from, and a file there could name the advisor's address together with a
