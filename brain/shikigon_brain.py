@@ -612,11 +612,17 @@ def seen_path() -> Path:
 
 
 def load_seen() -> list[str] | None:
-    """Mission ids already written down; ``None`` before the first look."""
-    path = seen_path()
-    if not path.exists():
+    """Mission ids already written down; ``None`` before the first look.
+
+    A file it cannot read counts as the first look: it remembers what is there and writes the
+    file anew. Until 0.1.14 an empty one stopped every move in a tournament, after the move went
+    out, until it was deleted by hand (cos20 #612, F4, the variant of F3)."""
+    try:
+        data = files.loads(seen_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return None
-    return [str(i) for i in files.loads(path.read_text(encoding="utf-8")).get("ids", [])]
+    ids = data.get("ids", []) if isinstance(data, dict) else None
+    return [str(i) for i in ids] if isinstance(ids, list) else None
 
 
 async def tournament_journal(agent: Any, state: Any) -> int:
@@ -783,24 +789,41 @@ async def choose(decider: Any, state: Any, paused: frozenset[str]) -> tuple[str,
 async def try_again(
     agent: Any, decider: Any, state: Any, last: dict[str, Any], refusals: Refusals | None
 ) -> dict[str, Any]:
-    """After the world said no, a decider that can (the head, cos20 #527) chooses again.
+    """Count the move of this tick; after the world said no, a decider that can (the head,
+    cos20 #527) chooses again.
 
-    A refusal frees the tick on the server, so the new move counts for this tick. Each
-    refusal is counted, so a move the world keeps refusing is paused as before. The decider
-    ends it (``None``) after its own few tries.
+    A refusal frees the tick on the server, so the new move counts for this tick. Every move
+    is counted here, once, and a refusal BEFORE the decider chooses again: a move this refusal
+    pauses is then among ``paused`` and goes out no more in this tick. Until 0.1.14 it was
+    counted after the new choice, and a move the world had just refused for the third time
+    went out a fourth time, without the sentence that it was paused (cos20 #612, F1). The
+    decider ends it (``None``) after its own few tries.
     """
+    from words import action_words
+
     again = getattr(decider, "again", None)
-    while again is not None and last.get("refused"):
+    paused_now: list[str] = []
+    while True:
+        if refusals is not None and refusals.note(last):
+            paused_now.append(str(last.get("action") or ""))
+        if again is None or not last.get("refused"):
+            break
         paused = refusals.paused() if refusals is not None else frozenset()
         choice = await again(state, last, paused)
         if choice is None:
-            break  # the last refusal is counted by the caller, like any move's
-        if refusals is not None:
-            refusals.note(last)
+            break
         action, params = choice
-        if action == "wait":
-            return {"action": "wait", "ok": True, "why": "chose to wait"}
-        last = await play(agent, action, params)
+        if action in paused:
+            why = f"held back: {action_words(action)} is paused, the world kept refusing it"
+            last = {"action": "wait", "ok": True, "why": why}
+        elif action == "wait":
+            last = {"action": "wait", "ok": True, "why": "chose to wait"}
+        else:
+            last = await play(agent, action, params)
+    said = f"refused {REFUSALS_BEFORE_PAUSE} times, paused for {PAUSED_MOVES} moves"
+    for action in paused_now:  # also a move paused before the last one of this tick
+        text = said if action == last.get("action") else f"{action_words(action)}: {said}"
+        last["why"] = f"{last['why']} — {text}" if last.get("why") else text
     return last
 
 
@@ -830,10 +853,8 @@ async def tick(
     elif action == "wait":
         last = {"action": "wait", "ok": True, "why": "chose to wait"}
     else:
-        last = await try_again(agent, decider, state, await play(agent, action, params), refusals)
-    if refusals is not None and refusals.note(last):
-        said = f"refused {REFUSALS_BEFORE_PAUSE} times, paused for {PAUSED_MOVES} moves"
-        last["why"] = f"{last['why']} — {said}" if last.get("why") else said
+        last = await play(agent, action, params)
+    last = await try_again(agent, decider, state, last, refusals)  # counts it, once
     last["words"] = move_words(last)  # what the panel and its advisor show (words.py)
     advice = getattr(decider, "last", None)  # what an advisor did on this move, if one was asked
     if advice:

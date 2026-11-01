@@ -621,6 +621,10 @@ class HeadDecider:
         then the rules play once, unless theirs was the refused move. That holds also where its
         new move goes to the rules (``_take``, the learning budget): until 0.1.14 the rules' move
         went out there unchecked, the one just refused among them (cos20 #566, F6).
+
+        What it allows, its talk and its budget are those of its last ``decide``: a wrapper that
+        plays a move without asking it does not ask it again (``speech.TalkingDecider``, cos20
+        #612, F2).
         """
         if self.last is None:
             return None

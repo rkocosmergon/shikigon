@@ -229,6 +229,7 @@ class TalkingDecider:
         self.key = key
         self.send = send or advisor.sender(conf, home)
         self.last: dict[str, Any] | None = None
+        self._then = False  # this move is the proposal it announced: the inner did not choose
 
     async def _inner_choice(
         self, state: Any, blocked: frozenset[str]
@@ -245,6 +246,7 @@ class TalkingDecider:
         memo = load(self.home)
         then, memo["then"] = announced(memo, blocked), None  # played now or never
         memo["moves"] += 1
+        self._then = then is not None
         if then is not None:  # the word went out: now the proposal it announced, no model call
             files.write_json(memo_path(self.home), memo)
             self.last = None
@@ -269,9 +271,14 @@ class TalkingDecider:
         self, state: Any, refused: dict[str, Any], blocked: frozenset[str] = frozenset()
     ) -> tuple[str, dict[str, Any]] | None:
         """A new choice after the world said no, if the inner decider offers one (the head,
-        cos20 #527); the rule tree and the advisor do not."""
+        cos20 #527); the rule tree and the advisor do not.
+
+        Not after the proposal it announced: the inner decider did not choose on this move, and
+        its again would choose from the moves, the state and the talk of the move before. Until
+        0.1.14 a move the world no longer offered went out that way (cos20 #612, F2). The
+        refusal ends the move; on the next one the inner decider chooses afresh."""
         inner = getattr(self.inner, "again", None)
-        if inner is None:
+        if inner is None or self._then:
             return None
         choice: tuple[str, dict[str, Any]] | None = await inner(state, refused, blocked)
         self.last = getattr(self.inner, "last", None)

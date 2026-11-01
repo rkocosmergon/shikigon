@@ -80,6 +80,21 @@ What changed for someone who uses Shikigon. Newest first.
 - **The advisor knows where your key is shown.** Its notes said the key is never shown; the
   terminal shows it in full when you press `K`, as the README says. The README now also
   says that the hint for the first field comes at once, not ten minutes after the last.
+- **A move refused three times rests at once.** When the world refused a move the third time in
+  a row, the pause began only after the next pick, so the same move could go out a fourth time
+  in the same moment, and the note "paused for 30 moves" was missing. Now the third refusal
+  pauses the move before anything else is picked, the move is held back whoever picks it, and
+  the note is in the move.
+- **No retry from an older offer.** When the world refused a contract proposal announced the
+  moment before, the head picked its retry from the moves the world had offered back then, and
+  could send one it no longer offers. Now an announced proposal is not retried; the next move
+  is picked from what the world offers then.
+- **An empty count file no longer stops the head.** If `advisor_count.json` in the state folder
+  was empty (after a crash, for instance) or held no count, every move of the head ended as
+  "could not be played" until the file was deleted by hand. Now such a file counts as zero.
+- **An empty tournament file no longer stops the moves.** The same held for
+  `tournament_seen.json` during a tournament: each move went out, but ended as "could not be
+  played", until the file was deleted. Now such a file counts as a first look.
 
 ## 0.1.13 (2026-10-23)
 

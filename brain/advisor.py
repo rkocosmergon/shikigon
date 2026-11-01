@@ -389,11 +389,20 @@ def _today() -> str:
 
 def _counts(home: Path) -> dict[str, Any]:
     """The advisor's counters. In a file, because a move can come from a second process
-    (a `tick` from a terminal next to the running brain)."""
-    path = home / "advisor_count.json"
-    if not path.exists():
+    (a `tick` from a terminal next to the running brain).
+
+    A file it cannot read counts as none, like every other file the brain keeps; the next count
+    writes it anew. Until 0.1.14 an empty or broken one stopped every move of the head and every
+    question until it was deleted by hand (cos20 #612, F3)."""
+    try:
+        data = files.loads((home / "advisor_count.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return {}
-    return dict(files.loads(path.read_text(encoding="utf-8")))
+    return data if isinstance(data, dict) else {}
+
+
+def _number(counts: dict[str, Any], key: str) -> int:
+    return int(files.finite(counts.get(key)) or 0)
 
 
 def _keep(home: Path, counts: dict[str, Any]) -> None:
@@ -402,7 +411,7 @@ def _keep(home: Path, counts: dict[str, Any]) -> None:
 
 def calls_today(home: Path) -> int:
     counts = _counts(home)
-    return int(counts.get("calls", 0)) if counts.get("day") == _today() else 0
+    return _number(counts, "calls") if counts.get("day") == _today() else 0
 
 
 def count_call(home: Path) -> None:
@@ -412,7 +421,7 @@ def count_call(home: Path) -> None:
 def count_move(home: Path) -> int:
     """Count a move the model could be asked on; returns how many there have been."""
     counts = _counts(home)
-    counts["moves"] = int(counts.get("moves", 0)) + 1
+    counts["moves"] = _number(counts, "moves") + 1
     _keep(home, counts)
     return int(counts["moves"])
 
