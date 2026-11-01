@@ -26,11 +26,21 @@ from typing import Any
 LINE_BYTES = 300  # a journal line is about 100 bytes, rarely 400; enough to read from the end
 
 
+def xdg_home(name: str, fallback: Path) -> Path:
+    """The folder an XDG variable names, if it names an absolute one; else ``fallback``.
+
+    An empty or relative value counts as unset (XDG Base Directory spec). Until 0.1.14 a relative
+    one made the folder relative to wherever a command was started: the config of that folder
+    was read (cos20 #613), and the state folder with the talk and the advisor's key stood in a
+    folder another user may own (cos20 #492, betreuer pass ead8263, B1). The same rule stands in
+    the bar (``Model.stateHome``) and in both scripts (``case``)."""
+    given = os.environ.get(name) or ""
+    return Path(given) if os.path.isabs(given) else fallback
+
+
 def state_dir() -> Path:
-    """The brain's state folder (``$XDG_STATE_HOME/shikigon``). An empty ``XDG_STATE_HOME``
-    counts as unset, as in the wake script (``${XDG_STATE_HOME:-…}``) and the bar (``||``)."""
-    base = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
-    return base / "shikigon"
+    """The brain's state folder (``$XDG_STATE_HOME/shikigon``, ``xdg_home``)."""
+    return xdg_home("XDG_STATE_HOME", Path.home() / ".local" / "state") / "shikigon"
 
 
 def private_folder(path: Path) -> Path:

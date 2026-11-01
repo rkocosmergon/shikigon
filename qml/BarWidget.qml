@@ -25,8 +25,8 @@ BarWidget {
 
   readonly property var service: bar && bar.shell && bar.shell.serviceFor
     ? bar.shell.serviceFor("cosmergon.shikigon") : null
-  readonly property string stateDir: (Quickshell.env("XDG_STATE_HOME")
-    || (Quickshell.env("HOME") + "/.local/state")) + "/shikigon"
+  readonly property string stateDir: Model.stateHome(Quickshell.env("XDG_STATE_HOME"),
+    Quickshell.env("HOME")) + "/shikigon"
   // The panel uses the theme's foreground (as omarchy.agents does); the eyes are drawn on
   // the bar itself and use the bar's foreground, which differs on a transparent bar
   // (Bar.qml: barForeground, as ActiveWindow uses it). Palette through Commons.Color:

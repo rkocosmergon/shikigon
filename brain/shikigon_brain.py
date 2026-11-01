@@ -61,10 +61,8 @@ def config_path() -> Path:
     """``$XDG_CONFIG_HOME/shikigon/shikigon.toml``. An empty or relative ``XDG_CONFIG_HOME`` counts
     as unset (XDG Base Directory spec): until 0.1.14 an empty one made the path relative, and the
     config of whatever folder the brain was started from named the advisor, its key and the world
-    (cos20 #613)."""
-    given = os.environ.get("XDG_CONFIG_HOME") or ""
-    base = Path(given) if os.path.isabs(given) else Path.home() / ".config"
-    return base / "shikigon" / "shikigon.toml"
+    (cos20 #613). The rule is ``files.xdg_home``, also for the state folder."""
+    return files.xdg_home("XDG_CONFIG_HOME", Path.home() / ".config") / "shikigon" / "shikigon.toml"
 
 
 def state_dir() -> Path:

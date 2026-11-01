@@ -160,12 +160,13 @@ MOVE_WORD = re.compile(rf"[a-z][a-z0-9_]{{0,{MOVE_WORD_CHARS - 1}}}")
 
 
 def word(value: Any, chars: int = MOVE_WORD_CHARS) -> str:
-    """A word of the world for a prompt (a kind, an id, a tick): one line, the marks out, cut.
+    """A word or sentence of the world for a prompt (a kind, an id, a tick, the server's advice):
+    one line, the marks out, cut. Another player's text goes through ``quoted``.
 
-    Sentences go through ``cut``, another player's text through ``quoted``; the world's words
-    (a contract's kind and id, a mission type, a partner, a tick) went in as they came, a line
-    break and the quote marks included, and could stand in the head's prompt as the brain's own
-    (cos20 #492, betreuer pass 0563e7c, B2).
+    The world's words (a contract's kind and id, a mission type, a partner, a tick) went in as
+    they came, a line break and the quote marks included, and could stand in the head's prompt
+    as the brain's own (cos20 #492, betreuer pass 0563e7c, B2); the facts of every prompt and
+    what the head is told back about its move did so until the pass at ead8263 (B2, B3).
     """
     text = "".join(c if c.isprintable() else " " for c in cut(value, chars))
     return text.replace("<", "‹").replace(">", "›")
@@ -222,7 +223,7 @@ def standing(state: Any) -> list[str]:
     if ranking is None:
         return []
     lines = []
-    goal = cut(getattr(ranking, "ziel", "") or "", FACT_CHARS)
+    goal = word(getattr(ranking, "ziel", "") or "", FACT_CHARS)
     if goal:
         lines.append(f"Goal of the game: {goal}")
     rang, of = place(ranking)
@@ -238,26 +239,31 @@ def standing(state: Any) -> list[str]:
 
 
 def facts(state: Any) -> str:
-    """What the model is told about this Shikigon. Facts of the world, never the key."""
+    """What the model is told about this Shikigon. Facts of the world, never the key.
+
+    One line each: every word and sentence of the world goes through ``word``. Through ``cut``
+    until 0.1.14, which only shortened, a name, a persona or a sentence of the server could
+    carry line breaks and quote marks into every prompt (cos20 #492, betreuer pass ead8263, B2).
+    """
     if state is None:
         return "The world did not answer just now; nothing is known about the agent's state."
     situation = getattr(getattr(state, "world_briefing", None), "situation", None)
-    name = cut(getattr(state, "agent_name", "") or "", 64)
-    persona = cut(getattr(state, "persona_type", "") or "", 64)
+    name = word(getattr(state, "agent_name", "") or "", 64)
+    persona = word(getattr(state, "persona_type", "") or "", 64)
     lines = [
         f"Agent: {name} ({persona})",
         f"Energy: {round(float(getattr(state, 'energy', 0.0)), 1)}",
         f"Fields: {len(getattr(state, 'fields', []) or [])}",
-        f"Compass: {cut(getattr(state, 'compass_preset', None) or 'autonomous', 64)}",
+        f"Compass: {word(getattr(state, 'compass_preset', None) or 'autonomous', 64)}",
         *standing(state),
     ]
     if situation is not None:
-        lines.append(f"Energy trend: {cut(situation.energy_trend, 64)}")
+        lines.append(f"Energy trend: {word(situation.energy_trend, 64)}")
         if situation.active_catastrophe:
-            lines.append(f"Catastrophe: {cut(situation.active_catastrophe, FACT_CHARS)}")
+            lines.append(f"Catastrophe: {word(situation.active_catastrophe, FACT_CHARS)}")
     step = getattr(state, "next_step", None)
     if step:
-        lines.append(f"The server's advice: {cut(step.get('next', ''), FACT_CHARS)}")
+        lines.append(f"The server's advice: {word(step.get('next', ''), FACT_CHARS)}")
     offers = open_energy_offers(state)
     if offers:
         lines.append(
@@ -295,7 +301,7 @@ def time_left(until: str) -> str:
         end = datetime.datetime.fromisoformat(until)
         minutes = int((end - datetime.datetime.now(datetime.UTC)).total_seconds() // 60)
     except (ValueError, TypeError):  # not a time with a zone: say it as it came, cut like a fact
-        return f"until {cut(until, 64)}"  # uncut until 0.1.13: up to 8 MiB of the world's (P5)
+        return f"until {word(until, 64)}"  # uncut until 0.1.13: up to 8 MiB of the world's (P5)
     if minutes <= 0:
         return "no longer (it has ended)"
     return f"for another {minutes // 60} h {minutes % 60} min"

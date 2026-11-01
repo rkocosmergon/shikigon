@@ -2,6 +2,14 @@
 // Same pattern as Omarchy's own models (shell/plugins/bar/BarModel.js): QML imports this
 // file directly and ignores the guard at the end; Node loads it as CommonJS.
 
+// The folder above the state folder: $XDG_STATE_HOME only if it is an absolute path, as in the
+// brain (files.xdg_home) and both scripts. A relative one would make the bar read the talk from
+// a folder relative to where the shell was started (cos20 #492, betreuer pass ead8263, B1).
+function stateHome(given, home) {
+  var value = String(given || "")
+  return value.charAt(0) === "/" ? value : home + "/.local/state"
+}
+
 // The brain reports "free" under the server's name for it.
 function isCurrentPreset(name, compass) {
   return compass === name || (name === "free" && compass === "autonomous")
@@ -537,6 +545,7 @@ if (typeof module !== "undefined") {
     tournamentRunning: tournamentRunning,
     tournamentRows: tournamentRows,
     endsText: endsText,
-    marauderLines: marauderLines
+    marauderLines: marauderLines,
+    stateHome: stateHome
   }
 }

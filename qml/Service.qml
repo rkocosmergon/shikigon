@@ -30,7 +30,7 @@ Item {
   property var shell: null
 
   readonly property string home: Quickshell.env("HOME")
-  readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") || (home + "/.local/state")
+  readonly property string stateHome: Model.stateHome(Quickshell.env("XDG_STATE_HOME"), home)
   readonly property string stateDir: stateHome + "/shikigon"
   readonly property string python: home + "/.local/share/shikigon/venv/bin/python"
   readonly property string brain: decodeURIComponent(

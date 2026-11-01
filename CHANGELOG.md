@@ -4,11 +4,14 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.14 (2026-10-31)
 
-- **Your config comes from your home, always.** With `XDG_CONFIG_HOME` set but empty (or to a
-  relative path), the brain read and wrote `shikigon/shikigon.toml` in whatever folder it was
-  started from, and a file there could name the advisor's address together with a key from your
-  environment. Now such a value counts as unset, as the XDG spec says, and the config is
-  `~/.config/shikigon/shikigon.toml`.
+- **Your config and your state come from your home, always.** With `XDG_CONFIG_HOME` set but
+  empty (or to a relative path), the brain read and wrote `shikigon/shikigon.toml` in whatever
+  folder it was started from, and a file there could name the advisor's address together with a
+  key from your environment. With `XDG_STATE_HOME` set to a relative path, the brain, the bar and
+  both scripts put the state folder there, with the talk and the advisor's key: in a folder
+  another user owns, they could swap it for one of their own while a question ran. Now such a value
+  counts as unset, as the XDG spec says: the config is `~/.config/shikigon/shikigon.toml`, the
+  state `~/.local/state/shikigon`.
 - **A move whose answer got lost counts against the learning budget.** When the world's answer
   to a move of the head could not be read, the move counted as refused, and the next move had
   the whole day's rest again. Now a move whose outcome is not known counts as made; a move the
@@ -18,8 +21,10 @@ What changed for someone who uses Shikigon. Newest first.
   it. Now it starts in `/`, like every other program Shikigon starts.
 - **The world's words stand in the head's prompt as one line each.** A contract's kind and id,
   a partner, a tick, a mission type and the fields of the world's forms went into the head's
-  prompt as they came, line breaks and quote marks included. Now each is one line, cut, with
-  the marks taken out, as another player's text already was.
+  prompt as they came, line breaks and quote marks included; so did its name, character and
+  compass, the server's sentences in every prompt, and what the head was told back about a move
+  it wrote, the fields of a mission's schema there uncut. Now each is one line, cut, with the
+  marks taken out, as another player's text already was.
 - **The README says that a SOCKS proxy does not work.** With `ALL_PROXY=socks5://…` in your
   environment advice, head and moves end in an error; Shikigon ships without SOCKS support.
 - **Two games.** The README now describes the outer game next to the inner one: the four ways

@@ -17,7 +17,13 @@ umask 077
 here="$(dirname "$(readlink -f "$0")")"
 lock="$here/../requirements.lock"
 venv="$HOME/.local/share/shikigon/venv"
-state="${XDG_STATE_HOME:-$HOME/.local/state}/shikigon"
+# The state folder: $XDG_STATE_HOME only if it is an absolute path, as in the brain
+# (files.xdg_home) and the bar (Model.stateHome); a relative one would put the talk and the
+# advisor's key in whatever folder this was started from (cos20 #492, betreuer pass ead8263).
+case "${XDG_STATE_HOME:-}" in
+    /*) state="$XDG_STATE_HOME/shikigon" ;;
+    *) state="$HOME/.local/state/shikigon" ;;
+esac
 log="$state/setup.log"
 mkdir -p "$state" "$(dirname "$venv")"
 # The talk, the journal and the lessons are the player's alone, also where the home is not

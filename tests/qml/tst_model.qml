@@ -7,6 +7,15 @@ import "../../qml/ShikigonModel.js" as Model
 TestCase {
   name: "ShikigonModel"
 
+  // cos20 #492, betreuer pass ead8263, B1: a relative XDG_STATE_HOME counts as unset.
+  function test_state_home_is_absolute_or_the_default() {
+    compare(Model.stateHome("/x/state", "/home/p"), "/x/state")
+    compare(Model.stateHome("", "/home/p"), "/home/p/.local/state")
+    compare(Model.stateHome(undefined, "/home/p"), "/home/p/.local/state")
+    compare(Model.stateHome(".local/state", "/home/p"), "/home/p/.local/state")
+    compare(Model.stateHome("~/state", "/home/p"), "/home/p/.local/state")
+  }
+
   function test_current_preset() {
     verify(Model.isCurrentPreset("attack", "attack"))
     verify(Model.isCurrentPreset("free", "autonomous"), "the server calls 'free' autonomous")

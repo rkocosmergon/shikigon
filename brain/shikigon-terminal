@@ -8,7 +8,13 @@ set -euo pipefail
 # wrote ~/.cosmergon/config.toml with this shell's umask before it set 0600 (cos20 #492, fourth
 # review, K2; the SDK makes it 0600 from creation since 0.27.32).
 umask 077
-state="${XDG_STATE_HOME:-$HOME/.local/state}/shikigon"
+# The state folder: $XDG_STATE_HOME only if it is an absolute path, as in the brain
+# (files.xdg_home) and the bar (Model.stateHome); a relative one would put the talk and the
+# advisor's key in whatever folder this was started from (cos20 #492, betreuer pass ead8263).
+case "${XDG_STATE_HOME:-}" in
+    /*) state="$XDG_STATE_HOME/shikigon" ;;
+    *) state="$HOME/.local/state/shikigon" ;;
+esac
 venv="$HOME/.local/share/shikigon/venv"
 if [ ! -f "$state/credentials.json" ]; then
     echo "No Shikigon lives here yet. Wake it from the bar first."
