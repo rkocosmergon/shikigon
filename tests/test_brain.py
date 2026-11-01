@@ -658,8 +658,9 @@ async def test_a_second_move_in_one_tick_is_said_in_words_not_a_crash() -> None:
     assert line["ok"] is False and line["action"] == "place_cells"
     agent.failure = CsgConnectionError("down")
     last = await brain.tick(agent, FakeDecider(("evolve", {})))
+    # whether the world took it is not known: a limit counts it as made (cos20 #614)
     assert last == {"action": "evolve", "ok": False, "why": "the world did not answer",
-                    "words": "evolve a field"}
+                    "unknown": True, "words": "evolve a field"}
 
 
 async def test_a_compass_changed_too_often_is_said_in_words_not_a_crash() -> None:

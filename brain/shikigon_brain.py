@@ -58,7 +58,12 @@ THRIVING, CONTENT, STRUGGLING, ASLEEP = "thriving", "content", "struggling", "as
 
 
 def config_path() -> Path:
-    base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    """``$XDG_CONFIG_HOME/shikigon/shikigon.toml``. An empty or relative ``XDG_CONFIG_HOME`` counts
+    as unset (XDG Base Directory spec): until 0.1.14 an empty one made the path relative, and the
+    config of whatever folder the brain was started from named the advisor, its key and the world
+    (cos20 #613)."""
+    given = os.environ.get("XDG_CONFIG_HOME") or ""
+    base = Path(given) if os.path.isabs(given) else Path.home() / ".config"
     return base / "shikigon" / "shikigon.toml"
 
 
@@ -713,7 +718,10 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
         why = "the world takes one move per tick: it already moved in this one"
         return {"action": action, "ok": False, "why": why}
     except CsgConnectionError:
-        return {"action": action, "ok": False, "why": "the world did not answer"}
+        # The SDK says this also after the move went out: an answer that was no JSON, could not
+        # be read, or the last try failed. Whether the world took it is not known (``unknown``),
+        # so a limit counts it as made (``spend_budget``, cos20 #614).
+        return {"action": action, "ok": False, "why": "the world did not answer", "unknown": True}
     except (AuthenticationError, SendRefusedError):
         raise
     except Exception as exc:  # noqa: BLE001 - the door: nothing of one move ends the brain
@@ -972,11 +980,15 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
     refusal the rules can play (``fallback``), and a word can stand in its place (``speech``).
     Until 0.1.14 ``own`` of the refused move stayed, and the rules' move was booked as the head's
     loss: a field the rules built after a refused transfer used up the day's budget (cos20 #566,
-    F2)."""
+    F2).
+
+    A move whose answer was lost (``unknown``, ``play``) counts as made: for a limit, not known is
+    given. Until 0.1.14 it counted as refused, and the next move had the whole rest again, as
+    often as the answers got lost (cos20 #614)."""
     import head
     import lessons
 
-    if not (advice.get("head") and last.get("ok")):
+    if not (advice.get("head") and (last.get("ok") or last.get("unknown"))):
         return
     if advice.get("fallback") or last.get("action") != advice.get("choice"):
         return  # what went out is not the move the head chose
@@ -1527,8 +1539,13 @@ INHERITED_UMASK = 0o022
 
 
 def start_program(path: str, argv: list[str]) -> None:
-    """Become the program at ``path``, with the umask the brain was started with."""
+    """Become the program at ``path`` in ``/`` (``sign_in``), with the umask the brain was
+    started with."""
+    import connections
+
+    folder = connections.neutral_folder()
     os.umask(INHERITED_UMASK)
+    os.chdir(folder)
     os.execv(path, argv)
 
 
@@ -1538,7 +1555,13 @@ def sign_in(agent: str, start: Callable[[str, list[str]], Any] = start_program) 
     Omarchy's stub stands in the program's place (starting it would install it), or the program
     is not there. The path checked is the path started (``connections.sign_in_argv``). The
     program gets this process's environment and the umask the brain was started with, not
-    the brain's own 077: the player may go on working in it."""
+    the brain's own 077: the player may go on working in it.
+
+    It starts in ``/``, as every program Shikigon starts (``connections.neutral_folder``): pi
+    reads ``AGENTS.md`` and ``CLAUDE.md`` from its working folder and every folder above it,
+    with tools and without asking. Until 0.1.14 it started in the folder the brain was started
+    from, and a file someone else wrote there reached its system prompt (cos20 #492,
+    Betreuer-Durchgang 0563e7c, B1)."""
     import connections
 
     try:
@@ -1547,7 +1570,10 @@ def sign_in(agent: str, start: Callable[[str, list[str]], Any] = start_program) 
         return connections.placeholder_why(agent) or "Omarchy's placeholder stands in its place"
     except FileNotFoundError:
         return f"{CONTROL.sub('', agent)[:WORD_CHARS]} cannot be signed in to from here"
-    start(argv[0], argv)
+    try:
+        start(argv[0], argv)
+    except PermissionError as exc:  # ``/`` is not the system's alone: nothing is started
+        return str(exc)
     return ""
 
 

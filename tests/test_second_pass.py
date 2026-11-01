@@ -160,7 +160,9 @@ def test_no_program_is_started_but_through_the_neutral_folder() -> None:
     """The guard against a new start beside it: in the brain, an injected runner (a parameter
     named ``run``) is called only by ``in_neutral_folder``, and a process is created only by
     ``run_in_group``, which ``in_neutral_folder`` is given."""
-    allowed = {"in_neutral_folder": {"run"}, "run_in_group": {"subprocess.Popen"}}
+    # the sign-in becomes its program in ``/`` (``start_program``, cos20 #492 0563e7c B1)
+    allowed = {"in_neutral_folder": {"run"}, "run_in_group": {"subprocess.Popen"},
+               "start_program": {"os.execv"}, "sign_in": {"start"}}
     found = []
     for path in sorted((ROOT / "brain").glob("*.py")):
         for function in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -172,7 +174,10 @@ def test_no_program_is_started_but_through_the_neutral_folder() -> None:
 
 
 def _starts(function: ast.FunctionDef) -> list[tuple[int, str]]:
-    """Where ``function`` starts a program: its injected runner, ``subprocess``, ``os``."""
+    """Where ``function`` starts a program: its injected runner or starter, ``subprocess``,
+    ``os`` (also ``exec*``, ``spawn*``, ``posix_spawn*``, ``fork``) and ``pty.spawn``. Until
+    0.1.14 ``os.execv`` and a starter passed in were not counted, and the sign-in started pi in
+    the folder the brain was started from (cos20 #492, Betreuer-Durchgang 0563e7c, B1)."""
     params = {arg.arg for arg in function.args.args + function.args.kwonlyargs}
     spawning = {"run", "Popen", "call", "check_call", "check_output", "system", "popen"}
     starts = []
@@ -180,14 +185,17 @@ def _starts(function: ast.FunctionDef) -> list[tuple[int, str]]:
         if not isinstance(call, ast.Call):
             continue
         func = call.func
-        if isinstance(func, ast.Name) and func.id == "run" and "run" in params:
-            starts.append((call.lineno, "run"))
+        if isinstance(func, ast.Name) and func.id in ("run", "start") and func.id in params:
+            starts.append((call.lineno, func.id))
         elif isinstance(func, ast.Attribute) and func.attr.startswith("create_subprocess"):
             starts.append((call.lineno, func.attr))
-        elif isinstance(func, ast.Attribute) and func.attr in spawning:
+        elif isinstance(func, ast.Attribute):
             module = getattr(func.value, "id", "")
-            if module in ("subprocess", "os"):
+            creates = func.attr.startswith(("exec", "spawn", "posix_spawn")) or func.attr == "fork"
+            if module in ("subprocess", "os") and (func.attr in spawning or creates):
                 starts.append((call.lineno, f"{module}.{func.attr}"))
+            elif module == "pty" and func.attr in ("spawn", "fork"):
+                starts.append((call.lineno, f"pty.{func.attr}"))
     return starts
 
 

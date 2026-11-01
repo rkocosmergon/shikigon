@@ -150,9 +150,10 @@ def test_the_program_signed_in_to_gets_the_umask_the_brain_was_started_with(
     done: list[Any] = []
     monkeypatch.setattr(brain, "INHERITED_UMASK", 0o002)
     monkeypatch.setattr(brain.os, "umask", lambda mask: done.append(("umask", mask)) or 0o077)
+    monkeypatch.setattr(brain.os, "chdir", lambda folder: done.append(("chdir", folder)))
     monkeypatch.setattr(brain.os, "execv", lambda path, argv: done.append(("execv", path, argv)))
     brain.start_program("/usr/bin/pi", ["/usr/bin/pi"])
-    assert done == [("umask", 0o002), ("execv", "/usr/bin/pi", ["/usr/bin/pi"])]
+    assert done == [("umask", 0o002), ("chdir", "/"), ("execv", "/usr/bin/pi", ["/usr/bin/pi"])]
 
 
 @pytest.mark.parametrize("agent", ["codex", "sh", "../pi", "", "pi\x1b[2J"])

@@ -261,10 +261,16 @@ def in_neutral_folder(run: Callable[..., Any], argv: list[str], **kwargs: Any) -
     ``/home/<login>/.local/state/shikigon/run/…`` (cos20 #492, eighth review, finding 1). ``/``
     names nobody.
     """
+    return run(argv, cwd=neutral_folder(), **kwargs)
+
+
+def neutral_folder() -> str:
+    """``/``, once only the system can write it; ``PermissionError`` otherwise. The one check for
+    every start: the questions here and the sign-in (``shikigon_brain.sign_in``)."""
     root = os.stat(NEUTRAL_FOLDER)
     if root.st_uid != 0 or root.st_mode & 0o022:
         raise PermissionError(f"{NEUTRAL_FOLDER} is writable by someone other than the system")
-    return run(argv, cwd=NEUTRAL_FOLDER, **kwargs)
+    return NEUTRAL_FOLDER
 
 
 def agent_env(agent: str) -> dict[str, str]:

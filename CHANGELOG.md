@@ -4,6 +4,18 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## 0.1.14 (2026-10-31)
 
+- **Your config comes from your home, always.** With `XDG_CONFIG_HOME` set but empty (or to a
+  relative path), the brain read and wrote `shikigon/shikigon.toml` in whatever folder it was
+  started from, and a file there could name the advisor's address together with a key from your
+  environment. Now such a value counts as unset, as the XDG spec says, and the config is
+  `~/.config/shikigon/shikigon.toml`.
+- **A move whose answer got lost counts against the learning budget.** When the world's answer
+  to a move of the head could not be read, the move counted as refused, and the next move had
+  the whole day's rest again. Now a move whose outcome is not known counts as made; a move the
+  world refused or held back (one move per tick) still does not count.
+- **Signing in to pi starts it in `/`.** The sign-in started pi in the folder the brain was
+  started from, where pi reads `AGENTS.md` and `CLAUDE.md` of that folder and the ones above
+  it. Now it starts in `/`, like every other program Shikigon starts.
 - **Two games.** The README now describes the outer game next to the inner one: the four ways
   in with an inviting agent's code, what there is to buy and how it is paid, and what the
   inviter earns, dated and linked to the partner terms. The advisor can explain it when asked.
