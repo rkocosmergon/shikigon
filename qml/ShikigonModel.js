@@ -342,6 +342,9 @@ function panelState(facts) {
   if (asleep === "key_ended")  // a new one that did not wake says why, right here
     return is("key_ended", "It was away too long. The world took it over.",
               facts.said ? [facts.said] : [], ["wake a new one"])
+  if (asleep === "key_lost")  // its key file is there but cannot be read (cos20 #492)
+    return is("key_lost", "Its key file cannot be read. A new one can move in.",
+              facts.said ? [facts.said] : [], ["wake a new one"])
   if (asleep === "config") {
     var why = (status.last && status.last.why) || "its configuration cannot be followed"
     return is("config", why, ["Change it in ~/.config/shikigon/shikigon.toml."], [])

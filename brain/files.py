@@ -138,6 +138,38 @@ def finite(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _kept(path: Path) -> Any:
+    """What a file the brain keeps holds, or ``None``: missing, unreadable, empty, broken."""
+    try:
+        return loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):  # a byte that is no UTF-8 is a ValueError too
+        return None
+
+
+def read_object(path: Path) -> dict[str, Any]:
+    """A JSON object the brain keeps, or ``{}``: the one way to read one (guard in test_files).
+
+    A file that is missing, empty (a crash between writing and the disk), broken, or of another
+    form counts as none; its values are then read by their type (``finite``, ``isinstance``).
+    Until 0.1.14 each reader did this itself, and four did not: a ``speech.json``, a
+    ``lessons.json``, a ``budget.json`` or an ``advisor.json`` of another form stopped every move
+    (cos20 #492, Betreuer-Durchgang b40f78b; the class of #612 F3/F4)."""
+    data = _kept(path)
+    return data if isinstance(data, dict) else {}
+
+
+def read_list(path: Path) -> list[Any]:
+    """A JSON list the brain keeps, or ``[]`` (see ``read_object``)."""
+    data = _kept(path)
+    return data if isinstance(data, list) else []
+
+
+def count(value: Any, default: int = 0) -> int:
+    """``value`` as a whole number, or ``default``: a counter read from a file the brain keeps."""
+    number = finite(value)
+    return int(number) if number is not None else default
+
+
 def json_in(text: str) -> Any:
     """The JSON between the first ``{`` and the last ``}`` of a model's answer.
 

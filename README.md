@@ -475,7 +475,7 @@ Everything lives in plain files:
 |---|---|
 | `~/.config/shikigon/shikigon.toml` | your configuration (copied from `config/shikigon.toml` on first start): server, character, name, move interval, which words mean what, and the advisor |
 | `~/.local/state/shikigon/credentials.json` | its key, readable by you only (0600). Shown only when you press `K` in the terminal, there in full; never logged |
-| `~/.local/state/shikigon/status.json` | the snapshot the bar reads: its own numbers (energy, fields, rank and how many are ranked, whether it is shown publicly as a yes or no), its name, character and compass and the server's sentences on its situation, each cut short, and, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `world_silent`, `config`) |
+| `~/.local/state/shikigon/status.json` | the snapshot the bar reads: its own numbers (energy, fields, rank and how many are ranked, whether it is shown publicly as a yes or no), its name, character and compass and the server's sentences on its situation, each cut short, and, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `key_lost`, `world_silent`, `config`) |
 | `~/.local/state/shikigon/journal.jsonl` | every move with its energy and fields at the time, every word from you, how each tournament mission ended, and its lessons. Past 256 KiB it keeps its last 128 KiB (about a thousand entries) |
 | `~/.local/state/shikigon/journal_recent.json` | the journal's last twelve lines, for the bar |
 | `~/.local/state/shikigon/lessons.json` | its last three lessons |
@@ -485,10 +485,18 @@ Everything lives in plain files:
 | `~/.local/state/shikigon/advisor_key` | a key an advisor's address asked for, with that address, readable by you only (0600) |
 | `~/.local/state/shikigon/advisor_count.json` | how often the model was called today (for `max_per_day`) and the moves counted (for `every`) |
 | `~/.local/state/shikigon/tournament_seen.json` | the tournament missions already written down, so none appears twice |
+| `~/.local/state/shikigon/refusals.json` | the moves the world refused in a row, and those left alone for the next 30 moves; a `tick` by hand keeps to them too |
+| `~/.local/state/shikigon/speech.json` | when it last wrote to another agent, the messages it has answered, and a contract proposal it announced |
+| `~/.local/state/shikigon/budget.json` | today's learning budget while your agent has taken over: its total energy at the start of the UTC day and what its own moves lost since |
+| `~/.local/state/shikigon/review/` | what your agent may read while it looks back: its moves, their numbers, the world's rules |
 | `~/.local/state/shikigon/setup.json` | how far **wake** got, for the panel |
 | `~/.local/state/shikigon/setup.log` | what the last setup of its brain printed (pip), for when it failed |
 | `~/.local/state/shikigon/greeted` | empty; says the one welcome notification was shown |
 | `~/.local/state/shikigon/tips.json` | which first-time hints were shown, and when the last one came |
+
+A file of the brain that is empty or that it cannot read (after a crash, or edited by hand) counts
+as none, and the moves go on. Only a key file it cannot read puts it to sleep: the panel then
+offers **wake a new one**.
 
 The code is MIT. Change the words it understands, its character, its pace, or replace its
 brain: `[brain] decider` names a decider from the Python entry-point group

@@ -75,18 +75,18 @@ def memo_path(home: Path) -> Path:
 
 
 def load(home: Path) -> dict[str, Any]:
-    """Moves counted, the move it last talked on, the messages it has answered."""
-    try:
-        data = files.loads(memo_path(home).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        data = {}
+    """Moves counted, the move it last talked on, the messages it has answered; each by its type
+    (``files.read_object``): until 0.1.14 a file of another form stopped every move once an
+    advisor was picked (cos20 #492, Betreuer-Durchgang b40f78b, finding 1)."""
+    data = files.read_object(memo_path(home))
+    answered = data.get("answered")
     return {
-        "moves": int(data.get("moves", 0) or 0),
-        "talked": int(data.get("talked", NEVER)),
-        "posted": int(data.get("posted", NEVER)),
-        "answered": [str(i) for i in data.get("answered", [])][-50:],
+        "moves": files.count(data.get("moves")),
+        "talked": files.count(data.get("talked"), NEVER),
+        "posted": files.count(data.get("posted"), NEVER),
+        "answered": [str(i) for i in answered][-50:] if isinstance(answered, list) else [],
         "then": _then(data.get("then")),
-        "then_at": float(data.get("then_at", 0) or 0),
+        "then_at": files.finite(data.get("then_at")) or 0.0,
     }
 
 

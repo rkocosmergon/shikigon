@@ -95,6 +95,16 @@ What changed for someone who uses Shikigon. Newest first.
 - **An empty tournament file no longer stops the moves.** The same held for
   `tournament_seen.json` during a tournament: each move went out, but ended as "could not be
   played", until the file was deleted. Now such a file counts as a first look.
+- **No file of the brain stops it.** The same held for four more files, each in a form other
+  than the brain writes (edited by hand, for instance): `speech.json` stopped every move once an
+  advisor was picked, `lessons.json` and `budget.json` every move of your agent, `advisor.json`
+  every advised move or the brain itself. Each file is now read in its form, and what it cannot
+  read counts as none. A key file it cannot read (`credentials.json`, empty after a crash)
+  started the brain anew every 30 seconds; now it falls asleep and the panel offers **wake a new
+  one**. `forget` then removes the files here, as after an ended key.
+- **A tick by hand keeps to the pauses.** A move paused after three refusals was left alone only
+  by the running brain; a `tick` by hand sent it at once. The pauses now stand in
+  `refusals.json` in the state folder, for both.
 
 ## 0.1.13 (2026-10-23)
 

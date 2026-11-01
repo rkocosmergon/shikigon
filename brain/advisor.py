@@ -394,15 +394,11 @@ def _counts(home: Path) -> dict[str, Any]:
     A file it cannot read counts as none, like every other file the brain keeps; the next count
     writes it anew. Until 0.1.14 an empty or broken one stopped every move of the head and every
     question until it was deleted by hand (cos20 #612, F3)."""
-    try:
-        data = files.loads((home / "advisor_count.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
+    return files.read_object(home / "advisor_count.json")
 
 
 def _number(counts: dict[str, Any], key: str) -> int:
-    return int(files.finite(counts.get(key)) or 0)
+    return files.count(counts.get(key))
 
 
 def _keep(home: Path, counts: dict[str, Any]) -> None:

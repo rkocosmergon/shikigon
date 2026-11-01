@@ -352,16 +352,26 @@ def checked_program(agent: str, run: Callable[..., Any] | None = None) -> tuple[
 # ---------- the choice ----------------------------------------------------------------------
 
 
+# What ``advisor.json`` holds: the keys the brain writes (``advisor_command``), as texts.
+CHOICE_TEXTS = ("via", "agent", "agent_model", "base_url", "model")
+
+
 def chosen(home: Path) -> dict[str, Any]:
-    """What the player picked in the panel; empty if nothing."""
-    path = home / CHOICE_FILE
-    if not path.exists():
-        return {}
-    try:
-        data = files.loads(path.read_text(encoding="utf-8"))
-    except ValueError:
-        return {}
-    return data if isinstance(data, dict) else {}
+    """What the player picked in the panel; empty if nothing. Only the keys the brain writes, each
+    in its form: ``advisor.json`` goes over the config file, and until 0.1.14 an ``every`` that was
+    a word there stopped every advised move, a ``timeout_s`` every start of the brain (cos20 #492,
+    Betreuer-Durchgang b40f78b, finding 4)."""
+    data = files.read_object(home / CHOICE_FILE)
+    picked: dict[str, Any] = {key: data[key] for key in CHOICE_TEXTS
+                              if isinstance(data.get(key), str)}
+    every = files.finite(data.get("every"))
+    if every is not None and every >= 1:
+        picked["every"] = int(every)
+    advise = data.get("advise")
+    whole = isinstance(advise, int) and not isinstance(advise, bool) and advise >= 1
+    if advise in ("off", "head") or whole:
+        picked["advise"] = advise
+    return picked
 
 
 def choose(home: Path, choice: dict[str, Any]) -> None:
@@ -397,16 +407,11 @@ def kept_key(home: Path, url: str) -> str:
     address asks for it again. Until 0.1.12 it was bound to whatever ``advisor.json`` named at
     the moment of reading, so it went to the next address picked (cos20 #492 B3).
     """
-    path = home / KEY_FILE
-    if not path.exists() or not origin(url):
+    if not origin(url):
         return ""
-    try:
-        kept = files.loads(path.read_text(encoding="utf-8").strip())
-    except ValueError:
-        return ""
-    if not isinstance(kept, dict):
-        return ""
-    return str(kept.get("key") or "") if kept.get("origin") == origin(url) else ""
+    kept = files.read_object(home / KEY_FILE)
+    key = kept.get("key")
+    return key if isinstance(key, str) and kept.get("origin") == origin(url) else ""
 
 
 def secret_for(home: Path | None, conf: dict[str, Any], url: str) -> str:

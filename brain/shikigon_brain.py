@@ -122,12 +122,28 @@ def credentials_path() -> Path:
     return state_dir() / "credentials.json"
 
 
+CREDENTIAL_TEXTS = ("agent_id", "api_key", "expires_at", "world")
+
+
 def load_credentials() -> dict[str, str] | None:
+    """Its key file as texts; ``None`` while no Shikigon lives here. A file that is there but
+    cannot be read gives what it can, perhaps nothing (``key_lost``): it is not "no Shikigon",
+    which would let ``register`` replace it without ``--new``."""
     path = credentials_path()
     if not path.exists():
         return None
-    data = files.loads(path.read_text(encoding="utf-8"))
-    return data if isinstance(data, dict) else None
+    data = files.read_object(path)
+    return {key: data[key] for key in CREDENTIAL_TEXTS if isinstance(data.get(key), str)}
+
+
+KEY_LOST_WHY = "its key file cannot be read: wake a new one"
+
+
+def key_lost(creds: dict[str, str] | None) -> bool:
+    """True if a key file is there but names no agent or no key. Until 0.1.14 an empty one (a
+    crash between writing and the disk) ended the brain on every start, and the bar started it
+    again every 30 seconds (cos20 #492, Betreuer-Durchgang b40f78b, finding 5)."""
+    return creds is not None and not (creds.get("agent_id") and creds.get("api_key"))
 
 
 INVITE_FORM = re.compile(r"[A-Z0-9]{4,12}")  # the world's codes: eight of A-Z0-9 (31.10.2026)
@@ -237,9 +253,12 @@ def terminal_refusal(cfg: dict[str, Any], creds: dict[str, str]) -> str:
     The dashboard runs in a process of its own, with its own world (``--base-url``; Shikigon
     hands no address over as an argument, §1b) and without this brain's port check. Until 0.1.12
     it got the key of a Shikigon from any world and sent it to cosmergon.com. It opens only for
-    a Shikigon of that world, so the key goes nowhere it was not given."""
+    a Shikigon of that world, so the key goes nowhere it was not given. A key file it cannot read
+    is said in a sentence, not in a traceback of the script that hands the key over."""
     import connections
 
+    if not (creds.get("agent_id") and creds.get("api_key")):
+        return KEY_LOST_WHY
     home = connections.origin(DASHBOARD_WORLD)
     world = connections.origin(str(cfg.get("world", {}).get("base_url") or DASHBOARD_WORLD))
     given_by = connections.origin(creds.get("world") or world)
@@ -319,15 +338,16 @@ def register(
 def agent_paths(home: Path) -> list[Path]:
     """What belongs to the agent that lives here, not to the player: its moves, what it learned
     from them, the day its learning budget is measured against, its words, the missions it saw,
-    its snapshot. The talk with the advisor is the player's (cos20 #468), as are the choice of
-    advisor, its counter of calls and the bar's hints."""
+    its snapshot, the moves the world kept refusing it. The talk with the advisor is the
+    player's (cos20 #468), as are the choice of advisor, its counter of calls and the bar's
+    hints."""
     import head
     import lessons
     import speech
 
     return [home / lessons.JOURNAL_FILE, home / BAR_JOURNAL, home / lessons.LESSONS_FILE,
             home / lessons.REVIEW_FOLDER, home / head.BUDGET_FILE, speech.memo_path(home),
-            home / seen_path().name, home / "status.json"]  # fmt: skip
+            home / seen_path().name, home / "status.json", home / REFUSALS_FILE]  # fmt: skip
 
 
 def leave_the_old_one(home: Path) -> None:
@@ -348,14 +368,19 @@ def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
     The server deletes the agent. A key that has already ended can delete nothing: the
     world keeps that agent as a Vagant, and only the files here go.
     If the server does not answer or refuses, nothing here is removed, so you can try again.
-    Your configuration stays. ``delete`` is ``connections.bounded_delete`` in use and a stub in
-    tests.
+    A key file it cannot read (``key_lost``) has no key to send: only the files here go, as after
+    an ended key. Your configuration stays. ``delete`` is ``connections.bounded_delete`` in use
+    and a stub in tests.
     """
     import advisor
 
     creds = load_credentials()
     if creds is None:
         raise SystemExit("No Shikigon lives here.")
+    if key_lost(creds):  # nothing to send the server: the files here go, as after a 401
+        shutil.rmtree(state_dir())
+        lost = "its key file could not be read; the world keeps the agent as a Vagant"
+        return {"ok": True, "server": lost, "removed": str(state_dir())}
     if why := world_refusal(cfg) or key_refusal(cfg, creds):
         return {"ok": False, "why": why}
     url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/players/me"
@@ -617,11 +642,7 @@ def load_seen() -> list[str] | None:
     A file it cannot read counts as the first look: it remembers what is there and writes the
     file anew. Until 0.1.14 an empty one stopped every move in a tournament, after the move went
     out, until it was deleted by hand (cos20 #612, F4, the variant of F3)."""
-    try:
-        data = files.loads(seen_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    ids = data.get("ids", []) if isinstance(data, dict) else None
+    ids = files.read_object(seen_path()).get("ids")
     return [str(i) for i in ids] if isinstance(ids, list) else None
 
 
@@ -661,6 +682,7 @@ async def tournament_journal(agent: Any, state: Any) -> int:
 # Why it sleeps, as one word the bar can act on (a key that ended wants a different next
 # step than a world that did not answer). The sentence for you stays in ``last.why``.
 KEY_ENDED, WORLD_SILENT, CONFIG = "key_ended", "world_silent", "config"
+KEY_LOST = "key_lost"  # its key file cannot be read (``key_lost``): a new one is the way on
 
 
 def fall_asleep(reason: str, why: str) -> dict[str, Any]:
@@ -742,19 +764,61 @@ REFUSALS_BEFORE_PAUSE = 3
 PAUSED_MOVES = 30
 
 
-class Refusals:
-    """Which moves the world keeps refusing, and which are paused. Kept only while it runs."""
+REFUSALS_FILE = "refusals.json"
 
-    def __init__(self) -> None:
+
+def refusals_path() -> Path:
+    return state_dir() / REFUSALS_FILE
+
+
+def _per_move(value: Any) -> dict[str, int]:
+    """``{move: number}`` read from the file by its form."""
+    return {str(k): files.count(v) for k, v in value.items()} if isinstance(value, dict) else {}
+
+
+class Refusals:
+    """Which moves the world keeps refusing, and which are paused.
+
+    With ``path`` (``refusals_path``) they are kept in a file, read before each look and written
+    after each count: a ``tick`` by hand next to the running brain holds back what the brain
+    paused, and the brain what the ``tick`` paused. Until 0.1.14 they lived in the running
+    brain alone, and a ``tick`` sent at once the move it had just paused (cos20 #492,
+    Betreuer-Durchgang b40f78b, finding 6). Without ``path``, in memory only."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path
         self.moves = 0
         self._in_a_row: dict[str, int] = {}
         self._paused_until: dict[str, int] = {}
+        self._load()
+
+    def _load(self) -> None:
+        if self.path is None:
+            return
+        data = files.read_object(self.path)
+        self.moves = files.count(data.get("moves"))
+        self._in_a_row = _per_move(data.get("in_a_row"))
+        self._paused_until = _per_move(data.get("paused_until"))
+
+    def _save(self) -> None:
+        if self.path is None:
+            return
+        files.write_json(self.path, {
+            "moves": self.moves, "in_a_row": self._in_a_row,
+            "paused_until": {a: u for a, u in self._paused_until.items() if u > self.moves}})
 
     def paused(self) -> frozenset[str]:
+        self._load()
         return frozenset(a for a, until in self._paused_until.items() if until > self.moves)
 
     def note(self, last: dict[str, Any]) -> bool:
         """Count one move; ``True`` when this refusal pauses it."""
+        self._load()
+        pauses = self._count(last)
+        self._save()
+        return pauses
+
+    def _count(self, last: dict[str, Any]) -> bool:
         self.moves += 1
         action = str(last.get("action") or "")
         if last.get("ok"):
@@ -947,6 +1011,8 @@ def make_agent(cfg: dict[str, Any]) -> Any:
     creds = load_credentials()
     if creds is None:
         raise SystemExit("No Shikigon yet. Run: shikigon_brain.py register")
+    if key_lost(creds):
+        raise SystemExit(KEY_LOST_WHY)
     if why := world_refusal(cfg) or key_refusal(cfg, creds):
         raise SystemExit(why)
     return CosmergonAgent(
@@ -1385,7 +1451,7 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
     show_talk()
     done_in: int | None = None
     learning: Any = None
-    refusals = Refusals()
+    refusals = Refusals(refusals_path())
     while True:
         if why := world_refusal(cfg):  # the world's port can change hands while it runs (H9)
             fall_asleep(CONFIG, why)
@@ -1415,6 +1481,8 @@ async def with_agent(
     from cosmergon_agent.exceptions import AuthenticationError, SendRefusedError
 
     creds = load_credentials()
+    if key_lost(creds):
+        return fall_asleep(KEY_LOST, KEY_LOST_WHY)
     if why := world_refusal(cfg) or (key_refusal(cfg, creds) if creds else ""):
         return fall_asleep(CONFIG, why)
     agent = make_agent(cfg)
@@ -1540,8 +1608,12 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     if args.command == "run":
         connections.run_loop(with_agent(cfg, lambda a: run(cfg, a, decider), once=False))
         return 0
-    act = guarded_tick if args.command == "tick" else advise
-    print(json.dumps(connections.run_loop(with_agent(cfg, lambda a: act(a, decider)))))
+    async def work(agent: Any) -> dict[str, Any]:
+        if args.command == "tick":  # the pauses of the running brain hold here too
+            return await guarded_tick(agent, decider, None, Refusals(refusals_path()))
+        return await advise(agent, decider)
+
+    print(json.dumps(connections.run_loop(with_agent(cfg, work))))
     return 0
 
 

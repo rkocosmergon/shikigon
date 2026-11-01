@@ -307,6 +307,15 @@ TestCase {
     compare(ended.full, false)
   }
 
+  function test_a_key_file_it_cannot_read_is_no_dead_end() {
+    // Until 0.1.14 the brain ended on every start and the bar started it again (cos20 #492).
+    var lost = Model.panelState({ agent: true, status: {
+      mood: "asleep", reason: "key_lost", last: { why: "its key file cannot be read: wake a new one" } } })
+    compare(lost.name, "key_lost")
+    compare(lost.actions, ["wake a new one"])
+    compare(lost.full, false)
+  }
+
   function test_a_silent_world_and_an_unknown_decider_say_so() {
     var silent = Model.panelState({ agent: true, status: { mood: "asleep", reason: "world_silent" } })
     compare(silent.sentence, "The world did not answer. It tries again by itself.")

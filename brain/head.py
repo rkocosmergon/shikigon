@@ -437,11 +437,17 @@ def _today() -> str:
 
 
 def _budget_data(home: Path) -> dict[str, Any]:
-    try:
-        data = files.loads((home / BUDGET_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    """Today's budget as ``{day, start, spent}``, each by its type; ``{}`` when today's is not
+    measured yet. A file of today without a readable ``start`` counts as not measured: until
+    0.1.14 it stopped every move of the head until the day ended, and a ``spent`` of another
+    form stopped it after the move had gone out (cos20 #492, Betreuer-Durchgang b40f78b,
+    finding 3)."""
+    data = files.read_object(home / BUDGET_FILE)
+    start = files.finite(data.get("start"))
+    if data.get("day") != _today() or start is None:
         return {}
-    return data if isinstance(data, dict) else {}
+    return {"day": data["day"], "start": start,
+            "spent": max(0.0, files.finite(data.get("spent")) or 0.0)}
 
 
 NO_TOTAL = "learning budget: the world states no total energy, so nothing may be given away"
@@ -464,24 +470,24 @@ def budget_left(home: Path, conf: dict[str, Any], total: float | None) -> float 
     if pct <= 0:
         return None
     data = _budget_data(home)
-    if data.get("day") != _today():
+    if not data:
         if total is None:
             return 0.0
         data = {"day": _today(), "start": float(total), "spent": 0.0}
         files.write_json(home / BUDGET_FILE, data)
-    return max(0.0, float(data["start"]) * pct / 100 - float(data.get("spent") or 0.0))
+    return max(0.0, float(data["start"]) * pct / 100 - float(data["spent"]))
 
 
 def budget_started(home: Path) -> bool:
     """True once today's budget was measured against a total energy of the world."""
-    return _budget_data(home).get("day") == _today()
+    return bool(_budget_data(home))
 
 
 def budget_spend(home: Path, loss: float) -> None:
     """Count what one of its own moves lost today (a positive number)."""
     data = _budget_data(home)
-    if loss > 0 and data.get("day") == _today():
-        data["spent"] = float(data.get("spent") or 0.0) + loss
+    if loss > 0 and data:
+        data["spent"] += loss
         files.write_json(home / BUDGET_FILE, data)
 
 

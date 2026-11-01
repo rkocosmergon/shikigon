@@ -291,14 +291,11 @@ def parse_lesson(text: str) -> dict[str, str] | None:
 
 
 def kept(home: Path) -> list[dict[str, Any]]:
-    path = home / LESSONS_FILE
-    if not path.exists():
-        return []
-    try:
-        data = files.loads(path.read_text(encoding="utf-8"))
-    except ValueError:
-        return []
-    return [entry for entry in data if isinstance(entry, dict)] if isinstance(data, list) else []
+    """The lessons kept, oldest first: only those that carry their three texts. Until 0.1.14 a
+    lesson without one stopped every move of the head, every question and every look back
+    (``latest_text``; cos20 #492, Betreuer-Durchgang b40f78b, finding 2)."""
+    return [entry for entry in files.read_list(home / LESSONS_FILE)
+            if isinstance(entry, dict) and all(isinstance(entry.get(key), str) for key in BOUNDS)]
 
 
 def keep(home: Path, lesson: dict[str, Any]) -> None:
