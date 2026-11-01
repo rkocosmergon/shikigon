@@ -16,6 +16,15 @@ What changed for someone who uses Shikigon. Newest first.
   to a move of the head could not be read, the move counted as refused, and the next move had
   the whole day's rest again. Now a move whose outcome is not known counts as made; a move the
   world refused or held back (one move per tick) still does not count.
+- **A contract it announced is proposed once.** When the agent it wrote to refused the message
+  before a proposal, the head proposed the contract in the same tick and the announcement
+  proposed it again on the next: that agent had two offers for the one announced. Now a refused
+  word announces nothing, and the next move is chosen afresh.
+- **No word while messages or posts are left alone.** After the world refused messages three
+  times in a row, your Shikigon still wrote a word, the call counted against the day's limit,
+  and the move was held back: the tick passed without a move, and the proposal went out next
+  without its word. Now it writes nothing while the move that would carry the word is left
+  alone, and the rule tree's move goes out.
 - **Signing in to pi starts it in `/`.** The sign-in started pi in the folder the brain was
   started from, where pi reads `AGENTS.md` and `CLAUDE.md` of that folder and the ones above
   it. Now it starts in `/`, like every other program Shikigon starts.
