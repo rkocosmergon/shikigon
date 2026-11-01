@@ -289,7 +289,9 @@ shows **WHO ANSWERS?**, one list:
   that runs as you, not as a system service. A key over plain http never goes through a proxy
   set in your environment. Over https such a proxy carries the connection encrypted and cannot
   read the key, unless your system trusts a certificate of that proxy, as some company networks
-  set up. Never in plain text over a network, also not one that looks like home — in a café
+  set up. Only an http or https proxy works: with a SOCKS proxy in your environment
+  (`ALL_PROXY=socks5://…`) advice, head and moves end in an error, because Shikigon ships
+  without SOCKS support. Never in plain text over a network, also not one that looks like home — in a café
   `192.168.1.50` or `macmini.local` can be someone else. A name and a password
   in the address (`https://me:pw@…`) are a key too and keep the same rule. The same holds for
   the world: its key goes only to an `https` address (or this machine), and only to the world

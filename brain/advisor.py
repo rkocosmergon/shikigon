@@ -159,6 +159,18 @@ MOVE_WORD_CHARS, WHY_QUOTED = 40, 120
 MOVE_WORD = re.compile(rf"[a-z][a-z0-9_]{{0,{MOVE_WORD_CHARS - 1}}}")
 
 
+def word(value: Any, chars: int = MOVE_WORD_CHARS) -> str:
+    """A word of the world for a prompt (a kind, an id, a tick): one line, the marks out, cut.
+
+    Sentences go through ``cut``, another player's text through ``quoted``; the world's words
+    (a contract's kind and id, a mission type, a partner, a tick) went in as they came, a line
+    break and the quote marks included, and could stand in the head's prompt as the brain's own
+    (cos20 #492, betreuer pass 0563e7c, B2).
+    """
+    text = "".join(c if c.isprintable() else " " for c in cut(value, chars))
+    return text.replace("<", "‹").replace(">", "›")
+
+
 def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
     """One move of the journal as a model may read it: the one way from the journal into a prompt.
 

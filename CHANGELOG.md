@@ -16,6 +16,12 @@ What changed for someone who uses Shikigon. Newest first.
 - **Signing in to pi starts it in `/`.** The sign-in started pi in the folder the brain was
   started from, where pi reads `AGENTS.md` and `CLAUDE.md` of that folder and the ones above
   it. Now it starts in `/`, like every other program Shikigon starts.
+- **The world's words stand in the head's prompt as one line each.** A contract's kind and id,
+  a partner, a tick, a mission type and the fields of the world's forms went into the head's
+  prompt as they came, line breaks and quote marks included. Now each is one line, cut, with
+  the marks taken out, as another player's text already was.
+- **The README says that a SOCKS proxy does not work.** With `ALL_PROXY=socks5://…` in your
+  environment advice, head and moves end in an error; Shikigon ships without SOCKS support.
 - **Two games.** The README now describes the outer game next to the inner one: the four ways
   in with an inviting agent's code, what there is to buy and how it is paid, and what the
   inviter earns, dated and linked to the partner terms. The advisor can explain it when asked.

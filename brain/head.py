@@ -96,14 +96,15 @@ def forms_of(info: Any) -> Forms:
 def form_lines(forms: list[dict[str, Any]]) -> list[str]:
     """One line per form: what it is for, its fields (with their type where the world names
     it), the ones it needs."""
+    word = advisor.word  # the world's words, one line each (cos20 #492, B2)
     lines = []
     for form in forms:
-        needs = ", ".join(form.get("required") or []) or "none"
+        needs = ", ".join(word(n) for n in form.get("required") or []) or "none"
         given = form.get("types")
         types: dict[str, Any] = given if isinstance(given, dict) else {}
-        fields = ", ".join(f"{f} ({types[f]})" if f in types else str(f)
+        fields = ", ".join(f"{word(f)} ({word(types[f])})" if f in types else word(f)
                            for f in form.get("params") or [])
-        lines.append(f"  form: {_short(form.get('description') or '', 160)} — fields "
+        lines.append(f"  form: {word(form.get('description') or '', 160)} — fields "
                      f"{fields}; needs {needs}")
     text = "\n".join(lines)
     return [text if len(text) <= FORM_CHARS else text[: FORM_CHARS - 1] + "…"]
@@ -125,20 +126,21 @@ def possible(action: str, facts: Any, state: Any) -> bool:
 
 def mission_lines(facts: dict[str, Any]) -> list[str]:
     """The missions it can start, each with what it needs (the world's own schema)."""
-    marauder, bombs = facts.get("marauder_state", "?"), facts.get("mega_bombs", 0)
-    threshold = facts.get("holes_threshold", "?")
+    word = advisor.word  # the world's words, one line each (cos20 #492, B2)
+    marauder, bombs = word(facts.get("marauder_state", "?")), word(facts.get("mega_bombs", 0))
+    threshold = word(facts.get("holes_threshold", "?"))
     lines = [f"  its marauder: {marauder} · bombs: {bombs} · holes a field needs: {threshold}"]
     loot = facts.get("richest_loot_field") or {}
     if loot:
-        lines.append(f"  most bomb boxes: {_short(loot, 160)}")
+        lines.append(f"  most bomb boxes: {word(loot, 160)}")
     kinds = facts.get("mission_types")
     for mission in kinds if isinstance(kinds, list) else []:
         if not isinstance(mission, dict):
             continue
         given = mission.get("params_schema")
-        schema = ", ".join(f"{k}: {_short(v, 40)}"
+        schema = ", ".join(f"{word(k)}: {word(v)}"
                            for k, v in (given if isinstance(given, dict) else {}).items())
-        lines.append(f"  - {mission.get('type')}({schema})")
+        lines.append(f"  - {word(mission.get('type'))}({schema})")
     lines.append('  form: {"action": "start_mission", "params": {"mission_type": "<type>", '
                  '"params": {...}}}')
     return lines
@@ -205,9 +207,10 @@ def contracts_in(state: Any) -> list[str]:
               if isinstance(c, dict)]
     lines = []
     for c in active:
-        who = f"agent {c['partner_id']}" if c.get("partner_id") else "an open call"
-        end = f"until tick {c['ends_at_tick']}" if c.get("ends_at_tick") else "without end"
-        lines.append(f"- {c.get('contract_type')} with {who}, {end}, terms "
+        word = advisor.word  # the world's words, one line each (cos20 #492, B2)
+        who = f"agent {word(c['partner_id'])}" if c.get("partner_id") else "an open call"
+        end = f"until tick {word(c['ends_at_tick'])}" if c.get("ends_at_tick") else "without end"
+        lines.append(f"- {word(c.get('contract_type'))} with {who}, {end}, terms "
                      f"{advisor.quoted(c.get('terms') or {}, 160)}")
     kinds = {c.get("contract_type") for c in active}
     if kinds - {"custom"}:
@@ -229,8 +232,9 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
         parts.append("Your last moves:\n" + "\n".join(recent))
     offers = []
     for c in tuple(getattr(state, "pending_contracts", None) or ())[:5]:
-        offers.append(f"- contract_id {c.get('contract_id')}: {c.get('contract_type')} from "
-                      f"{c.get('from_player_id')}, terms "
+        word = advisor.word  # the world's words, one line each (cos20 #492, B2)
+        offers.append(f"- contract_id {word(c.get('contract_id'))}: "
+                      f"{word(c.get('contract_type'))} from {word(c.get('from_player_id'))}, terms "
                       f"{advisor.quoted(c.get('terms') or {}, 160)}")
     if offers:
         parts.append("Contracts offered to you:\n" + "\n".join(offers))
@@ -246,7 +250,7 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
             continue
         shown = ({k: v for k, v in facts.items() if k not in _NOISE}
                  if isinstance(facts, dict) else facts)
-        line = f"- {action}: {_short(shown, FACTS_CHARS)}"
+        line = f"- {advisor.word(action)}: {advisor.word(shown, FACTS_CHARS)}"
         if action in forms and action not in OWN_FORM:
             own.append(line)
             own.extend(form_lines(forms[action]))
