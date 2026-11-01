@@ -22,6 +22,7 @@ Measured why it chooses freely and may try again (cos20 #525, #527): an agent wi
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -326,6 +327,31 @@ def mission_form(params: dict[str, Any], state: Any) -> str:
     return ""
 
 
+# What the head writes as text into a move is a name or an id, never a sentence of its own
+# (cos20 #492, betreuer pass f2c7212, B1–B4): one word without a space, cut (``NAME``); a key is a
+# field name (``advisor.MOVE_WORD``). Its words to other agents go only through the brain's speech
+# (``speak``, ``speech.usable``). At f2c7212 only ``message``/``say`` were held back
+# (``NEVER_ITS_OWN``), and a contract's clause, a cube's name, a counter offer's slots or a
+# mission's title went out in the head's own sentences, with or without a learning budget.
+NAME_CHARS = 64  # an id is 36
+NAME = re.compile(rf"[A-Za-z0-9][A-Za-z0-9_.:\-]{{0,{NAME_CHARS - 1}}}")
+
+
+def own_words(value: Any) -> str:
+    """Empty when every text in ``value``, at any depth, is a name (``NAME``) and every key a
+    field name; else what is wrong, for the head."""
+    if isinstance(value, str):
+        return "" if NAME.fullmatch(value) else (f"{advisor.word(value)} is no name or id: a move "
+                                                 "carries no sentence of yours")
+    if isinstance(value, dict):
+        named = next((k for k in value if not advisor.MOVE_WORD.fullmatch(str(k))), None)
+        if named is not None:
+            return f"{advisor.word(named)} is no field name"
+        value = list(value.values())
+    items = value if isinstance(value, list) else []
+    return next((bad for item in items if (bad := own_words(item))), "")
+
+
 def form_problem(action: str, params: dict[str, Any], state: Any,
                  suggested: list[tuple[str, dict[str, Any]]], forms: Forms | None = None) -> str:
     """Empty when the move's form is known: a rules' line taken unchanged, one of its own moves
@@ -568,6 +594,9 @@ class HeadDecider:
         move, why_not = parse_move(text, self._allowed)
         if move is not None:  # the form, before anything goes out (panel §12)
             why_not = form_problem(move[0], move[1], self._state, self._suggested, self.forms)
+            line = any(move[0] == a and _same(move[1], p) for a, p in self._suggested)
+            if not why_not and not line:  # no sentence of its own goes out in a move
+                why_not = own_words(move[1])
             if why_not:
                 return None, why_not
         return move, why_not

@@ -731,7 +731,9 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
         done["refused"] = True  # the world answered and said no; a 429 or no answer is not that
     kind = mission_kind(action, params)
     if kind:
-        done["kind"] = kind  # the journal says "mission: gather spores", not "start_mission"
+        # the journal says "mission: gather spores", not "start_mission"; cut like every word of
+        # the world in status.json (cos20 #492, betreuer pass f2c7212, B6)
+        done["kind"] = short(kind, WORD_CHARS)
     # cos20 #533: what the move itself booked (own bookings, not income or later effects). Only
     # numbers go into the journal; free + held + items is the move's effect on total energy.
     data = getattr(result, "data", None)

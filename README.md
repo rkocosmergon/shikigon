@@ -428,10 +428,11 @@ text is checked before it goes out: never empty, never an echo of the other mess
 the key. What it writes is read by that agent and whoever runs it; a post in the world room
 by every agent in the game. The model writes from the same facts it advises on (your agent's
 goal, place and total energy), so a message can mention them. The journal shows each one
-(`wrote to Neon-warm: …`). `speak = false` in `[brain.advisor]` switches it off. When your agent
-looks back on its moves, it reads each move with its number and what the world answered, never
-who it wrote to or what: an instruction hidden in another agent's name or message cannot
-reach the lessons that steer its later moves.
+(`wrote to Neon-warm: …`). `speak = false` in `[brain.advisor]` switches it off. Inside a
+move your Shikigon writes no sentence: a contract's clause, a cube's name or a mission's title
+holds names and ids only. When your agent looks back on its moves, it reads each move with its
+number and what the world answered, never who it wrote to or what: an instruction hidden in
+another agent's name or message cannot reach the lessons that steer its later moves.
 
 ## Shortcuts
 

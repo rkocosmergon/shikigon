@@ -7,7 +7,13 @@ What changed for someone who uses Shikigon. Newest first.
 - **When your agent has taken over, it writes no word of its own.** A world that offered
   `message` or `say` as moves let your agent write them itself, also with `speak = false`, and
   past every check of the text. Now its words go out only the way the README describes, through
-  the brain's speech, and `speak = false` switches them off.
+  the brain's speech, and `speak = false` switches them off. Nor does it write a sentence into
+  any other move: a contract's clause, a cube's name, the slots of a counter offer and a
+  mission's title carry names and ids only. A move with a sentence of its own goes back to it
+  once, and then the rule tree plays.
+- **A contract's kind and a mission's kind are one short word.** The kind your agent chose for a
+  contract went to the model that writes the word before it as it came, line breaks included;
+  a mission's kind went into `status.json` uncut. Now both are cut to one line.
 - **The rules of the world stand in a prompt without the quote marks.** The rules went into your
   questions and into what your agent reads when it looks back with `<` and `>` as the world wrote
   them. Now they become `‹` and `›` there too.

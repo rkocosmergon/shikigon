@@ -143,7 +143,8 @@ def occasion(
     target = contract_target(action, params)
     if target:
         names = {str(t.player_id): str(t.username) for t in _targets(state)}
-        kind = str(params.get("contract_type") or params.get("template_id") or "contract")
+        # the world's word, one line, the marks out (cos20 #492, betreuer pass f2c7212, B5)
+        kind = advisor.word(params.get("contract_type") or params.get("template_id") or "contract")
         to_name = names.get(target, "that agent")[:NAME_CHARS]
         return Occasion("announce", to=target, to_name=to_name,
                         contract=kind)  # fmt: skip
