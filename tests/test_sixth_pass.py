@@ -362,27 +362,23 @@ def test_every_way_from_the_journal_into_a_prompt_goes_through_one_function() ->
 PRICES = {"market_list": {"available": True, "reference_prices": {"bomb": 100, "seed": 1}}}
 
 
-@pytest.mark.parametrize("params, plays", [
-    ({"to_player_id": "p2", "item_type": "bomb", "count": 10}, False),  # 1000 over a rest of 50
-    ({"to_player_id": "p2", "item_type": "nothing", "count": 1}, False),  # no price, no check
-    ({"to_player_id": "p2", "item_type": "bomb", "count": "NaN"}, False),
-    # ~~2, within the rest: plays~~ (eleventh review, K46): the reference price is the cheapest
-    # offer of any other agent, the world books goods at the house price. No value of goods can
-    # be said, so they play the rules under a budget (test_eleventh_pass).
-    ({"to_player_id": "p2", "item_type": "seed", "count": 2}, False),
+@pytest.mark.parametrize("params", [
+    {"to_player_id": "p2", "item_type": "bomb", "count": 10},  # 1000 over a rest of 50
+    {"to_player_id": "p2", "item_type": "nothing", "count": 1},  # no price
+    {"to_player_id": "p2", "item_type": "bomb", "count": "NaN"},
+    # (eleventh review, K46): the reference price is the cheapest offer of any other agent, the
+    # world books goods at the house price. No value of goods can be said by the brain.
+    {"to_player_id": "p2", "item_type": "seed", "count": 2},
 ])  # fmt: skip
-async def test_giving_things_away_is_checked_like_giving_energy(
-    params: dict[str, Any], plays: bool,
-) -> None:
+async def test_giving_things_away_is_checked_like_giving_energy(params: dict[str, Any]) -> None:
+    """Checked by the world against the rest, as energy is (``max_cost``, cos20 #527 C-a)."""
     _budget()
     answer = _move("transfer_inventory", params)
     decider = _head(answer, answer, forms={"transfer_inventory": [
         {"params": ["to_player_id", "item_type", "count"]}]})  # the world states its form
     move = await decider.decide(_offering("transfer_inventory", **PRICES))
-    assert (move[0] == "transfer_inventory") is plays, json.dumps(decider.last)
-    if not plays:
-        assert move == RULES
-        assert decider.last is not None and "learning budget" in decider.last["fallback"]
+    assert move[0] == "transfer_inventory", json.dumps(decider.last)
+    assert move[1]["max_cost"] == pytest.approx(50.0)
 
 
 # --- 7: a name that does not resolve holds a call no longer than its deadline -------------------

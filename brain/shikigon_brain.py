@@ -1005,7 +1005,11 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
 
     A move whose answer was lost (``unknown``, ``play``) counts as made: for a limit, not known is
     given. Until 0.1.14 it counted as refused, and the next move had the whole rest again, as
-    often as the answers got lost (cos20 #614)."""
+    often as the answers got lost (cos20 #614).
+
+    A move that went out with ``max_cost`` (``limit``, cos20 #527 C-a) carries no ``gives``: the
+    world checks it. Where its answer names no effect, the limit counts, the most the world let
+    it cost."""
     import head
     import lessons
 
@@ -1014,8 +1018,11 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
     if advice.get("fallback") or last.get("action") != advice.get("choice"):
         return  # what went out is not the move the head chose
     effect = lessons.own_effect(last) if advice.get("own") else None
-    loss = -effect if effect is not None else 0.0
-    loss = max(loss, files.finite(advice.get("gives")) or 0.0)
+    if effect is None and advice.get("limit") is not None:
+        loss = files.finite(advice.get("limit")) or 0.0  # the most the world let it cost
+    else:
+        loss = -effect if effect is not None else 0.0
+        loss = max(loss, files.finite(advice.get("gives")) or 0.0)
     head.budget_spend(state_dir(), loss)
 
 

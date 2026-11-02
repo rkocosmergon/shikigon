@@ -160,7 +160,7 @@ def test_f1_a_new_shikigon_measures_its_budget_against_its_own_total(home: Path)
     new = state(agent_id(home), energy=100_000.0, total=100_000.0, actions=("transfer_energy",))
     action, params = asyncio.run(decider.decide(new))
     assert decider.budget_left == 5_000.0, decider.budget_left
-    assert action == "wait", (action, params, decider.last)
+    assert action == "transfer_energy" and params["max_cost"] == 5_000.0, (action, params)
 
 
 def test_f1_the_new_heads_last_moves_are_its_own(home: Path) -> None:
@@ -231,12 +231,10 @@ def test_f2_the_rules_move_is_not_counted_against_the_heads_budget(home: Path) -
 
 def test_f6_the_refused_rules_move_does_not_go_out_twice(home: Path) -> None:
     answers = iter([json.dumps({"action": "create_field", "params": {}, "why": "the rules"}),
-                    json.dumps({"action": "transfer_energy",  # beyond the budget of 50,000
-                                "params": {"to_player_id": "ally", "amount": 900_000},
-                                "why": "x"})])
+                    "I do not know"])  # the rules play again
 
     async def model(messages: list[dict[str, str]], max_tokens: int) -> str:
-        return next(answers)
+        return next(answers, "I do not know")
 
     world = World(state())
     decider = head.HeadDecider(FieldFirst(), HEAD, home, send=model, forms=forms)

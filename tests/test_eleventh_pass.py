@@ -59,17 +59,19 @@ def _left() -> float | None:
 
 async def test_a_transfer_counts_against_the_budget_also_when_the_world_books_nothing() -> None:
     """The real move: ``brain.tick`` with the head, against a world whose answers carry no
-    ``energy_effect`` (``FakeAgent``: no ``data``). The first gift goes out and is counted; the
-    second no longer fits the rest, and the rules play."""
+    ``energy_effect`` (``FakeAgent``: no ``data``). The first gift goes out with the rest as its
+    limit (``max_cost``, cos20 #527 C-a); with no effect named, the limit counts, and the rules
+    play the next move."""
     gift = _move("transfer_energy", {"to_player_id": "p2", "amount": 30_000}, "allies")
     decider = head.HeadDecider(StubTree(), {**CONF, **BUDGET}, brain.state_dir(),
                                send=Replies(gift, gift), forms=_transfer_forms)  # fmt: skip
     agent = FakeAgent(_with_total())
     first = await brain.tick(agent, decider)
     assert first["action"] == "transfer_energy" and first["ok"], first
-    assert _left() == pytest.approx(20_000.0), "the 30,000 it checked are counted"
+    assert agent.acted[0][1]["max_cost"] == pytest.approx(50_000.0)
+    assert _left() == pytest.approx(0.0), "no effect named: the most the world let it cost"
     second = await brain.tick(agent, decider)
-    assert second["action"] == RULES[0], "the rest no longer covers a second gift"
+    assert second["action"] == RULES[0], "the rest is used up"
     assert [action for action, _ in agent.acted] == ["transfer_energy", RULES[0]]
 
 
@@ -99,17 +101,18 @@ async def test_only_the_move_that_went_out_counts_what_it_gives() -> None:
 # --- 3: goods have no value the brain can say -------------------------------------------------
 
 
-async def test_giving_goods_plays_the_rules_whatever_price_the_world_names() -> None:
+async def test_giving_goods_goes_out_with_the_rest_whatever_price_the_world_names() -> None:
     """Another agent offers one mega bomb at 1: the world names 1 as its reference price, and
-    fifty of them counted 50 against a rest of 50. The world books them at the house price."""
+    fifty of them counted 50 against a rest of 50. The world books them at the house price, and
+    since cos20 #527 C-a it checks them against the rest itself (``max_cost``)."""
     cheap = {"market_list": {"available": True, "reference_prices": {"mega_bomb": 1}}}
     params = {"to_player_id": "p2", "item_type": "mega_bomb", "count": 50}
     answer = _move("transfer_inventory", params)
     decider = _head(answer, answer, forms={"transfer_inventory": [
         {"params": ["to_player_id", "item_type", "count"]}]})
     _budget()  # a rest of 50 today
-    assert await decider.decide(_offering("transfer_inventory", **cheap)) == RULES
-    assert decider.last is not None and "cannot be said" in decider.last["fallback"]
+    action, sent = await decider.decide(_offering("transfer_inventory", **cheap))
+    assert action == "transfer_inventory" and sent["max_cost"] == pytest.approx(50.0)
     assert head.gives_away("transfer_inventory", params, _offering(**cheap)) is None
     assert head.gives_away("transfer_energy", {"to_player_id": "p2", "amount": 7},
                            _offering()) == 7  # energy keeps its number

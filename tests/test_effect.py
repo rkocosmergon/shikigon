@@ -99,13 +99,14 @@ async def _transfer_forms() -> dict[str, Any]:
     return head.forms_of({"actions": {"transfer_energy": {"forms": [form]}}})
 
 
-async def test_a_transfer_beyond_the_learning_budget_is_played_by_the_rules() -> None:
+async def test_a_transfer_beyond_the_learning_budget_goes_out_with_the_rest_as_its_limit() -> None:
+    """The world refuses it with nothing booked (``max_cost``, cos20 #527 C-a)."""
     gift = _move("transfer_energy", {"to_player_id": "p2", "amount": 60_000}, "allies")
     decider = head.HeadDecider(StubTree(), {**CONF, "learning_budget_pct": 5}, brain.state_dir(),
                                send=Replies(gift), forms=_transfer_forms)
-    action, _ = await decider.decide(_with_total(1_000_000.0))  # 5 % = 50,000 left today
-    assert action == "create_field", "the rules' line"
-    assert decider.last is not None and "learning budget" in decider.last["fallback"]
+    action, params = await decider.decide(_with_total(1_000_000.0))  # 5 % = 50,000 left today
+    assert action == "transfer_energy" and params["max_cost"] == pytest.approx(50_000.0)
+    assert decider.last is not None and "fallback" not in decider.last
     assert decider.budget_left == pytest.approx(50_000.0)
 
 

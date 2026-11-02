@@ -142,12 +142,12 @@ async def test_a_rules_line_without_parameters_still_goes_out_as_it_is() -> None
 
 
 async def test_without_a_total_from_the_world_nothing_is_given_away() -> None:
+    """The rest is 0, and the move goes out with it as its limit (cos20 #527 C-a)."""
     gift = _move("transfer_energy", {"to_player_id": "p2", "amount": 10}, "allies")
     decider = head.HeadDecider(StubTree(), {**CONF, "learning_budget_pct": 5}, brain.state_dir(),
                                send=Replies(gift), forms=_transfer_forms)
-    action, _ = await decider.decide(_state())  # the newborn's ranking names no total energy
-    assert action == "create_field", "the rules' line"
-    assert decider.last is not None and decider.last["fallback"] == head.NO_TOTAL
+    action, params = await decider.decide(_state())  # the newborn's ranking names no total energy
+    assert action == "transfer_energy" and params["max_cost"] == 0.0
     assert head.budget_left(brain.state_dir(), {"learning_budget_pct": 5}, None) == 0.0
 
 

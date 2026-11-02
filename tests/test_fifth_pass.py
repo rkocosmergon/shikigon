@@ -145,7 +145,7 @@ async def test_no_value_in_the_heads_answer_ends_a_move() -> None:
             assert isinstance(move, tuple) and isinstance(move[1], dict), (value, answer)
 
 
-async def test_an_amount_that_is_no_number_lets_the_rules_play() -> None:
+async def test_an_amount_that_is_no_number_goes_out_for_the_world_to_refuse() -> None:
     files.write_json(brain.state_dir() / head.BUDGET_FILE,
                      {"day": head._today(), "start": 1000.0, "spent": 0.0})  # fmt: skip
     wire = json.loads((ROOT / "tests" / "fixtures" / "state_newborn.json").read_text())
@@ -159,8 +159,9 @@ async def test_an_amount_that_is_no_number_lets_the_rules_play() -> None:
         answer = _move("transfer_energy", {"to": "p2", "amount": amount})
         decider = head.HeadDecider(StubTree(), {**CONF, "learning_budget_pct": 5},
                                    brain.state_dir(), send=Replies(answer), forms=forms)
-        assert await decider.decide(state) == ("create_field", {"size": 32}), amount
-        assert decider.last is not None and "learning budget" in decider.last["fallback"]
+        action, params = await decider.decide(state)  # strict: the world names the field
+        assert action == "transfer_energy" and params["strict"] is True, amount
+        assert params["max_cost"] == pytest.approx(50.0), amount
 
 
 # --- 6: opening the panel looks for nobody --------------------------------------------------------

@@ -153,16 +153,30 @@ def _waiting() -> Any:
 
 @pytest.mark.parametrize("action, params", [
     ("market_buy", {"listing_id": "L-of-another-agent"}),
+    ("breach_contract", {"contract_id": "c9"}),  # its penalty is booked in the move
+    ("future_move", {"to_player_id": "p2", "amount": 1}),  # a move the world adds later
+])  # fmt: skip
+async def test_a_move_whose_gift_cannot_be_said_goes_out_with_the_rest_as_its_limit(
+    action: str, params: dict[str, Any],
+) -> None:
+    """The world measures what it books and refuses it beyond the rest (cos20 #527 C-a)."""
+    _budget()
+    answer = _move(action, params)
+    decider = _head(answer, answer, forms=FORMS)
+    move = await decider.decide(_waiting())
+    assert move[0] == action, json.dumps(decider.last)
+    assert move[1]["max_cost"] == pytest.approx(50.0)
+
+
+@pytest.mark.parametrize("action, params", [
     ("accept_contract", {"contract_id": "c1"}),  # a tribute this agent would pay
     ("accept_contract", {"contract_id": "c2", "escrow_amount": 100}),  # escrow held
     ("propose_contract", {"to_player_id": "p2", "contract_type": "tribute",
                           "terms": {"amount_per_tick": 5, "payer_id": ME, "duration": 10}}),
     ("propose_contract", {"to_player_id": "p2", "contract_type": "mercenary",
                           "escrow_amount": 40}),
-    ("breach_contract", {"contract_id": "c9"}),
-    ("future_move", {"to_player_id": "p2", "amount": 1}),  # a move the world adds later
 ])  # fmt: skip
-async def test_a_move_whose_gift_cannot_be_said_plays_the_rules(
+async def test_a_contract_whose_gift_cannot_be_said_plays_the_rules(
     action: str, params: dict[str, Any],
 ) -> None:
     _budget()

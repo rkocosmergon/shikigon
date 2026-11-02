@@ -393,6 +393,17 @@ GIVES_NOTHING = frozenset({
 # the total energy, and a mission (``start_mission``) uses bombs on later ticks, neither booked in
 # the move. The budget counts the move as it is made, and the README says so (cos20 #492,
 # twelfth review, B1; founder 29.10.2026: the promise is narrowed, the head keeps its missions).
+def measured_by_world(action: str, line: bool, forms: Forms) -> bool:
+    """The world checks the move against the rest (``max_cost``, cos20 #527 C-a): a move it wrote
+    itself in the world's form, other than a contract or a mission. The world measures what the
+    move books and refuses it with nothing booked when that costs more; a world that does not know
+    ``max_cost`` refuses it under ``strict`` as an unknown field. A contract's costs come later
+    than the move (per tick, a reward, a tribute), and a mission's from a contract, so for those
+    the brain still says beforehand what they give (``gives_away``)."""
+    return (not line and action in forms and action != "start_mission"
+            and action not in contracts.CONTRACT_MOVES)
+
+
 # Transfers: checked against the rest also as a rules' line. Energy gives a number, its amount;
 # goods give none the brain could stand behind (``given_value``).
 TRANSFERS = frozenset({"transfer_energy", "transfer_inventory", "remit_to_owner"})
@@ -606,6 +617,7 @@ class HeadDecider:
         if self.last is not None:
             self.last["fallback"] = why[:WHY_CHARS]
             self.last.pop("gives", None)  # the move it would have given with does not go out
+            self.last.pop("limit", None)
         return self._rules
 
     def _take(self, move: Move) -> tuple[str, dict[str, Any]]:
@@ -614,8 +626,10 @@ class HeadDecider:
         if self.last is not None:
             self.last.update({"choice": action, "why": why, "own": not line})
             self.last.pop("gives", None)
+            self.last.pop("limit", None)
         rest = self.budget_left
-        if rest is not None and (not line or action in TRANSFERS):
+        limit = rest is not None and measured_by_world(action, line, self.forms)
+        if rest is not None and not limit and (not line or action in TRANSFERS):
             value = gives_away(action, params, self._state)
             if value is None:  # what it gives cannot be said: none to check against the rest
                 return self._rules_play("learning budget: what this move gives cannot be said")
@@ -634,7 +648,10 @@ class HeadDecider:
         # a move without parameters went out as a rules' line (cos20 #492, eighth review,
         # finding 2).
         if action in self.forms:
-            return action, {**shaped(params), "strict": True}
+            limited = {"max_cost": rest} if limit else {}
+            if limit and self.last is not None:  # counted if the world names no effect
+                self.last["limit"] = rest
+            return action, {**shaped(params), "strict": True, **limited}
         return action, shaped(params)
 
     async def decide(
