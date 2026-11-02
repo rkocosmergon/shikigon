@@ -55,7 +55,7 @@ async def test_a_move_beyond_the_rest_goes_out_with_the_rest_as_its_limit() -> N
     assert played[0] == "transfer_energy" and played[1]["amount"] == 60_000
     assert played[1]["strict"] is True and played[1]["max_cost"] == 50_000.0
     assert decider.last is not None and "fallback" not in decider.last
-    assert "gives" not in decider.last, "counted from what the world books, not a guess"
+    assert decider.last["limit"] == 50_000.0, "counted from what the world books, not a guess"
 
 
 async def test_buying_another_agents_offer_goes_out_with_its_limit() -> None:
@@ -89,10 +89,58 @@ async def test_without_a_budget_no_limit_goes_out() -> None:
     assert "max_cost" not in played[1]
 
 
+async def test_a_move_the_world_finds_too_costly_is_chosen_again_with_the_rest_whole() -> None:
+    """The world's 409 (cos20 ``ablauf._pruefe_hoechstkosten``) is a refusal like any other: the
+    head hears what it would have cost, and nothing of the rest is gone."""
+    gift = _move("transfer_energy", {"to_player_id": "p2", "amount": 60_000}, "allies")
+    small = _move("transfer_energy", {"to_player_id": "p2", "amount": 1_000}, "less")
+    model = Replies(gift, small)
+    decider = head.HeadDecider(StubTree(), BUDGET, brain.state_dir(), send=model,
+                               forms=_forms("transfer_energy", ["to_player_id", "amount"]))
+    state = _with_total(1_000_000.0)
+    await decider.decide(state)
+    why = "this move would cost 60,000.00 (own bookings, total energy), max_cost 50,000.00"
+    refused = {"action": "transfer_energy", "ok": False, "refused": True, "why": why}
+
+    assert decider.last is not None
+    brain.spend_budget(decider.last, refused)
+    played = await decider.again(state, refused)
+
+    assert played is not None and played[1]["amount"] == 1_000
+    assert played[1]["max_cost"] == 50_000.0, "the rest is whole"
+    assert "would cost 60,000.00" in model.asked[-1][-1]["content"]
+    assert head.budget_left(brain.state_dir(), BUDGET, 1_000_000.0) == pytest.approx(50_000.0)
+
+
+class TreeThatGives:
+    """Rules whose own line is a transfer: the tree has none today (``transfer_energy`` is not in
+    its pool), a later one may."""
+
+    async def decide(self, state: Any, blocked: frozenset[str] = frozenset()) -> Any:
+        if "transfer_energy" in blocked:
+            return "wait", {}
+        return "transfer_energy", {"to_player_id": "p2", "amount": 40}
+
+
+async def test_a_rules_line_goes_out_as_the_rules_send_it_and_the_budget_is_not_asked() -> None:
+    """The budget is for the head's own moves: the rules play their line without the head too."""
+    line = _move("transfer_energy", {"to_player_id": "p2", "amount": 40}, "the rules say so")
+    decider = head.HeadDecider(TreeThatGives(), BUDGET, brain.state_dir(), send=Replies(line),
+                               forms=_forms("transfer_energy", ["to_player_id", "amount"]))
+
+    played = await decider.decide(_with_total(1_000_000.0))
+
+    assert played == ("transfer_energy", {"to_player_id": "p2", "amount": 40})
+    assert decider.last is not None and decider.last["own"] is False and "limit" not in decider.last
+    brain.spend_budget({**decider.last, "head": True},
+                       {"ok": True, "action": "transfer_energy",
+                        "effect": {"free": -40.0, "held": 0.0, "items": 0.0}})
+    assert head.budget_left(brain.state_dir(), BUDGET, 1_000_000.0) == pytest.approx(50_000.0)
+
+
 def test_a_limited_move_counts_what_the_world_booked_else_its_limit() -> None:
-    """A move with ``max_cost`` carries no ``gives``. Where its answer names no effect (a lost
-    answer, cos20 #614; a world that books nothing, K45), the limit counts: the most the world
-    let it cost."""
+    """Where the answer of a move with ``max_cost`` names no effect (a lost answer, cos20 #614; a
+    world that books nothing, K45), the limit counts: the most the world let it cost."""
     def left() -> float | None:
         return head.budget_left(brain.state_dir(), BUDGET, 1_000_000.0)
 

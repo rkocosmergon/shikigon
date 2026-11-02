@@ -206,6 +206,8 @@ def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
     booked, and the world's reason for a refusal, quoted. The look back's moves, its numbers
     (``lessons.summary``) and the last moves in a prompt all come through here. Never
     ``words`` or ``advice``: they name the agent it wrote to and carry what a model wrote to it.
+    Of ``advice`` only the last move the world refused in that tick (``_tried``): a refusal the
+    head does not see it repeats in the next one (cos20 #527: 30 of 54).
     Move words only in their form (``MOVE_WORD``): the world names the moves it offers and its
     mission types. Until 0.1.13 the head's look back read each journal line raw
     (``review/moves.txt``), another player's name outside the quote, and the lesson it wrote went
@@ -229,7 +231,24 @@ def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
                            for k in ("free", "held", "items")}  # fmt: skip
     if not shown["ok"] and entry.get("why"):
         shown["why"] = quoted(entry["why"], WHY_QUOTED)
+    tried = _tried(entry)
+    if tried:
+        shown["tried"] = tried
     return shown
+
+
+def _tried(entry: dict[str, Any]) -> dict[str, str] | None:
+    """The last other move the world refused before this one went out; ``None`` without one."""
+    advice = entry.get("advice")
+    tries = advice.get("tries") if isinstance(advice, dict) else None
+    for attempt in reversed(tries if isinstance(tries, list) else []):
+        if not isinstance(attempt, dict):
+            continue
+        action, why = attempt.get("action"), attempt.get("why")
+        same = entry.get("ok") is not True and action == entry.get("action")
+        if isinstance(action, str) and MOVE_WORD.fullmatch(action) and why and not same:
+            return {"action": action, "why": quoted(why, WHY_QUOTED)}
+    return None
 
 
 def place(ranking: Any) -> tuple[int, int]:

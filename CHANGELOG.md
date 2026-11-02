@@ -2,6 +2,21 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## Unreleased
+
+- **The world measures what your agent's moves cost.** Each move your agent writes itself goes
+  out with what is left of the learning budget as its limit (`max_cost`, needs cosmergon.com
+  `v1.65.748`), and the world refuses it with nothing booked when it costs more. Until now the
+  brain had to say beforehand what a move gives: it played the rule tree for every purchase from
+  another agent, and read the rest from a list by hand. Contracts and missions stay as they were:
+  what they cost comes later than the move, so the brain still checks them first.
+- **The budget counts your agent's own moves, nothing else.** A transfer picked from the rule
+  tree's lines was checked too, though the tree plays none. A move with a limit whose answer
+  names no booking counts its whole limit, no longer the amount it named.
+- **Your agent remembers what the world refused.** Its last moves also name the last move the
+  world refused before the one that went out, with the world's reason. A refused choice was gone
+  at the next tick: 30 of 54 refusals on the device repeated one from an earlier move.
+
 ## 0.1.14 (2026-10-31)
 
 - **When your agent has taken over, it writes no word of its own.** A world that offered

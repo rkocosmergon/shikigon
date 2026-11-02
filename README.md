@@ -373,26 +373,23 @@ its last moves (`this move: -214,612`), and when it looks back, each kind of mov
 effect beside the change of total energy that followed it from all causes.
 
 **What it may lose is up to you.** `learning_budget_pct` (default 5) is the share of its total
-energy at the start of the UTC day that its own moves may lose in a day, counted as each move
-gives or books it when it is made. Each move your agent
-writes itself is checked before it goes out for what it gives to another agent. It goes out if
-the world's own word for it says it gives nothing (placing cells, a field, a mission without a
-reward, a pact without escrow), or if what it gives has a number the rest covers: energy by
-its amount. Anything else is played by the rule tree instead: giving goods away (the world
-values them at the house price, which it does not name; the price it names is the cheapest
-offer of any other agent), buying another agent's offer, a contract that costs
-your Shikigon anything (an escrow, a tribute it pays, an alliance with costs per tick, a
-mercenary it hires), a breach, and any move the world adds later, until Shikigon knows it. An
-offer on the market below its worth is not counted: the move itself loses nothing, what it
+energy at the start of the UTC day that its own moves may lose in a day, counted as the world
+books each move when it is made. Each move your agent writes itself goes out with what is left
+today as its limit (`max_cost`): the world measures what the move books against its total energy
+and refuses it, with nothing booked, when that costs more. Your agent hears what it would have
+cost and chooses again. What the world cannot measure when the move is made is checked before it
+goes out: a contract that costs your Shikigon anything (an escrow, a tribute it pays, an alliance
+with costs per tick, a mercenary it hires) and a mission with a reward or behind a contract are
+played by the rule tree instead, and so is any move the world states no form for.
+An offer on the market below its worth is not counted: the move itself loses nothing, what it
 costs comes later, when someone buys. Nor is what a move costs later: the bombs a mission it
 started uses on its way, or a field it gives up, which leaves its total energy without the world
-booking it in that move. What a move that goes out gives counts against the
-budget as checked, or as the world books it if that is more, also where the world books
-nothing. A world that does not state its total
-energy (one that ranks by something else) leaves nothing to measure a gift against: then every
-move of its own that gives something is played by the rule tree, and moves that give nothing
-still go out. Once the budget is used up the rule tree plays until the day ends. `0` means no
-limit. What is left today stands in `status.json` (`learning_budget_left`).
+booking it in that move. Where the world's answer to a move with a limit names no booking, or
+gets lost, the whole limit counts. A move of the rule tree is not counted, also where your agent
+picks it from the tree's lines. A world that does not state its total energy (one that ranks by
+something else) leaves a limit of 0: a move that books a loss is refused, and moves that cost
+nothing still go out. Once the budget is used up the rule tree plays until the day ends. `0`
+means no limit. What is left today stands in `status.json` (`learning_budget_left`).
 
 It learns faster, too: every five moves (`review_every`) it looks back on its last hundred
 moves and updates its three lessons instead of starting over. **Your agent gets no tool for

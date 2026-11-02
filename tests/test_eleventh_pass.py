@@ -77,25 +77,23 @@ async def test_a_transfer_counts_against_the_budget_also_when_the_world_books_no
 
 async def test_only_the_move_that_went_out_counts_what_it_gives() -> None:
     """A word written in the place of the head's move gives nothing, a refused move nothing; the
-    move itself counts what the check put on it, or the world's booking if that is larger. A move
-    the budget refused carries no value at all."""
+    move itself counts what the world booked, or its limit where the world names no booking."""
     _left()  # the day begins
-    chose = {"head": True, "own": True, "choice": "transfer_energy", "gives": 30_000.0}
+    chose = {"head": True, "own": True, "choice": "transfer_energy", "limit": 30_000.0}
     brain.spend_budget(chose, {"ok": True, "action": "message"})  # a word went out instead
     brain.spend_budget(chose, {"ok": False, "action": "transfer_energy", "refused": True})
     assert _left() == pytest.approx(50_000.0)
     brain.spend_budget(chose, {"ok": True, "action": "transfer_energy"})  # no booking
     assert _left() == pytest.approx(20_000.0)
-    booked = {"free": -32_000.0, "held": 0.0, "items": 0.0}  # a fee on top
-    brain.spend_budget({**chose, "gives": 10_000.0},
-                       {"ok": True, "action": "transfer_energy", "effect": booked})
-    assert _left() == pytest.approx(0.0), "the larger of the two: the booking"
+    booked = {"free": -20_000.0, "held": 0.0, "items": 0.0}
+    brain.spend_budget(chose, {"ok": True, "action": "transfer_energy", "effect": booked})
+    assert _left() == pytest.approx(0.0), "the booking, not the larger limit"
 
     too_much = _move("transfer_energy", {"to_player_id": "p2", "amount": 60_000}, "allies")
     decider = head.HeadDecider(StubTree(), {**CONF, **BUDGET}, brain.state_dir(),
                                send=Replies(too_much), forms=_transfer_forms)  # fmt: skip
     assert await decider.decide(_with_total()) == RULES
-    assert decider.last is not None and "gives" not in decider.last
+    assert decider.last is not None and "limit" not in decider.last
 
 
 # --- 3: goods have no value the brain can say -------------------------------------------------
@@ -113,6 +111,6 @@ async def test_giving_goods_goes_out_with_the_rest_whatever_price_the_world_name
     _budget()  # a rest of 50 today
     action, sent = await decider.decide(_offering("transfer_inventory", **cheap))
     assert action == "transfer_inventory" and sent["max_cost"] == pytest.approx(50.0)
-    assert head.gives_away("transfer_inventory", params, _offering(**cheap)) is None
-    assert head.gives_away("transfer_energy", {"to_player_id": "p2", "amount": 7},
-                           _offering()) == 7  # energy keeps its number
+    assert not head.gives_nothing("transfer_inventory", params, _offering(**cheap))
+    assert not head.gives_nothing("transfer_energy", {"to_player_id": "p2", "amount": 7},
+                                  _offering()), "energy too: the world measures it, not its amount"

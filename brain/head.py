@@ -190,7 +190,9 @@ def recent_moves(home: Path, count: int = RECENT) -> list[str]:
         if "action" not in move or "tick" not in move:
             continue
         said = "taken" if move["ok"] else f"refused: {move.get('why', '')}"
-        lines.append(f"- tick {move['tick']}: {move['action']} — {said}{_effect(move)}")
+        tried = move.get("tried")
+        before = f" (first refused: {tried['action']} {tried['why']})" if tried else ""
+        lines.append(f"- tick {move['tick']}: {move['action']} — {said}{_effect(move)}{before}")
     return lines[-count:]
 
 
@@ -372,41 +374,33 @@ def form_problem(action: str, params: dict[str, Any], state: Any,
             "for writing it yourself")
 
 
-# What a move the head writes itself may give to another agent is checked against the learning
-# budget BEFORE it goes out (``gives_away``). The class has one place and denies by default: a
-# move is let through only where the world's own word for it (``your_effect`` in
-# ``GET /api/v1/game/info``, cos20 ``core/action_declarations.py:533ff``) says it gives nothing to
-# another agent, or where the brain can put a number on what it gives. Everything else plays
-# the rules while a budget is set, also a move the world adds later. ``your_effect`` is prose, so
-# the list is read from it by hand (cos20 #492, seventh review, finding 3: until 0.1.13 only the
-# two transfers were checked, and buying another agent's offer or a contract that has this agent
-# pay went past; sixth review, finding 6: until then only ``transfer_energy``).
-GIVES_NOTHING = frozenset({
-    "wait", "place_cells", "create_field", "create_cube", "evolve", "heal_holes", "buy_shield",
-    "market_list",  # stays its own until bought; an offer below its worth is the README's exception
-    "market_cancel", "reject_contract", "cancel_mission", "claim_field", "shoot_spore",
-    "burn_plague", "place_deployable", "pickup_drop", "terminal_query", "set_compass",
-    "set_tournament_compass", "abandon_field",
-    # not ``message``/``say``: never its own move (``NEVER_ITS_OWN``)
-})  # fmt: skip
+# What a move may cost the learning budget is measured by the world: it goes out with the rest as
+# ``max_cost``, and the world refuses it with nothing booked when it costs more (cos20 #527). What
+# the brain cannot have measured it does not let through while a budget is set: a contract or a
+# mission it cannot say gives nothing (``gives_nothing``), and any move the world states no form
+# for, also one the world adds later. Until 0.1.15 the brain kept a list of the moves that give
+# nothing, read by hand from the world's prose, and put a number on the two transfers (cos20 #492,
+# sixth, seventh and eleventh review).
 # Gives nothing to another agent is not loses nothing: a field given up (``abandon_field``) leaves
 # the total energy, and a mission (``start_mission``) uses bombs on later ticks, neither booked in
 # the move. The budget counts the move as it is made, and the README says so (cos20 #492,
 # twelfth review, B1; founder 29.10.2026: the promise is narrowed, the head keeps its missions).
-def measured_by_world(action: str, line: bool, forms: Forms) -> bool:
-    """The world checks the move against the rest (``max_cost``, cos20 #527 C-a): a move it wrote
-    itself in the world's form, other than a contract or a mission. The world measures what the
-    move books and refuses it with nothing booked when that costs more; a world that does not know
-    ``max_cost`` refuses it under ``strict`` as an unknown field. A contract's costs come later
-    than the move (per tick, a reward, a tribute), and a mission's from a contract, so for those
-    the brain still says beforehand what they give (``gives_away``)."""
-    return (not line and action in forms and action != "start_mission"
+# The budget is for the head's own moves: a rules' line is what the rules would play without it.
+# Until 0.1.15 a transfer was checked also as a rules' line, though the rules play none
+# (cos20 #527).
+
+
+def measured_by_world(action: str, forms: Forms) -> bool:
+    """The world checks a move the head wrote itself against the rest (``max_cost``, cos20 #527
+    C-a): a move in the world's form, other than a contract or a mission. The world measures what
+    the move books and refuses it with nothing booked when that costs more; a world that does not
+    know ``max_cost`` refuses it under ``strict`` as an unknown field. A contract's costs come
+    later than the move (per tick, a reward, a tribute), and a mission's from a contract, so for
+    those the brain says beforehand (``gives_nothing``)."""
+    return (action in forms and action != "start_mission"
             and action not in contracts.CONTRACT_MOVES)
 
 
-# Transfers: checked against the rest also as a rules' line. Energy gives a number, its amount;
-# goods give none the brain could stand behind (``given_value``).
-TRANSFERS = frozenset({"transfer_energy", "transfer_inventory", "remit_to_owner"})
 # A contract move gives nothing where ``contracts.costs_me`` says it costs nothing; else what it
 # gives cannot be said. Until 0.1.13 only its escrow and a payer written like the agent's own id
 # were read: an alliance with costs per tick, a mercenary it hires and its own id in upper case
@@ -425,38 +419,17 @@ def _inner(params: dict[str, Any]) -> dict[str, Any]:
     return inner if isinstance(inner, dict) else {}
 
 
-def given_value(action: str, params: dict[str, Any]) -> float | None:
-    """What a transfer gives away, in energy; ``None`` when it cannot be said.
-
-    ``transfer_energy`` and ``remit_to_owner`` by their amount, read like every value of a model's
-    answer: by its type (``files.finite``), never with a bare ``float()``. ``transfer_inventory``
-    has no value the brain can say: the world books goods and ranks the total energy at the house
-    price, which the state does not name, and its ``market_list.reference_prices`` is the cheapest
-    offer of any other agent. Until 0.1.13 goods counted at that price, so an offer of one item at
-    1 let the whole stock pass a budget that was a fraction of its worth (cos20 #492, eleventh
-    review, K46). A value that cannot be said lets the rules play while a budget is set."""
-    if action not in ("transfer_energy", "remit_to_owner"):
-        return None
-    amount = files.finite(_inner(params).get("amount") or 0)
-    return amount if amount is not None and amount >= 0 else None
-
-
-def gives_away(action: str, params: dict[str, Any], state: Any) -> float | None:
-    """What a move gives to another agent, in energy: ``0`` for a move the world says gives
-    nothing, a number for a transfer, ``None`` when it cannot be said beforehand (buying another
-    agent's offer, a contract that costs this agent anything, a breach, any move not named here).
-    The one place the learning budget asks (``HeadDecider._take``)."""
-    if action in GIVES_NOTHING:
-        return 0.0
-    if action in TRANSFERS:
-        return given_value(action, params)
+def gives_nothing(action: str, params: dict[str, Any], state: Any) -> bool:
+    """A move the world cannot check for the budget gives nothing to another agent. False also
+    for any move not named here: what it gives cannot be said, so the rules play
+    (``HeadDecider._take``)."""
     if action in contracts.CONTRACT_MOVES:
-        return None if contracts.costs_me(action, params, state) else 0.0
+        return not contracts.costs_me(action, params, state)
     if action == "start_mission":  # a reward or a contract behind it may pay another agent
         fields = _inner(params)
         reward = files.finite(fields.get("reward_energy") or 0)
-        return 0.0 if reward == 0 and not fields.get("from_contract") else None
-    return None
+        return reward == 0 and not fields.get("from_contract")
+    return False
 
 
 def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
@@ -512,7 +485,6 @@ def _budget_data(home: Path) -> dict[str, Any]:
             "spent": max(0.0, files.finite(data.get("spent")) or 0.0)}
 
 
-NO_TOTAL = "learning budget: the world states no total energy, so nothing may be given away"
 
 
 def budget_left(home: Path, conf: dict[str, Any], total: float | None) -> float | None:
@@ -616,7 +588,6 @@ class HeadDecider:
     def _rules_play(self, why: str) -> tuple[str, dict[str, Any]]:
         if self.last is not None:
             self.last["fallback"] = why[:WHY_CHARS]
-            self.last.pop("gives", None)  # the move it would have given with does not go out
             self.last.pop("limit", None)
         return self._rules
 
@@ -625,32 +596,24 @@ class HeadDecider:
         line = any(action == a and _same(params, p) for a, p in self._suggested)
         if self.last is not None:
             self.last.update({"choice": action, "why": why, "own": not line})
-            self.last.pop("gives", None)
             self.last.pop("limit", None)
-        rest = self.budget_left
-        limit = rest is not None and measured_by_world(action, line, self.forms)
-        if rest is not None and not limit and (not line or action in TRANSFERS):
-            value = gives_away(action, params, self._state)
-            if value is None:  # what it gives cannot be said: none to check against the rest
-                return self._rules_play("learning budget: what this move gives cannot be said")
-            if value > rest:
-                return self._rules_play("learning budget: the rest would not cover this"
-                                        if budget_started(self.home) else NO_TOTAL)
-            if self.last is not None:  # counted when the world takes it (``spend_budget``)
-                self.last["gives"] = value
         if action == "wait":
             return action, {}
         if line:
             return action, params  # a rules' line goes out as the rules send it
+        rest = self.budget_left
+        limit = rest is not None and measured_by_world(action, self.forms)
+        if rest is not None and not limit and not gives_nothing(action, params, self._state):
+            return self._rules_play("learning budget: what this move gives cannot be said")
         # A move it wrote itself goes out with ``strict`` wherever the world states its form, also
         # with no parameters: the world names the fields it needs instead of filling in its own
         # (``market_list`` with none offered the whole surplus at the median price). Until 0.1.13
         # a move without parameters went out as a rules' line (cos20 #492, eighth review,
         # finding 2).
         if action in self.forms:
-            limited = {"max_cost": rest} if limit else {}
             if limit and self.last is not None:  # counted if the world names no effect
                 self.last["limit"] = rest
+            limited = {"max_cost": rest} if limit else {}
             return action, {**shaped(params), "strict": True, **limited}
         return action, shaped(params)
 

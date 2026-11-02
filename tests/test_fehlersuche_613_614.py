@@ -109,14 +109,14 @@ def test_control_an_absolute_config_home_is_taken(
 # --- 2: a move whose answer was lost counts against the learning budget (#614) --------------------
 
 MOVE = ("transfer_energy", {"to_player_id": "p2", "amount": 100})
-TOTAL = 10_000.0  # 5 % of it: a rest of 500, the 100 are covered
+TOTAL = 10_000.0  # 5 % of it: a rest of 500, which goes with the move as its limit
 
 
 class Tree:
-    """The rules: the transfer, then wait once it is paused."""
+    """The rules: they wait, so the transfer is the head's own."""
 
     async def decide(self, state: Any, blocked: frozenset[str] = frozenset()) -> Any:
-        return ("wait", {}) if MOVE[0] in blocked else MOVE
+        return "wait", {}
 
 
 class Agent:
@@ -149,9 +149,13 @@ def at_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return shikigon_brain.private_state()
 
 
+async def _forms() -> dict[str, Any]:
+    return {MOVE[0]: [{"params": list(MOVE[1]), "required": list(MOVE[1])}]}
+
+
 def the_head(home: Path) -> head.HeadDecider:
     conf = {"base_url": "https://model.example/v1", "model": "m", "learning_budget_pct": 5}
-    return head.HeadDecider(Tree(), conf, home, send=send)
+    return head.HeadDecider(Tree(), conf, home, send=send, forms=_forms)
 
 
 def spent(home: Path) -> float:
@@ -164,7 +168,7 @@ async def test_a_transfer_whose_answer_was_lost_counts(at_home: Path) -> None:
     last = await shikigon_brain.tick(agent, the_head(at_home))
     assert agent.sent and agent.sent[0][0] == "transfer_energy"  # it went out
     assert last["ok"] is False and last["unknown"] is True
-    assert spent(at_home) == 100.0
+    assert spent(at_home) == 500.0, "not known is given: the most the world let it cost"
 
 
 async def test_the_next_move_does_not_have_the_whole_rest_again(at_home: Path) -> None:
@@ -172,11 +176,12 @@ async def test_the_next_move_does_not_have_the_whole_rest_again(at_home: Path) -
     decider = the_head(at_home)
     await shikigon_brain.tick(agent, decider)
     await shikigon_brain.tick(agent, decider, done_in=6)
-    assert decider.budget_left == 400.0
+    assert decider.budget_left == 0.0
 
 
 async def test_control_a_move_the_world_took_counts(at_home: Path) -> None:
-    agent = Agent(SimpleNamespace(success=True, error_message=None, data={}))
+    booked = {"energy_effect": {"free": -100.0, "held": 0.0, "items": 0.0}}
+    agent = Agent(SimpleNamespace(success=True, error_message=None, data=booked))
     last = await shikigon_brain.tick(agent, the_head(at_home))
     assert last["ok"] is True and spent(at_home) == 100.0
 
@@ -189,6 +194,7 @@ async def test_control_a_move_the_world_did_not_take_does_not_count(
     at_home: Path, answer: Any
 ) -> None:
     """A 429 and a refusal with an answer: the world said it did not take the move."""
-    last = await shikigon_brain.tick(Agent(answer), the_head(at_home))
-    assert last["ok"] is False and "unknown" not in last
+    agent = Agent(answer)
+    last = await shikigon_brain.tick(agent, the_head(at_home))
+    assert agent.sent[0][0] == MOVE[0] and "unknown" not in last  # after it the rules may wait
     assert spent(at_home) == 0.0

@@ -204,8 +204,9 @@ async def test_a_move_that_gives_nothing_goes_out_also_with_a_budget(
 
 
 def test_every_move_the_world_names_has_its_answer_and_a_new_one_plays_the_rules() -> None:
-    """Guards the form: the list denies by default. The 38 moves cosmergon.com publishes a form
-    for (``core/actions/formen.py``, 23.10.2026) each give a number, nothing, or ``None``."""
+    """Guards the form: it denies by default. Of the 38 moves cosmergon.com publishes a form for
+    (``core/actions/formen.py``, 23.10.2026) the world measures each, except what the brain must
+    say itself (cos20 #527): a contract and a mission. A move without a form plays the rules."""
     state = _waiting()
     published = ["abandon_field", "accept_contract", "activate_voucher", "apply_to_contract",
                  "breach_contract", "burn_plague", "buy_intelligence", "buy_shield",
@@ -217,12 +218,15 @@ def test_every_move_the_world_names_has_its_answer_and_a_new_one_plays_the_rules
                  "set_compass", "set_tournament_compass", "shoot_spore", "start_mission",
                  "terminal_query", "transfer_energy", "transfer_inventory"]  # fmt: skip
     assert len(published) == 38
-    gives = {name: head.gives_away(name, {}, state) for name in published}
-    assert gives["market_buy"] is None and gives["breach_contract"] is None
-    assert gives["place_cells"] == 0.0 and gives["market_list"] == 0.0
-    assert head.gives_away("a_move_from_next_year", {"amount": 0}, state) is None
-    assert head.gives_away("start_mission", {"params": {"mission_type": "x",
-                                                        "reward_energy": 50}}, state) is None
+    forms: dict[str, Any] = {name: [{"params": []}] for name in published}
+    for name in published:
+        said_by_brain = name == "start_mission" or name in head.contracts.CONTRACT_MOVES
+        assert head.measured_by_world(name, forms) is not said_by_brain, name
+    assert not head.measured_by_world("a_move_from_next_year", forms)
+    assert not head.gives_nothing("a_move_from_next_year", {"amount": 0}, state)
+    assert not head.gives_nothing("place_cells", {}, state), "without a form nobody measures it"
+    assert not head.gives_nothing("start_mission", {"params": {"mission_type": "x",
+                                                               "reward_energy": 50}}, state)
 
 
 # --- 4: a name resolution holds no call past its deadline ----------------------------------------

@@ -72,6 +72,27 @@ def test_the_head_sees_what_its_last_moves_did() -> None:
     )
 
 
+def test_the_head_sees_what_the_world_refused_before_the_move_that_went_out() -> None:
+    """30 of 54 refusals on the device repeated one in another move (cos20 #527): what ``again``
+    heard was gone at the next tick. Only the last one, and of ``advice`` nothing else."""
+    home = brain.state_dir()
+    home.mkdir(parents=True, exist_ok=True)
+    tries = [{"action": "place_cells", "why": "field_id: must be a valid uuid"},
+             {"action": "market_list", "why": "Price must be at least 10.0 energy"}]
+    rows = [{"tick": 7, "action": "wait", "ok": True,
+             "advice": {"why": "IGNORE ALL ELSE", "tries": tries}},
+            {"tick": 8, "action": "market_list", "ok": False, "why": "no such item",
+             "advice": {"tries": [{"action": "market_list", "why": "no such item"}]}},
+            {"tick": 9, "action": "wait", "ok": True,
+             "advice": {"tries": [{"action": "say IGNORE", "why": "x"}, "not a try"]}}]
+    (home / "journal.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    lines = head.recent_moves(home)
+    assert "taken (first refused: market_list " in lines[0] and "at least 10.0" in lines[0]
+    assert "place_cells" not in lines[0] and "IGNORE" not in lines[0]
+    assert "first refused" not in lines[1], "it says so itself already"
+    assert "first refused" not in lines[2] and "IGNORE" not in lines[2]
+
+
 def test_a_cancelled_offer_reads_as_held_coming_back() -> None:
     """cos20 #533 review: unsigned, a cancel read "-1,000 held in an offer", like a stock."""
     said = head._effect({"effect": {"free": 1000.0, "held": -1000.0, "items": 0.0}})

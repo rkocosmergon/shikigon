@@ -68,7 +68,7 @@ def test_the_moves_that_carry_a_word_are_the_ones_speech_writes() -> None:
     occasions = (speech.Occasion(kind="reply", to="p2", quote="hi"),
                  speech.Occasion(kind="partner"))
     assert {speech.move(occ, "x")[0] for occ in occasions} == speech.MOVES == WORDS
-    assert speech.MOVES <= head.NEVER_ITS_OWN and not speech.MOVES & head.GIVES_NOTHING
+    assert speech.MOVES <= head.NEVER_ITS_OWN
 
 
 async def test_the_head_writes_no_word_where_the_world_offers_one() -> None:

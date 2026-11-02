@@ -990,12 +990,10 @@ def write_status(status: dict[str, Any]) -> None:
 def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
     """Count what a move the head chose itself lost against its learning budget (cos20 #533).
 
-    The larger of what the world booked for a move it wrote itself (``energy_effect``) and what
-    the head's check put on the move before it went out (``gives``, ``HeadDecider._take``, also a
-    transfer as the rules' line), the latter only for the move it chose: a word written in its
-    place gives nothing. Until 0.1.13 only the world's booking counted, and a world that sends
-    none left the rest whole all day, for every transfer up to it (cos20 #492, eleventh review,
-    K45).
+    What the world booked for it (``energy_effect``). A move that went out with ``max_cost``
+    (``limit``, cos20 #527 C-a) counts the limit where its answer names no effect: the most the
+    world let it cost. Until 0.1.13 only the world's booking counted, and a world that sends none
+    left the rest whole all day (cos20 #492, eleventh review, K45).
 
     Only the move that went out counts, and only if it is the one the head chose: after a
     refusal the rules can play (``fallback``), and a word can stand in its place (``speech``).
@@ -1005,11 +1003,7 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
 
     A move whose answer was lost (``unknown``, ``play``) counts as made: for a limit, not known is
     given. Until 0.1.14 it counted as refused, and the next move had the whole rest again, as
-    often as the answers got lost (cos20 #614).
-
-    A move that went out with ``max_cost`` (``limit``, cos20 #527 C-a) carries no ``gives``: the
-    world checks it. Where its answer names no effect, the limit counts, the most the world let
-    it cost."""
+    often as the answers got lost (cos20 #614)."""
     import head
     import lessons
 
@@ -1018,11 +1012,10 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
     if advice.get("fallback") or last.get("action") != advice.get("choice"):
         return  # what went out is not the move the head chose
     effect = lessons.own_effect(last) if advice.get("own") else None
-    if effect is None and advice.get("limit") is not None:
-        loss = files.finite(advice.get("limit")) or 0.0  # the most the world let it cost
+    if effect is None:
+        loss = files.finite(advice.get("limit")) or 0.0
     else:
-        loss = -effect if effect is not None else 0.0
-        loss = max(loss, files.finite(advice.get("gives")) or 0.0)
+        loss = max(-effect, 0.0)
     head.budget_spend(state_dir(), loss)
 
 
