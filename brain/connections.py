@@ -190,14 +190,23 @@ def _checked(found: str, command: str) -> Path:
     return real
 
 
+def absolute_path(given: str) -> str:
+    """``given``, a PATH, with its absolute folders only. An empty or relative entry (``.``,
+    ``::``) is a folder of wherever a program was started, which another user may write. The
+    one rule for PATH: ``on_path`` looks up by it, the brain sets its own PATH by it when it
+    starts, so every program it starts inherits it (cos20 #492, betreuer pass c01ec84, F1), and
+    both scripts and the bar apply the same rule (``Model.PATH_RULE``). With no absolute folder
+    left, ``os.defpath``: an empty PATH is the current folder again, to sh and bash alike."""
+    kept = os.pathsep.join(folder for folder in given.split(os.pathsep) if os.path.isabs(folder))
+    return kept or os.defpath
+
+
 def on_path(command: str, path: str | None) -> str | None:
     """``command`` as found on ``path`` (None: this process's PATH), in its absolute folders
-    only. An empty or relative entry (``.``, ``::``) is a folder of wherever the brain was
-    started, which another user may write; ``shutil.which`` looked there until 0.1.14 (cos20
-    #492, betreuer pass 32a20f5, B4). The one way a program is looked up."""
-    given = os.environ.get("PATH", os.defpath) if path is None else path
-    folders = [folder for folder in given.split(os.pathsep) if os.path.isabs(folder)]
-    return shutil.which(command, path=os.pathsep.join(folders)) if folders else None
+    only (``absolute_path``); ``shutil.which`` looked in the others until 0.1.14 (cos20 #492,
+    betreuer pass 32a20f5, B4). The one way a program is looked up."""
+    return shutil.which(command, path=absolute_path(os.environ.get("PATH", os.defpath)
+                                                    if path is None else path))
 
 
 def program(command: str, env: dict[str, str] | None,

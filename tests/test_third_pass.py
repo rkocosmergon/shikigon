@@ -357,7 +357,7 @@ def test_every_writer_makes_its_files_for_the_player_alone() -> None:
     wake = (BRAIN / "shikigon-wake").read_text(encoding="utf-8")
     assert wake.index("\numask 077\n") < wake.index('mkdir -p "$state"')
     service = (ROOT / "qml" / "Service.qml").read_text(encoding="utf-8")
-    shells = re.findall(r'command: \["sh", "-c",\s*\n\s*\'([^\']*)', service)
+    shells = re.findall(r'command: Model\.shell\(\s*\n\s*\'([^\']*)', service)
     assert len(shells) == 2 and all(s.startswith("umask 077;") for s in shells), shells
 
 

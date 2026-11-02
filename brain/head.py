@@ -460,7 +460,8 @@ def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     try:
         data = files.loads(text[start : end + 1])
     except ValueError:
-        return None, "the answer was not JSON, or a number in it was not finite"
+        return None, ("the answer was not JSON, was nested too deep, "
+                      "or a number in it was not finite")
     if not isinstance(data, dict):
         return None, "the answer was not a JSON object"
     action = str(data.get("action") or "")

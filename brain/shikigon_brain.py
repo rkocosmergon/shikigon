@@ -47,6 +47,11 @@ from typing import Any
 # panel (seen on the device, 11.10.2026). Its own files live in the state folder.
 sys.dont_write_bytecode = True
 
+# Its own folder first on sys.path, whoever starts it how: with PYTHONSAFEPATH set (``-P``), or
+# under ``-I``, Python leaves the script's folder out, and every start of the brain ended at the
+# next line (cos20 #492, betreuer pass c01ec84, F3).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 # The brain's own modules only after the switch above: imported before it, they are cached.
 import files
 
@@ -1748,6 +1753,10 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     INHERITED_UMASK = os.umask(0o077)  # what it makes is the player's alone (K2)
+    if "PATH" in os.environ:  # what it starts finds programs in absolute folders only (F1)
+        import connections
+
+        os.environ["PATH"] = connections.absolute_path(os.environ["PATH"])
     sys.stderr = CutLines(sys.stderr)
     end_with_its_agents()
     sys.exit(main())

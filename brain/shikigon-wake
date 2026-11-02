@@ -13,6 +13,11 @@
 set -uo pipefail
 # Everything made here is the player's alone: the state folder, the log, the environment (K2).
 umask 077
+# Programs only from the absolute folders of PATH, as in the brain (connections.absolute_path)
+# and the bar (Model.PATH_RULE, the same line): an empty or relative entry is a folder of
+# wherever this was started, which another user may write, and bash looks there (cos20 #492,
+# betreuer pass c01ec84, F1). Builtins only up to here; what this starts inherits it.
+given="${PATH:-}:"; PATH=""; while [ -n "$given" ]; do case "${given%%:*}" in /*) PATH="${PATH:+$PATH:}${given%%:*}" ;; esac; given="${given#*:}"; done; export PATH="${PATH:-/bin:/usr/bin}";
 
 here="$(dirname "$(readlink -f "$0")")"
 lock="$here/../requirements.lock"

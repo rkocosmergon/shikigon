@@ -82,8 +82,8 @@ Item {
 
   // The game itself lives in the terminal client (cosmergon-dashboard); the bar only shows.
   function openTerminal() {
-    Quickshell.execDetached(["omarchy-launch-or-focus-tui", "--app-id=org.omarchy.cosmergon",
-                             terminalScript])
+    Quickshell.execDetached(Model.outside(["omarchy-launch-or-focus-tui",
+                                           "--app-id=org.omarchy.cosmergon", terminalScript]))
     return "ok"
   }
 
@@ -151,10 +151,10 @@ Item {
   // umask 077: what is made here, the state folder among it, is the player's alone (K2).
   Process {
     id: greeter
-    command: ["sh", "-c",
+    command: Model.shell(
       'umask 077; test -e "$1/greeted" && exit 0; mkdir -p "$1" && : > "$1/greeted" && '
       + 'notify-send -a Shikigon -- "Shikigon moved into your bar" "Click its eyes to wake it."',
-      "sh", root.stateDir]
+      [root.stateDir])
   }
 
   // ---------- First-time hints (cos20 #451): which one, ShikigonModel.nextTip ----------
@@ -221,11 +221,11 @@ Item {
     property string title: ""
     property string body: ""
     property string saved: ""
-    command: ["sh", "-c",
+    command: Model.shell(
       'umask 077; mkdir -p "$4" && printf %s "$3" > "$4/tips.json.tmp" '
       + '&& mv "$4/tips.json.tmp" "$4/tips.json" && '
       + 'notify-send -a Shikigon -- "$1" "$2"',  // fixed words only, title and body (Model.nextTip)
-      "sh", title, body, saved, root.stateDir]
+      [title, body, saved, root.stateDir])
   }
 
   Process {
@@ -278,15 +278,15 @@ Item {
   }
   // Omarchy's own chooser: it installs the agent and starts it; signing in is the agent's.
   function openAgentSetup() {
-    Quickshell.execDetached(["omarchy-menu", "summon", "setup.default.agent"])
+    Quickshell.execDetached(Model.outside(["omarchy-menu", "summon", "setup.default.agent"]))
   }
   // The agent's own program, for its sign-in, started by the brain in that terminal: the brain
   // checks the path it starts, so Omarchy's placeholder never runs from here (until 0.1.14 the
   // bar started the agent by its name, cos20 #492, thirteenth review). `agent` is a name from the
   // brain's own list.
   function openSignIn(agent) {
-    Quickshell.execDetached(["omarchy-launch-tui", "--app-id=org.omarchy.agent"]
-                            .concat(brainCommand(["sign-in", String(agent)])))
+    Quickshell.execDetached(Model.outside(["omarchy-launch-tui", "--app-id=org.omarchy.agent"]
+                                          .concat(brainCommand(["sign-in", String(agent)]))))
   }
 
   function parsed(text, fallback) {
@@ -392,7 +392,7 @@ Item {
 
   Process {
     id: credentialCheck
-    command: ["test", "-f", root.stateDir + "/credentials.json"]
+    command: Model.outside(["test", "-f", root.stateDir + "/credentials.json"])
     onExited: code => {
       root.awake = (code === 0)
       if (root.awake && !root.brainChecked && !waker.running) {

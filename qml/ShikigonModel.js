@@ -10,6 +10,26 @@ function stateHome(given, home) {
   return value.charAt(0) === "/" ? value : home + "/.local/state"
 }
 
+// PATH with its absolute folders only, set before a program is looked up: an empty or relative
+// entry is a folder of wherever the shell was started, which another user may write, and QProcess
+// and sh looked there (cos20 #492, betreuer pass c01ec84, F1). The rule of the brain
+// (connections.absolute_path) and of both scripts, which carry this line as it is; with no
+// absolute folder left, Python's os.defpath. Shell builtins only.
+var PATH_RULE = 'given="${PATH:-}:"; PATH=""; while [ -n "$given" ]; do '
+  + 'case "${given%%:*}" in /*) PATH="${PATH:+$PATH:}${given%%:*}" ;; esac; '
+  + 'given="${given#*:}"; done; export PATH="${PATH:-/bin:/usr/bin}"; '
+
+// A program the bar starts by its name: /bin/sh looks it up under PATH_RULE. The one way the bar
+// starts a program that is not its own (a guard in test_betreuer_c01ec84).
+function outside(argv) {
+  return ["/bin/sh", "-c", PATH_RULE + 'exec "$@"', "sh"].concat(argv)
+}
+
+// A short shell body of the bar's own, under PATH_RULE; `args` are its $1, $2, ...
+function shell(body, args) {
+  return ["/bin/sh", "-c", PATH_RULE + body, "sh"].concat(args || [])
+}
+
 // The brain reports "free" under the server's name for it.
 function isCurrentPreset(name, compass) {
   return compass === name || (name === "free" && compass === "autonomous")
@@ -546,6 +566,9 @@ if (typeof module !== "undefined") {
     tournamentRows: tournamentRows,
     endsText: endsText,
     marauderLines: marauderLines,
-    stateHome: stateHome
+    stateHome: stateHome,
+    PATH_RULE: PATH_RULE,
+    outside: outside,
+    shell: shell
   }
 }

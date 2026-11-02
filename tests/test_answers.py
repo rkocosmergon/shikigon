@@ -162,7 +162,7 @@ def test_a_key_never_goes_to_a_system_accounts_server(
 def test_brackets_are_a_refusal_not_a_crash() -> None:
     deep = "{" + "[" * 100_000 + "}"
     assert head.parse_move(deep, {"wait"}) == (
-        None, "the answer was not JSON, or a number in it was not finite")
+        None, "the answer was not JSON, was nested too deep, or a number in it was not finite")
     assert advisor.parse(deep, 3) is None
     assert lessons._json_object(deep)[0] is None
 

@@ -991,7 +991,7 @@ BarWidget {
   }
   Process {
     id: paster
-    command: ["sh", "-c", "timeout 2 wl-paste -n -t text 2>/dev/null | head -c 4096"]
+    command: Model.shell("timeout 2 wl-paste -n -t text 2>/dev/null | head -c 4096")
     stdout: StdioCollector {
       onStreamFinished: {
         const s = Model.pastedLine(text)

@@ -69,7 +69,16 @@ What changed for someone who uses Shikigon. Newest first.
   rules is shown as one line of plain characters without the marks, of at most 400, or not at
   all, and then only the rules play it.
 - **A program is looked up only in the absolute folders of your `PATH`.** An entry like `.` or
-  an empty one found pi, or mise, in the folder the brain was started from.
+  an empty one found pi, or mise, in the folder the brain was started from. The wake script, the
+  terminal and the bar looked there too, for `python3` (which builds the brain's environment),
+  `sh` and Omarchy's own commands. Now all of them set `PATH` to its absolute folders before
+  they look up a program, and what they start inherits it; with none left, `/bin:/usr/bin`.
+- **A move of your agent nested deeper than any the world uses is no usable answer.** Some 490
+  lists inside one another, within the 1,024 bytes a move may have, stopped the tick: neither
+  your agent's move nor the rules' went out. Every JSON the brain reads may now nest 64 deep (the
+  world's deepest is 8), and the rules play.
+- **The brain starts with `PYTHONSAFEPATH` set.** Python then leaves the brain's folder out of
+  its search path, and no start of the brain found its own modules.
 - **The README's “Remove” names the folders of `XDG_STATE_HOME` and `XDG_CONFIG_HOME`.** Set to
   an absolute folder, they hold the state with the keys and your talk; step 3 named only the
   default folders.

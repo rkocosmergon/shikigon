@@ -8,6 +8,11 @@ set -euo pipefail
 # wrote ~/.cosmergon/config.toml with this shell's umask before it set 0600 (cos20 #492, fourth
 # review, K2; the SDK makes it 0600 from creation since 0.27.32).
 umask 077
+# Programs only from the absolute folders of PATH, as in the brain (connections.absolute_path)
+# and the bar (Model.PATH_RULE, the same line): an empty or relative entry is a folder of
+# wherever this was started, which another user may write, and bash looks there (cos20 #492,
+# betreuer pass c01ec84, F1). Builtins only up to here; what this starts inherits it.
+given="${PATH:-}:"; PATH=""; while [ -n "$given" ]; do case "${given%%:*}" in /*) PATH="${PATH:+$PATH:}${given%%:*}" ;; esac; given="${given#*:}"; done; export PATH="${PATH:-/bin:/usr/bin}";
 # The state folder: $XDG_STATE_HOME only if it is an absolute path, as in the brain
 # (files.xdg_home) and the bar (Model.stateHome); a relative one would put the talk and the
 # advisor's key in whatever folder this was started from (cos20 #492, betreuer pass ead8263).
@@ -24,9 +29,10 @@ fi
 brain="$(cd "$(dirname "$0")" && pwd)/shikigon_brain.py"
 # The dashboard talks only to cosmergon.com and has no port check of its own: a Shikigon of
 # another world keeps its key out of it (terminal_refusal in shikigon_brain.py; H3, K9).
-# Started as a script, like every other call of the brain: its own folder comes first on
-# sys.path. Not with -I, which leaves that folder out, so the brain could not import its own
-# modules and the terminal never opened (0.1.13 candidate 22802ba, cos20 #492).
+# Started as a script, like every other call of the brain. Not with -I, which leaves its folder
+# off sys.path: the brain could not import its own modules and the terminal never opened (0.1.13
+# candidate 22802ba, cos20 #492). Since 0.1.14 the brain puts its folder there itself, also
+# under PYTHONSAFEPATH (betreuer pass c01ec84, F3).
 if ! why=$("$venv/bin/python" "$brain" terminal); then
     echo "$why"
     read -r -p "Press Enter to close." _

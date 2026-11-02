@@ -118,20 +118,44 @@ def _finite_float(text: str) -> float:
     return number
 
 
+# How deep a JSON the brain reads may nest. The deepest it is given is 8 (the world's
+# ``/api/v1/game/info`` and its state, measured 02.11.2026); a walk over 64 levels stays far
+# below Python's recursion limit of 1000, also at two frames a level (``head.own_words``).
+MAX_DEPTH = 64
+
+
 def loads(data: str | bytes) -> Any:
-    """``json.loads`` for text from outside: deep nesting is a ``ValueError`` like other bad JSON,
-    and so is a number that is not finite.
+    """``json.loads`` for text from outside: nesting deeper than ``MAX_DEPTH`` is a ``ValueError``
+    like other bad JSON, and so is a number that is not finite.
 
     ``json.loads("[" * 100_000)`` raises ``RecursionError``, which no ``except ValueError``
     catches: a model's answer of brackets ended a move with a traceback instead of a refusal
-    (cos20 #492 S8). ``NaN``, ``Infinity`` and ``1e999`` are no JSON numbers; Python took them,
-    and a head's move with one in it ended the brain where httpx refuses to send it
-    (``allow_nan=False``; sixth review, finding 2). Every JSON the brain reads goes through here
-    (guard in ``test_files``)."""
+    (cos20 #492 S8). What the parser still took, a walk after it could not: a head's move of
+    some 490 nested lists, in its 1024 bytes, ended the tick in ``head.own_words`` with neither
+    the head's move nor the rules' (cos20 #492, betreuer pass c01ec84, F2). ``NaN``,
+    ``Infinity`` and ``1e999`` are no JSON numbers; Python took them, and a head's move with one
+    in it ended the brain where httpx refuses to send it (``allow_nan=False``; sixth review,
+    finding 2). Every JSON the brain reads goes through here (guard in ``test_files``)."""
     try:
-        return json.loads(data, parse_constant=_no_constant, parse_float=_finite_float)
+        value = json.loads(data, parse_constant=_no_constant, parse_float=_finite_float)
     except RecursionError as exc:
         raise ValueError("the JSON is nested too deep") from exc
+    if _depth(value) > MAX_DEPTH:
+        raise ValueError("the JSON is nested too deep")
+    return value
+
+
+def _depth(value: Any) -> int:
+    """How deep ``value`` nests (a scalar 0, ``[]`` 1), walked without recursion."""
+    deepest, open_ = 0, [(value, 1)]
+    while open_:
+        item, level = open_.pop()
+        if isinstance(item, dict):
+            item = list(item.values())
+        if isinstance(item, list):
+            deepest = max(deepest, level)
+            open_.extend((inner, level + 1) for inner in item)
+    return deepest
 
 
 def finite(value: Any) -> float | None:
