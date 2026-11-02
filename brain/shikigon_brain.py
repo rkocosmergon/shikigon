@@ -400,10 +400,16 @@ def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
 
 
 def preset_for(text: str, table: dict[str, list[str]]) -> str | None:
-    """The compass preset your words point to, or ``None`` if it did not understand."""
+    """The compass preset your words point to, or ``None`` if it did not understand.
+
+    A word of the table counts only where one of your words begins: it may go on (``careful`` in
+    "carefully", ``verteidig`` in "verteidigen"), but it never stands inside another word. Until
+    0.1.14 it did, and "ally" (cooperate) in "really" or "actually" set the compass to cooperate
+    for "really explore" (cos20 #621, F2). Not understood is said; a wrong compass was not.
+    """
     said = text.lower()
     for preset, words in table.items():
-        if any(word.lower() in said for word in words):
+        if any(re.search(r"(?<!\w)" + re.escape(word.lower()), said) for word in words):
             return preset
     return None
 
@@ -746,6 +752,9 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
 
 
 TICK_BUFFER_S = 2.0  # after the server's "next tick at": a hair early is still the old tick
+# The longest it waits for a tick the world announced: the SDK's own bound for the same word
+# (cosmergon-agent ``_MAX_POLL_S``, cos20 #420). A guard holds the two equal.
+MAX_PAUSE_S = 300.0
 
 
 def pause(interval: float, state: Any, now: float | None = None) -> float:
@@ -754,12 +763,15 @@ def pause(interval: float, state: Any, now: float | None = None) -> float:
     A tick of the world is adaptive and often longer than the interval; a move every
     ``interval`` then lands twice in one tick, and the second is refused. The server says
     when its next tick comes (``next_tick_at``); without that word the interval stands.
+    It waits for that tick at most ``MAX_PAUSE_S``, as the SDK does: until 0.1.14 a tick
+    announced an hour ahead, or a clock an hour behind the world's, put it to sleep for that hour
+    (cos20 #621, F1). An ``interval`` of the player's beyond that bound still stands.
     """
     now = time.time() if now is None else now
     coming = getattr(state, "next_tick_at", None)
     if not coming or coming <= now:
         return interval
-    return max(interval, float(coming) - now + TICK_BUFFER_S)
+    return max(interval, min(float(coming) - now + TICK_BUFFER_S, MAX_PAUSE_S))
 
 
 LATE_TICK_S = 5.0  # the tick the server announced has not come yet: look again this soon

@@ -38,6 +38,16 @@ What changed for someone who uses Shikigon. Newest first.
   and the move was held back: the tick passed without a move, and the proposal went out next
   without its word. Now it writes nothing while the move that would carry the word is left
   alone, and the rule tree's move goes out.
+- **Your word sets the compass it names, not one hidden inside another word.** A word of the
+  compass table counted anywhere in what you said: `really explore` and `actually explore` set
+  the compass to cooperate, because `ally` stands inside them. Now a word counts only where one
+  of your words begins, so `carefully` and `verteidigen` are still heard. A German verb with a
+  prefix was heard only by chance before; the shipped table now names `aufbau`, `ausbau`,
+  `bekämpf` and `einkauf`, and a config written earlier says "did not understand" for them
+  instead of setting a compass.
+- **It waits for the world's next tick at most five minutes.** A tick announced an hour ahead,
+  or a clock an hour behind the world's, put your Shikigon to sleep for that hour. Now it waits
+  as long as the SDK waits for the same tick, at most 300 seconds, and looks again.
 - **Signing in to pi starts it in `/`.** The sign-in started pi in the folder the brain was
   started from, where pi reads `AGENTS.md` and `CLAUDE.md` of that folder and the ones above
   it. Now it starts in `/`, like every other program Shikigon starts.

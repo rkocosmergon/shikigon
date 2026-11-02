@@ -75,11 +75,13 @@ speak = true
 # override its character. A warrior told to be careful is still a warrior.
 # The world limits how often the compass may change; when it is too often, it answers 429
 # and says when to try again.
+# A word below counts where one of your words begins: "careful" also hears "carefully",
+# "bau" hears "bauen" but not "aufbauen" (that is "aufbau"). The first group that hears one wins.
 [instructions]
-attack = ["attack", "fight", "angreifen", "kämpf", "aggressiv"]
+attack = ["attack", "fight", "angreifen", "kämpf", "bekämpf", "aggressiv"]
 defend = ["defend", "careful", "safe", "vorsichtig", "verteidig", "schütz"]
-grow = ["grow", "expand", "build", "wachs", "bau", "expandier"]
-trade = ["trade", "sell", "buy", "market", "handel", "verkauf", "kauf"]
+grow = ["grow", "expand", "build", "wachs", "bau", "aufbau", "ausbau", "expandier"]
+trade = ["trade", "sell", "buy", "market", "handel", "verkauf", "kauf", "einkauf"]
 cooperate = ["cooperate", "friends", "ally", "verbünde", "zusammen", "freund"]
 explore = ["explore", "look around", "erkunde", "schau dich um"]
 autonomous = ["free", "your call", "do your thing", "frei", "mach was du willst"]
