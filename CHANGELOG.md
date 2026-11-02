@@ -48,6 +48,13 @@ What changed for someone who uses Shikigon. Newest first.
 - **It waits for the world's next tick at most five minutes.** A tick announced an hour ahead,
   or a clock an hour behind the world's, put your Shikigon to sleep for that hour. Now it waits
   as long as the SDK waits for the same tick, at most 300 seconds, and looks again.
+- **Asleep for its configuration, it comes back once that is right again.** When the world's
+  address led to a port on this machine that was no longer yours, your Shikigon fell asleep and
+  stayed asleep until the shell started again, also after the port was yours again or you had
+  changed the configuration. Now the bar starts it again after half a minute, as it already did
+  for an unknown decider; nothing is sent before the address and the key are checked again.
+- **A compass changed too often says "try again later".** It said "try again in a minute", but
+  the world allows a few changes an hour, and the wait can be longer.
 - **Signing in to pi starts it in `/`.** The sign-in started pi in the folder the brain was
   started from, where pi reads `AGENTS.md` and `CLAUDE.md` of that folder and the ones above
   it. Now it starts in `/`, like every other program Shikigon starts.

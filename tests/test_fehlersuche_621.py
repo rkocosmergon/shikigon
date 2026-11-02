@@ -170,3 +170,78 @@ def test_control_every_word_of_the_table_is_heard_where_a_word_begins() -> None:
         for word in words:
             preset = brain.preset_for(f"please {word}en now", TABLE)
             assert preset is not None and order.index(preset) <= order.index(own), word
+
+
+# --- K17: a sleep for its config comes back; the bar starts it again only after an exit != 0 ---
+
+
+class _Opened:
+    """An agent whose connection fails as it opens, with ``error``."""
+
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    async def __aenter__(self) -> Self:
+        raise self.error
+
+    async def __aexit__(self, *exc: object) -> bool:
+        return False
+
+
+def _run_ends(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, refusals: list[str],
+              agent: Any = None) -> tuple[int, dict[str, Any]]:
+    """``main(["run"])`` with the world's port refused as ``refusals`` says, call by call."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    home = tmp_path / "state" / "shikigon"
+    home.mkdir(parents=True)
+    (home / "credentials.json").write_text(json.dumps(
+        {"agent_id": "a1", "api_key": "k1", "world": "https://cosmergon.com:443"}))
+    said = iter(refusals)
+    monkeypatch.setattr(brain, "world_refusal", lambda cfg: next(said, ""))
+    monkeypatch.setattr(brain, "key_refusal", lambda cfg, creds: "")
+    monkeypatch.setattr(brain, "make_agent", lambda cfg: agent or _Compass())
+    code = brain.main(["run"])
+    return code, json.loads((home / "status.json").read_text())
+
+
+@pytest.mark.parametrize("refusals", [["its port is not yours"], ["", "its port is not yours"]],
+                         ids=["at the start", "while it runs"])
+def test_a_port_that_is_not_yours_ends_the_run_so_that_the_bar_starts_it_again(
+        refusals: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    code, status = _run_ends(tmp_path, monkeypatch, refusals)
+    assert status["reason"] == brain.CONFIG and code != 0
+
+
+def test_a_send_refused_at_the_port_ends_the_run_so_that_the_bar_starts_it_again(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from cosmergon_agent.exceptions import SendRefusedError
+
+    code, status = _run_ends(tmp_path, monkeypatch, [], _Opened(SendRefusedError("not yours")))
+    assert status["reason"] == brain.CONFIG and code != 0
+
+
+def test_control_a_key_that_ended_ends_the_run_with_0_a_restart_would_not_help(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from cosmergon_agent.exceptions import AuthenticationError
+
+    code, status = _run_ends(tmp_path, monkeypatch, [], _Opened(AuthenticationError("401")))
+    assert status["reason"] == brain.KEY_ENDED and code == 0
+
+
+# --- K27: the world allows a few compass changes an hour; the brain promises no minute ---------
+
+
+class _TooOften(_Compass):
+    async def set_compass(self, preset: str) -> dict[str, Any]:
+        from cosmergon_agent.exceptions import RateLimitError
+
+        raise RateLimitError(retry_after=30.0)  # what the SDK says, capped (_MAX_BACKOFF)
+
+
+def test_a_compass_changed_too_often_promises_no_wait_the_world_does_not_keep(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))  # the journal stays here
+    said = asyncio.run(brain.instruct(_TooOften(), "explore", TABLE))
+    assert said["ok"] is False and said["preset"] == "explore"
+    assert "minute" not in said["why"] and "later" in said["why"]

@@ -694,10 +694,14 @@ KEY_ENDED, WORLD_SILENT, CONFIG = "key_ended", "world_silent", "config"
 KEY_LOST = "key_lost"  # its key file cannot be read (``key_lost``): a new one is the way on
 
 
+ASLEEP_FOR = {"reason": ""}  # why it last fell asleep in this process (``_moves``: run's exit code)
+
+
 def fall_asleep(reason: str, why: str) -> dict[str, Any]:
     """Write the sleeping snapshot and return what is said about it."""
     last = {"action": "none", "ok": False, "why": why}
     write_status({"mood": ASLEEP, "reason": reason, "last": last})
+    ASLEEP_FOR["reason"] = reason
     return last
 
 
@@ -1020,7 +1024,10 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
     try:
         answer = await agent.set_compass(preset)
     except RateLimitError:  # the world limits how often the compass may change
-        why = "the compass was changed too often: try again in a minute"
+        # Not a time: the world allows a few changes an hour and says when, but the SDK caps what
+        # it says at 30 s (``_MAX_BACKOFF``); "in a minute" was not true (cos20 #621, K27).
+        why = ("the compass was changed too often: the world allows a few changes an hour, "
+               "try again later")
         journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False})
         return {"heard": text, "preset": preset, "ok": False, "why": why}
     ok = not (isinstance(answer, dict) and answer.get("error"))
@@ -1646,8 +1653,14 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
         print(json.dumps(fall_asleep(CONFIG, str(exc))))
         return 1
     if args.command == "run":
+        ASLEEP_FOR["reason"] = ""
         connections.run_loop(with_agent(cfg, lambda a: run(cfg, a, decider), once=False))
-        return 0
+        # A config it cannot follow ends with 1, as an unknown decider above does: the bar wakes it
+        # again after a while (Service.qml, restartLater), and a config set right or a port that
+        # is yours again is followed; nothing goes out before ``with_agent`` checked both. Until
+        # 0.1.14 it ended with 0 and slept until the shell started again (cos20 #621, K17). A key
+        # that ended or is lost wants a new one, not a restart: 0.
+        return 1 if ASLEEP_FOR["reason"] == CONFIG else 0
     async def work(agent: Any) -> dict[str, Any]:
         if args.command == "tick":  # the pauses of the running brain hold here too
             return await guarded_tick(agent, decider, None, Refusals(refusals_path()))

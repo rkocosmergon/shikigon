@@ -73,8 +73,8 @@ speak = true
 # What you say, and what your Shikigon hears.
 # A word from you sets its compass. The compass tilts its choices; it does not
 # override its character. A warrior told to be careful is still a warrior.
-# The world limits how often the compass may change; when it is too often, it answers 429
-# and says when to try again.
+# The world limits how often the compass may change, a few times an hour; when it is too
+# often, your word is not taken and it says so: try again later.
 # A word below counts where one of your words begins: "careful" also hears "carefully",
 # "bau" hears "bauen" but not "aufbauen" (that is "aufbau"). The first group that hears one wins.
 [instructions]
