@@ -356,6 +356,26 @@ def world_lines(info: Any) -> list[str]:
             *_tier_lines(evolve)]  # fmt: skip
 
 
+def _move_lines(moves: dict[str, Any], forms: Forms) -> tuple[list[str], list[str]]:
+    """The moves it writes itself, and the others the world offers now."""
+    own: list[str] = []
+    other: list[str] = []
+    for action, facts in moves.items():
+        if action == "start_mission" and isinstance(facts, dict):
+            own.append("- start_mission:")
+            own.extend(mission_lines(facts))
+            continue
+        shown = ({k: v for k, v in facts.items() if k not in _NOISE}
+                 if isinstance(facts, dict) else facts)
+        line = f"- {advisor.word(action)}: {advisor.word(shown, FACTS_CHARS)}"
+        if action in forms and action not in OWN_FORM:
+            own.append(line)
+            own.extend(form_lines(forms[action]))
+            continue
+        (own if action in OWN_FORM else other).append(line)
+    return own, other
+
+
 def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str, Any]]],
           lesson: str, recent: list[str], forms: Forms | None = None,
           world: list[str] | None = None) -> str:
@@ -380,21 +400,7 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
     inside = contracts_in(state)
     if inside:
         parts.append("Contracts you are in:\n" + "\n".join(inside))
-    own: list[str] = []
-    other: list[str] = []
-    for action, facts in moves.items():
-        if action == "start_mission" and isinstance(facts, dict):
-            own.append("- start_mission:")
-            own.extend(mission_lines(facts))
-            continue
-        shown = ({k: v for k, v in facts.items() if k not in _NOISE}
-                 if isinstance(facts, dict) else facts)
-        line = f"- {advisor.word(action)}: {advisor.word(shown, FACTS_CHARS)}"
-        if action in forms and action not in OWN_FORM:
-            own.append(line)
-            own.extend(form_lines(forms[action]))
-            continue
-        (own if action in OWN_FORM else other).append(line)
+    own, other = _move_lines(moves, forms)
     fields = field_lines(state)
     if fields:  # a move it writes needs them, and its income stands on what they hold
         parts.append("Your fields (field_id: what it holds), the most cells first:\n"
