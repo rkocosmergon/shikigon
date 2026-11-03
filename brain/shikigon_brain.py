@@ -722,6 +722,7 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
     findings 2 and 3). A key that ended and a port that changed hands still end the work: the
     caller puts the Shikigon to sleep and says why.
     """
+    import advisor
     from cosmergon_agent.exceptions import AuthenticationError, RateLimitError, SendRefusedError
     from cosmergon_agent.exceptions import ConnectionError as CsgConnectionError
 
@@ -742,6 +743,9 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
         return {"action": action, "ok": False, "why": why, "refused": True}
     why = "" if result.success else str(result.error_message or "")
     done: dict[str, Any] = {"action": action, "ok": bool(result.success), "why": why[:200]}
+    told = advisor.move_params(params)  # what it decided, for its own look back (cos20 #533)
+    if told:
+        done["params"] = told
     if not result.success:
         done["refused"] = True  # the world answered and said no; a 429 or no answer is not that
     kind = mission_kind(action, params)

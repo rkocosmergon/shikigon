@@ -199,6 +199,47 @@ def rule_line(action: str, params: dict[str, Any]) -> str | None:
     return line if held else None
 
 
+PARAMS_TOLD = 8  # parameters of one move in the journal
+# Parameters whose value is a word the world fixes. Any other word stays out: a message, a title, a
+# reason or a name is free text. A parameter added later is simply not told.
+PARAM_WORDS = frozenset({
+    "preset", "mission_type", "kind", "item_type", "contract_type",
+    "compass_preset", "decision", "query_type", "mode", "surface",
+})  # fmt: skip
+PARAM_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+def _param_value(key: str, value: Any, nested: bool) -> Any:
+    """What the journal keeps of one parameter; ``None`` keeps nothing."""
+    if key == "params" and nested:
+        return move_params(value, nested=False) or None
+    if key == "cells" and isinstance(value, dict | list):
+        return len(value)  # how many, not which: the field shows where they are
+    if isinstance(value, str):
+        id_like = key.endswith("_id") and PARAM_ID.fullmatch(value)
+        word_like = key in PARAM_WORDS and MOVE_WORD.fullmatch(value)
+        return value if id_like or word_like else None
+    number = files.finite(value) if isinstance(value, int | float) else None
+    return value if number is not None else None
+
+
+def move_params(params: Any, nested: bool = True) -> dict[str, Any]:
+    """What a move said, as its own journal may keep it and a model may read it (cos20 #533):
+    numbers, ids and closed words, at most ``PARAMS_TOLD``, under a key in the form of a move's
+    word. What a model or another agent wrote stays out."""
+    if not isinstance(params, dict):
+        return {}
+    told: dict[str, Any] = {}
+    for key, value in params.items():
+        if len(told) >= PARAMS_TOLD:
+            break
+        if isinstance(key, str) and MOVE_WORD.fullmatch(key):
+            kept = _param_value(key, value, nested)
+            if kept is not None:
+                told[key] = kept
+    return told
+
+
 def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
     """One move of the journal as a model may read it: the one way from the journal into a prompt.
 
@@ -225,6 +266,9 @@ def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
         number = files.finite(entry.get(key))
         if number is not None:
             shown[key] = number
+    told = move_params(entry.get("params"))
+    if told:
+        shown["params"] = told
     effect = entry.get("effect")
     if isinstance(effect, dict):
         shown["effect"] = {k: files.finite(effect.get(k) or 0) or 0.0

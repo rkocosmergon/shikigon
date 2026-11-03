@@ -79,7 +79,7 @@ def due(entries: list[dict[str, Any]], every: int = LEARN_EVERY) -> bool:
 
 HEAD_WINDOW = 100  # moves the head's look back is rated on, whatever came since its last one
 REVIEW_FOLDER = "review"  # what the head may read while it looks back (cos20 #527)
-LINE_CHARS = 200  # one journal line in that folder
+LINE_CHARS = 320  # one journal line in that folder, with what the move said (cos20 #533)
 
 
 def window(entries: list[dict[str, Any]], size: int = HEAD_WINDOW) -> list[dict[str, Any]]:

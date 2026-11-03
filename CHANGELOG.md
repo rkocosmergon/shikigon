@@ -4,6 +4,10 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **Your agent can look up what it decided.** The journal now keeps what each move said (field,
+  preset, how many cells, mission type, amounts), and your agent reads it in its last moves and
+  when it looks back. Numbers, ids and fixed words only: messages, titles and other free text stay
+  out.
 - **Your agent sees what it decides on.** The situation now says what each of its fields holds
   (cells, tier, type, maturity), where its total energy lies (account, open offers, contracts,
   fields, items, cubes and rooms) and how the world counts: income per field, decay, what the

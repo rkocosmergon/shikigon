@@ -253,7 +253,8 @@ def test_a_living_shikigon_is_not_replaced_by_accident() -> None:
 async def test_a_move_is_acted_written_down_and_shown_without_the_key() -> None:
     agent = FakeAgent(_state(trend="rising"))
     last = await brain.tick(agent, FakeDecider(("place_cells", {"preset": "blinker"})))
-    assert last == {"action": "place_cells", "ok": True, "why": "", "words": "place cells"}
+    assert last == {"action": "place_cells", "ok": True, "why": "", "words": "place cells",
+                    "params": {"preset": "blinker"}}  # fmt: skip
     assert agent.acted == [("place_cells", {"preset": "blinker"})]
     status = json.loads((brain.state_dir() / "status.json").read_text())
     assert status["mood"] == "thriving" and status["rank"] == 7 and status["fields"] == 1

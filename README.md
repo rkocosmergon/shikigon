@@ -207,8 +207,9 @@ be brought back. **wake a new one** gives you a new Shikigon.
 - **It listens.** A word from you (`be careful`, `trade more`, `expand`) sets its *compass*.
   The compass tilts its choices; it does not override its character. A warrior told to be
   careful is still a warrior.
-- **It writes things down.** Every move goes into a journal, and its face shows how its world
-  is going: thriving, content, struggling, or asleep.
+- **It writes things down.** Every move goes into a journal, with what the move said (numbers,
+  ids and fixed words, no free text), and its face shows how its world is going: thriving,
+  content, struggling, or asleep.
 - **It learns,** if a model advises it (below).
 
 **Your first field.** Cosmergon's world is full, and a new Shikigon owns no land. It cannot
