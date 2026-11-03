@@ -22,7 +22,7 @@ from pathlib import Path
 
 Send = Callable[[list[dict[str, str]], int], Awaitable[str]]
 
-READABLE = ("moves.txt", "rated.txt", "world.txt")  # what lessons.review_folder writes
+READABLE = ("moves.txt", "rated.txt", "world.txt", "ledger.txt")  # from lessons.review_folder
 READS = 3  # times it may read before it must answer
 SLICE_LINES = 40
 SLICE_CHARS = 6000
@@ -32,6 +32,7 @@ WHAT = {
     "moves.txt": "its last moves, one per line, with what the world answered",
     "rated.txt": "the numbers above",
     "world.txt": "the rules as the world states them",
+    "ledger.txt": "what the world booked on its energy, newest first",
 }
 
 
@@ -51,10 +52,12 @@ def lines_of(folder: Path, name: str) -> list[str] | None:
 def note(folder: Path) -> str:
     """What the head may read and how, with the number of lines in each file."""
     listed = ", ".join(
-        f"{name} ({len(lines_of(folder, name) or [])} lines: {WHAT[name]})" for name in READABLE
+        f"{name} ({len(lines_of(folder, name) or [])} lines: {WHAT[name]})"
+        for name in READABLE
+        if name != "ledger.txt" or lines_of(folder, name)
     )
     return (
-        f"Three files hold the details: {listed}. To read lines before you answer, answer with "
+        f"These files hold the details: {listed}. To read lines before you answer, answer with "
         f"one line and nothing else: READ <file> <first>-<last> (at most {SLICE_LINES} lines). "
         f"You get them back. You may read {READS} times; then answer with the three lines."
     )

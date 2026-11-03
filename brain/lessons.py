@@ -89,7 +89,69 @@ def window(entries: list[dict[str, Any]], size: int = HEAD_WINDOW) -> list[dict[
     return [entry for entry in entries if "action" in entry and "energy" in entry][-size:]
 
 
-def review_folder(home: Path, moves: list[dict[str, Any]], numbers: str, world: str) -> Path:
+LEDGER_HOUR = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}")  # the start of the world's time
+
+
+def _ledger_hour(value: Any) -> str:
+    hit = LEDGER_HOUR.match(value) if isinstance(value, str) else None
+    return hit.group() if hit else ""
+
+
+def _type_word(value: Any) -> str:
+    """A type the world names, only in the form of a move's word; else empty."""
+    import advisor
+
+    return value if isinstance(value, str) and advisor.MOVE_WORD.fullmatch(value) else ""
+
+
+def _event_line(row: Any) -> str:
+    """One hour of one mechanical booking, with what each field added; empty if unreadable."""
+    import advisor
+
+    if not isinstance(row, dict):
+        return ""
+    hour, kind = _ledger_hour(row.get("hour")), _type_word(row.get("event_type"))
+    amount = files.finite(row.get("total_amount"))
+    if not hour or not kind or amount is None:
+        return ""
+    count = files.finite(row.get("row_count"))
+    line = f"{hour} {kind} {_signed(amount)}" + (f" ({int(count)} bookings)" if count else "")
+    details = row.get("source_details")
+    tops = details.get("top_events") if isinstance(details, dict) else None
+    for top in tops if isinstance(tops, list) else []:
+        key = top.get("key") if isinstance(top, dict) else None
+        part = files.finite(top.get("amount")) if isinstance(top, dict) else None
+        if isinstance(key, str) and advisor.PARAM_ID.fullmatch(key) and part is not None:
+            line += f", field {key} {_signed(part)}"
+    return line
+
+
+def _booking_lines(rows: list[Any]) -> list[str]:
+    """Financial bookings by hour and type, newest hour first: loot comes in dozens an hour."""
+    hours: dict[tuple[str, str], list[float]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        hour, kind = _ledger_hour(row.get("created_at")), _type_word(row.get("transaction_type"))
+        amount = files.finite(row.get("amount"))
+        if hour and kind and amount is not None:
+            hours.setdefault((hour, kind), []).append(amount)
+    ordered = sorted(hours.items(), key=lambda item: item[0][0], reverse=True)
+    return [f"{hour} {kind} {_signed(sum(amounts))} ({len(amounts)} bookings)"
+            for (hour, kind), amounts in ordered]  # fmt: skip
+
+
+def ledger_lines(events: Any, transactions: Any) -> list[str]:
+    """What was booked on its energy, from the world's rows (cos20 #533): the consequences beside
+    the journal's decisions. Numbers, ids and the world's type words in their form, no more."""
+    lines = [_event_line(row) for row in (events if isinstance(events, list) else [])]
+    return [line for line in lines if line] + _booking_lines(
+        transactions if isinstance(transactions, list) else []
+    )
+
+
+def review_folder(home: Path, moves: list[dict[str, Any]], numbers: str, world: str,
+                  ledger: str = "") -> Path:  # fmt: skip
     """Write what the head may read while it looks back; the folder is inside the state
     folder (0700). Its moves one per line, as a model may read them (``advisor.move_for_model``:
     no names of other agents, the world's reason quoted), the numbers, the rules of the world."""
@@ -102,6 +164,10 @@ def review_folder(home: Path, moves: list[dict[str, Any]], numbers: str, world: 
     (folder / "moves.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     (folder / "rated.txt").write_text(numbers + "\n", encoding="utf-8")
     (folder / "world.txt").write_text(world[:8000] + "\n", encoding="utf-8")
+    if ledger:
+        (folder / "ledger.txt").write_text(ledger + "\n", encoding="utf-8")
+    else:  # an old one would read as now
+        (folder / "ledger.txt").unlink(missing_ok=True)
     return folder
 
 
@@ -311,7 +377,7 @@ def latest_text(home: Path) -> str:
 
 async def learn(
     home: Path, conf: dict[str, Any], facts: str, send: Send, force: bool = False,
-    head: bool = False, world: str = "", reader: Any = None, secret: str = "",
+    head: bool = False, world: str = "", reader: Any = None, secret: str = "", ledger: str = "",
 ) -> dict[str, Any] | None:
     """Look back and keep a lesson. ``None`` without an advisor, or when it is not time
     (forced: fewer than ``FORCED_MIN`` moves).
@@ -347,7 +413,7 @@ async def learn(
     note = ""
     stopped: list[bool] = []  # set when the day's limit ended its reading
     if head and reader is not None:
-        folder = review_folder(home, moves, numbers, world)
+        folder = review_folder(home, moves, numbers, world, ledger)
 
         def one_more() -> bool:
             """Each round of reading is a call of its own, against the same limit (cos20 #492,

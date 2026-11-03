@@ -1419,8 +1419,24 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
     return installed[name].load()()
 
 
+LEDGER_EVENTS, LEDGER_BOOKINGS = 72, 500  # rows of the world: a day of hours, hours of loot
+
+
+async def read_ledger(agent: Any) -> str:
+    """What the world booked on its energy, for its look back (cos20 #533); empty with an SDK that
+    cannot read it, or when the world does not answer. The SDK's own calls say ``None`` then."""
+    events = getattr(agent, "get_energy_events", None)
+    bookings = getattr(agent, "get_energy_transactions", None)
+    if events is None or bookings is None:
+        return ""
+    import lessons
+
+    return "\n".join(lessons.ledger_lines(await events(tier="hourly", limit=LEDGER_EVENTS),
+                                          await bookings(limit=LEDGER_BOOKINGS)))  # fmt: skip
+
+
 async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
-                send: Any = None) -> dict[str, Any] | None:
+                send: Any = None, agent: Any = None) -> dict[str, Any] | None:
     """A lesson from its last moves if one is due (``force``: now), written to the journal."""
     import advisor
     import lessons
@@ -1441,8 +1457,9 @@ async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
         world = await asyncio.to_thread(world_rules, cfg, connections.bounded_get)
         # it reads through the brain, never with a tool of its own (cos20 #492, K28)
         reader = functools.partial(reading.mediated, send)
-    entry = await lessons.learn(home, conf, advisor.facts(state), send, force=force,
-                                head=head, world=world, reader=reader, secret=secret)
+    ledger = await read_ledger(agent) if head else ""
+    entry = await lessons.learn(home, conf, advisor.facts(state), send, force=force, head=head,
+                                world=world, reader=reader, secret=secret, ledger=ledger)
     if entry is not None:
         journal(entry)
     return entry
@@ -1455,10 +1472,11 @@ NOTHING_TO_LEARN = ("nothing to learn from yet: it needs an advisor (ask in the 
 async def learn_now(cfg: dict[str, Any], agent: Any) -> dict[str, Any]:
     """``learn``: a lesson now, without waiting for the hundredth move."""
     state = await agent.refresh_state()
-    return await learn(cfg, state, force=True) or {"ok": False, "why": NOTHING_TO_LEARN}
+    done = await learn(cfg, state, force=True, agent=agent)
+    return done or {"ok": False, "why": NOTHING_TO_LEARN}
 
 
-def learning_next(cfg: dict[str, Any], state: Any, learning: Any) -> Any:
+def learning_next(cfg: dict[str, Any], state: Any, learning: Any, agent: Any = None) -> Any:
     """The lesson running beside the moves: the one still at work, a new one when due, or
     ``None``. A lesson that broke says so on stderr (the bar shows it) and is let go."""
     import lessons
@@ -1472,7 +1490,7 @@ def learning_next(cfg: dict[str, Any], state: Any, learning: Any) -> Any:
     if decider_name(cfg, conf) == "head":  # it has taken over: it looks back often (#527)
         every = max(1, int(conf.get("review_every", 5) or 5))
     if lessons.due(lessons.journal_tail(state_dir()), every):
-        return asyncio.create_task(learn(cfg, state))
+        return asyncio.create_task(learn(cfg, state, agent=agent))
     return None
 
 
@@ -1528,7 +1546,7 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
             continue
         state = getattr(agent, "state", None)
         done_in = getattr(state, "tick", None)
-        learning = learning_next(cfg, state, learning)
+        learning = learning_next(cfg, state, learning, agent)
         await asyncio.sleep(pause(interval, state))
 
 

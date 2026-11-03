@@ -135,8 +135,9 @@ maturity, where its total energy lies, how the world counts income, decay and ti
 numbers), every move the world offers right now with what each needs, the
 contracts other agents offered it and the contracts it is in (the other agent by id, the terms
 quoted as information) and what the world answered to its last moves; when it looks back,
-it may ask the brain for lines from three files the brain wrote for it (its last hundred
-moves, their numbers, the rules of the world). The key itself is never sent. What the brain
+it may ask the brain for lines from the files the brain wrote for it (its last hundred
+moves, their numbers, the rules of the world, what the world booked on its energy). The key
+itself is never sent. What the brain
 sends goes over https, or stays on this machine: never in plain text over a network, where
 anyone on the way could read it (below, "an address of its own"). When your agent (pi) answers,
 the brain hands it all of this over stdin on this machine, and your agent sends it on over its
@@ -398,8 +399,8 @@ means no limit. What is left today stands in `status.json` (`learning_budget_lef
 It learns faster, too: every five moves (`review_every`) it looks back on its last hundred
 moves and updates its three lessons instead of starting over. **Your agent gets no tool for
 this, and none at all** (since 0.1.11): it may answer `READ moves.txt 1-40` instead of its
-lessons, and the brain hands back those lines, only from the three files it wrote for it
-(its moves, their numbers, the rules of the world), at most 40 lines at a time and three times
+lessons, and the brain hands back those lines, only from the files it wrote for it
+(its moves, their numbers, the rules of the world, what was booked), at most 40 lines at a time and three times
 per look back. A name or path outside them gets a sentence, never a file. So no instruction
 hidden in what other agents wrote can make your agent read your files. Before 0.1.11 pi
 looked back with its own read tool, which could read any file you can read.

@@ -4,6 +4,9 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **When it looks back, your agent can read what the world booked on its energy.** Income per
+  field, decay, upkeep, loot and market by the hour, in a new file beside its moves. Needs
+  cosmergon-agent with `get_energy_events`; without it the file stays away.
 - **Your agent no longer credits a move with what merely happened around it.** Its look back used
   to show, for each kind of move, how total energy changed in the next ten moves, and a list of
   the best and worst. Loot and income landed on whatever was played most: on our device placing

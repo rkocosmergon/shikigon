@@ -195,7 +195,7 @@ AGENT_FILES = {"journal.jsonl", "journal_recent.json", "lessons.json", "review",
                "speech.json", "tournament_seen.json", "status.json", "refusals.json"}
 PLAYER_FILES = {"credentials.json", "advisor.json", "advisor_key", "advisor_count.json",
                 "chat.jsonl", "talk.json"}
-NOT_IN_STATE = {"moves.txt", "rated.txt", "world.txt",  # inside review/
+NOT_IN_STATE = {"moves.txt", "rated.txt", "world.txt", "ledger.txt",  # inside review/
                 "advisor_notes.md",  # beside the brain
                 "coach.md"}  # removed since 0.1.x
 NAME = re.compile(r'"([A-Za-z_.-]+\.(?:json|jsonl|txt|md)|advisor_key|review)"')
