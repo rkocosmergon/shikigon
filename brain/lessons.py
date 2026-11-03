@@ -375,6 +375,16 @@ def latest_text(home: Path) -> str:
             f"Do more of: {newest['double_down']}")
 
 
+def latest_as_answer(home: Path) -> str:
+    """The newest lesson as a look back must answer it. Shown with Avoid and Do more of, the model
+    went on in those words and the answer did not fit (18 of 42 on the device, cos20 #527)."""
+    lessons = kept(home)
+    if not lessons:
+        return ""
+    newest = lessons[-1]
+    return "\n".join(f"{label}: {newest[key]}" for label, key in LABELS.items())
+
+
 async def learn(
     home: Path, conf: dict[str, Any], facts: str, send: Send, force: bool = False,
     head: bool = False, world: str = "", reader: Any = None, secret: str = "", ledger: str = "",
@@ -409,7 +419,7 @@ async def learn(
     # the numbers as a model may read them (``advisor.move_for_model``): a mission type the world
     # named went into them raw until 0.1.13, also into ``rated.txt`` (sixth review, finding 4)
     numbers = summary([m for m in map(advisor.move_for_model, moves) if "energy" in m])
-    before = latest_text(home) if head else ""
+    before = latest_as_answer(home) if head else ""
     note = ""
     stopped: list[bool] = []  # set when the day's limit ended its reading
     if head and reader is not None:
@@ -436,6 +446,7 @@ async def learn(
     lesson, unfit = read_lesson(text)
     if lesson is None:
         entry["why"] = "daily limit reached" if stopped else f"the answer did not fit: {unfit}"
+        entry["answer_chars"] = len(text or "")  # cut off or one line; never the text itself
         return entry
     if secret and any(secret in value for value in lesson.values()):
         # no agent can read the key file any more (cos20 #492, K28); a lesson with the key is

@@ -310,6 +310,34 @@ async def test_while_it_has_taken_over_it_looks_back_every_few_moves_and_updates
     assert "Evolving its field" in second.asked[0][-1]["content"]
 
 
+async def test_the_look_back_shows_its_last_lesson_in_the_words_it_must_answer_in() -> None:
+    """Device 03.11.2026: 18 of 42 look backs kept nothing, most for ``'avoid' is missing``. The
+    prompt asked for LESS and MORE and showed the last lesson with Avoid and Do more of (cos20
+    #527). Copying what it sees must give an answer that fits."""
+    home = brain.state_dir()
+    _played(home, 40)
+    conf = {**CONF, "review_every": 5}
+    await lessons.learn(home, conf, "facts", Replies(LESSON), head=True)
+    _played(home, 5)
+    model = Replies(LESSON)
+    await lessons.learn(home, conf, "facts", model, head=True)
+    asked = model.asked[0][-1]["content"]
+    assert "Avoid:" not in asked and "Do more of:" not in asked
+    shown = asked[asked.index("LESSON:"):]
+    assert lessons.read_lesson(shown)[0] == lessons.read_lesson(LESSON)[0]
+
+
+async def test_an_answer_that_does_not_fit_says_its_length_and_not_its_text() -> None:
+    home = brain.state_dir()
+    _played(home, 40)
+    answer = "LESSON: " + "one line and nothing after it " * 5
+    entry = await lessons.learn(home, {**CONF, "review_every": 5}, "facts", Replies(answer),
+                                head=True)
+    assert entry is not None and not entry["ok"]
+    assert entry["answer_chars"] == len(answer)
+    assert "one line" not in json.dumps(entry)
+
+
 async def test_an_agent_that_may_read_gets_a_folder_and_never_keeps_the_key() -> None:
     home = brain.state_dir()
     _played(home, 40)
