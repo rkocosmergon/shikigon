@@ -1146,6 +1146,13 @@ def world_forms(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:
     return head.forms_of(world_info(cfg, get))
 
 
+def world_numbers(cfg: dict[str, Any], get: Callable[..., Any]) -> list[str]:
+    """How the world counts, in lines of ours (cos20 #533); empty if it is unreachable."""
+    import head
+
+    return head.world_lines(world_info(cfg, get))
+
+
 def recent_moves(count: int) -> list[str]:
     """Its last moves from the journal, in words, as a model may read them
     (``advisor.move_for_model``: the world's reason quoted, no names of other agents)."""
@@ -1377,7 +1384,10 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
             def forms() -> Any:
                 return asyncio.to_thread(world_forms, cfg, connections.bounded_get)
 
-            inner = head.HeadDecider(inner, conf, state_dir(), forms=forms)
+            def numbers() -> Any:
+                return asyncio.to_thread(world_numbers, cfg, connections.bounded_get)
+
+            inner = head.HeadDecider(inner, conf, state_dir(), forms=forms, world=numbers)
         if advised or not speech.wanted(conf):  # a dry run plays and says nothing
             return inner
         key = (load_credentials() or {}).get("api_key", "")

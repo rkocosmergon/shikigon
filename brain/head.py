@@ -69,7 +69,9 @@ CONTRACT_ANSWERS = ("accept_contract", "reject_contract")
 # list.
 OWN_FORM = frozenset({"start_mission", *CONTRACT_ANSWERS, "wait"})
 FORM_CHARS = 700  # the forms of one move in the situation (market_list has one per kind)
-FIELDS_TOLD = 8  # field ids in the situation (an id is 36 characters)
+FIELDS_TOLD = 8  # fields in the situation (an id is 36 characters)
+FIELD_TYPES = frozenset({"still_life", "oscillator", "spaceship", "gun", "breeder"})
+TIERS_TOLD = 9  # lines of the tier table, whatever the world publishes
 Forms = dict[str, list[dict[str, Any]]]
 _NOISE = {"sichtbarkeits_schwelle", "cost_by_cube_size", "reference_prices", "mission_types"}
 
@@ -241,18 +243,128 @@ def contracts_in(state: Any) -> list[str]:
     return lines
 
 
-def field_ids(state: Any) -> list[str]:
-    """The ids of its own fields, at most ``FIELDS_TOLD``, each one word of the world's."""
-    fields = tuple(getattr(state, "fields", None) or ())[:FIELDS_TOLD]
-    return [advisor.word(getattr(field, "id", "")) for field in fields]
+def _amount(value: Any) -> float | None:
+    """A count or rate of the world, or ``None``: never a word, never below zero."""
+    number = files.finite(value)
+    return number if number is not None and number >= 0 else None
+
+
+def _shown(number: float) -> str:
+    """``806``, ``1.5``, ``0.0013``: the world's number, no exponent up to 12 digits."""
+    return format(number, ".12g")
+
+
+def _field_line(field: Any) -> str:
+    """One field: what its income and its next tier depend on (cos20 #533). Numbers and the
+    closed list of types; what is neither stays out, the id stays."""
+    told = []
+    cells = _amount(getattr(field, "active_cell_count", None))
+    if cells is not None:
+        told.append(f"{_shown(cells)} cells")
+    tier = _amount(getattr(field, "entity_tier", None))
+    if tier is not None:
+        told.append(f"tier {_shown(tier)}")
+    kind = getattr(field, "entity_type", None)
+    if isinstance(kind, str) and kind in FIELD_TYPES:
+        told.append(kind)
+    maturity = _amount(getattr(field, "reife_score", None))
+    if maturity is not None:
+        told.append(f"maturity {_shown(maturity)}")
+    ident = advisor.word(getattr(field, "id", ""))
+    return f"- {ident}: {', '.join(told)}" if told else f"- {ident}"
+
+
+def field_lines(state: Any) -> list[str]:
+    """Its own fields, the most living cells first, at most ``FIELDS_TOLD``."""
+    fields = tuple(getattr(state, "fields", None) or ())
+
+    def cells(field: Any) -> float:
+        count = _amount(getattr(field, "active_cell_count", None))
+        return -1.0 if count is None else count
+
+    return [_field_line(field) for field in sorted(fields, key=cells, reverse=True)[:FIELDS_TOLD]]
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _income_line(economy: dict[str, Any]) -> list[str]:
+    base = _amount(economy.get("energy_base_rate"))
+    bonus = _as_dict(economy.get("income_pattern_bonus"))
+    kinds = [(kind, _amount(bonus.get(kind))) for kind in ("growing", "changing", "static")]
+    if base is None or any(number is None for _, number in kinds):
+        return []
+    told = ", ".join(f"{kind} {_shown(number)}" for kind, number in kinds if number is not None)
+    line = (f"Income of a field each tick: living cells x {_shown(base)} x pattern bonus ({told}) "
+            "x the multiplier of its tier")  # fmt: skip
+    return [line]
+
+
+def _decay_line(economy: dict[str, Any]) -> list[str]:
+    rate = _amount(economy.get("energy_decay_rate"))
+    exempt = _amount(economy.get("energy_decay_exempt"))
+    if rate is None or exempt is None:
+        return []
+    line = (f"Decay: while your balance is above {_shown(exempt)}, each tick takes {_shown(rate)} "
+            "of all of it")  # fmt: skip
+    return [line]
+
+
+def _tick_line(economy: dict[str, Any]) -> list[str]:
+    seconds = _amount(economy.get("tick_interval_seconds"))
+    return [] if seconds is None else [f"A tick is about {_shown(seconds)} seconds"]
+
+
+def _tier_lines(evolve: dict[str, Any]) -> list[str]:
+    """Maturity, cells and type by the tier it reaches, the price by the tier it has now: so the
+    server reads them (``core/actions/felder.py``, ``next_tier`` and ``entity_tier``)."""
+    multipliers = _as_dict(evolve.get("energy_multiplier_per_tier"))
+    maturity = _as_dict(evolve.get("reife_thresholds"))
+    cells = _as_dict(evolve.get("min_cells_per_tier"))
+    kinds = _as_dict(evolve.get("required_type_per_tier"))
+    costs = _as_dict(evolve.get("costs_per_tier"))
+    tiers = sorted(int(key) for key in multipliers if isinstance(key, str) and key.isdecimal())
+    lines = []
+    for tier in [tier for tier in tiers if tier > 0][:TIERS_TOLD]:
+        multiplier = _amount(multipliers.get(str(tier)))
+        if multiplier is None:
+            continue
+        needs = []
+        if tier > 1:
+            needed = _amount(maturity.get(str(tier)))
+            needs += [] if needed is None else [f"maturity {_shown(needed)}"]
+            least = _amount(cells.get(str(tier)))
+            needs += [] if least is None else [f"{_shown(least)} cells"]
+            kind = kinds.get(str(tier))
+            needs += [kind] if isinstance(kind, str) and kind in FIELD_TYPES else []
+            price = _amount(costs.get(str(tier - 1)))
+            needs += [] if price is None else [f"pays {_shown(price)}"]
+        tail = f"; needs {', '.join(needs)}" if needs else ""
+        lines.append(f"- tier {tier}: multiplier {_shown(multiplier)}{tail}")
+    return ["Tiers of a field, and what evolve needs to reach one:", *lines] if lines else []
+
+
+def world_lines(info: Any) -> list[str]:
+    """How the world counts, from its ``game/info`` (cos20 #533): income, decay, the tiers. Only
+    its numbers and closed words in sentences of ours; a world that does not say leaves no line."""
+    if not isinstance(info, dict):
+        return []
+    economy = _as_dict(info.get("economy"))
+    evolve = _as_dict(_as_dict(info.get("actions")).get("evolve"))
+    return [*_income_line(economy), *_decay_line(economy), *_tick_line(economy),
+            *_tier_lines(evolve)]  # fmt: skip
 
 
 def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str, Any]]],
-          lesson: str, recent: list[str], forms: Forms | None = None) -> str:
+          lesson: str, recent: list[str], forms: Forms | None = None,
+          world: list[str] | None = None) -> str:
     """The situation for the head, at most ``BRIEF_CHARS``; a cut says so. ``forms``: what the
-    world publishes; a move with a form is one it writes itself."""
+    world publishes; a move with a form is one it writes itself. ``world``: ``world_lines``."""
     forms = forms or {}
     parts = [advisor.facts(state)]
+    if world:
+        parts.append("How the world counts:\n" + "\n".join(world))
     if lesson:
         parts.append(f"What you learned from your own moves:\n{lesson}")
     if recent:
@@ -283,9 +395,10 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
             own.extend(form_lines(forms[action]))
             continue
         (own if action in OWN_FORM else other).append(line)
-    fields = field_ids(state)
-    if fields:  # a move it writes needs them, and the rules' lines name one only when they place
-        parts.append("Your fields (field_id): " + ", ".join(fields))
+    fields = field_lines(state)
+    if fields:  # a move it writes needs them, and its income stands on what they hold
+        parts.append("Your fields (field_id: what it holds), the most cells first:\n"
+                     + "\n".join(fields))
     parts.append("Moves you write yourself:\n" + "\n".join(own))
     if other:
         parts.append("Other moves the world offers now (take them only as one of the rules' "
@@ -552,10 +665,13 @@ class HeadDecider:
 
     def __init__(self, tree: Any, conf: dict[str, Any], home: Path,
                  send: advisor.Send | None = None,
-                 forms: Callable[[], Awaitable[Forms]] | None = None) -> None:  # fmt: skip
+                 forms: Callable[[], Awaitable[Forms]] | None = None,
+                 world: Callable[[], Awaitable[list[str]]] | None = None) -> None:  # fmt: skip
         self.tree = tree
         self._load_forms = forms  # the world's forms, read once it answers (cos20 #530)
         self.forms: Forms = {}
+        self._load_world = world  # how the world counts, read the same way (cos20 #533)
+        self.world: list[str] = []
         self.conf = conf
         self.home = home
         waits = {**conf, "timeout_s": max(float(conf.get("timeout_s", 20)), HEAD_WAIT_S)}
@@ -641,6 +757,8 @@ class HeadDecider:
 
         if not self.forms and self._load_forms is not None:
             self.forms = await self._load_forms()  # empty while the world is silent: next move
+        if not self.world and self._load_world is not None:
+            self.world = await self._load_world()
         suggested = await advisor.proposals(self.tree, state, limit=SUGGESTED, paused=blocked)
         self._rules = suggested[0] if suggested else ("wait", {})
         self._suggested, self._state = suggested, state
@@ -657,7 +775,8 @@ class HeadDecider:
             # used up: the rules play until the day ends, no call is made
             return self._rules_play("learning budget used up today")
         situation = brief(state, moves, suggested, lessons.latest_text(self.home),
-                          recent_moves(self.home), self.forms)
+                          recent_moves(self.home), self.forms, self.world)
+        self.last["chars"] = len(situation)  # measured against BRIEF_CHARS (cos20 #533)
         self._talk = [{"role": "system", "content": HEAD_SYSTEM},
                       {"role": "user", "content": situation}]
         move, why_not = await self._ask()

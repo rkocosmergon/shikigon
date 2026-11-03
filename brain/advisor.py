@@ -263,6 +263,29 @@ def place(ranking: Any) -> tuple[int, int]:
     return int(getattr(ranking, "champion_rang", 0) or 0), 0
 
 
+ENERGY_PARTS = (  # the keys of ``gesamtenergie_teile``, in the world's order (cos20 #533)
+    ("konto", "on account"),
+    ("angebote_energie", "in open offers"),
+    ("vertraege_escrow", "held in contracts"),
+    ("felder", "its fields"),
+    ("inventar", "its items"),
+    ("cubes_raeume", "its cubes and rooms"),
+)
+
+
+def _energy_parts(ranking: Any) -> list[str]:
+    """Where its total energy lies, only the parts it knows and only those that hold anything."""
+    parts = getattr(ranking, "gesamtenergie_teile", None)
+    if not isinstance(parts, dict):
+        return []
+    told = []
+    for key, name in ENERGY_PARTS:
+        amount = files.finite(parts.get(key))
+        if amount is not None and round(amount):
+            told.append(f"{name} {round(amount)}")
+    return [f"Of that: {', '.join(told)}"] if told else []
+
+
 def standing(state: Any) -> list[str]:
     """The goal, its place and its own total energy — what it plays for (cos20 #504)."""
     ranking = getattr(state, "ranking", None)
@@ -281,6 +304,7 @@ def standing(state: Any) -> list[str]:
             f"Its total energy: {round(float(total))} "
             "(its energy plus what its fields, cubes, rooms and items are worth)"
         )
+        lines.extend(_energy_parts(ranking))
     return lines
 
 

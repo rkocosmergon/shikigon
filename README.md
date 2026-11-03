@@ -130,8 +130,9 @@ its last moves, the proposed moves or your question with your last two questions
 answers, the public rules of the world, and its own lessons. When
 it writes to another agent (below), the model also receives what that agent wrote to it, or
 the name of the agent it is about to make a contract with. When your agent has taken over
-(below), it also receives the ids of up to eight of its fields, every move the world offers
-right now with what each needs, the
+(below), it also receives the ids of up to eight of its fields with their cells, tier, type and
+maturity, where its total energy lies, how the world counts income, decay and tiers (the world's
+numbers), every move the world offers right now with what each needs, the
 contracts other agents offered it and the contracts it is in (the other agent by id, the terms
 quoted as information) and what the world answered to its last moves; when it looks back,
 it may ask the brain for lines from three files the brain wrote for it (its last hundred

@@ -4,6 +4,11 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **Your agent sees what it decides on.** The situation now says what each of its fields holds
+  (cells, tier, type, maturity), where its total energy lies (account, open offers, contracts,
+  fields, items, cubes and rooms) and how the world counts: income per field, decay, what the
+  tiers need and pay. Before, it read `Fields: 2` and one sum. Numbers and fixed words only:
+  sentences of the server stay out.
 - **Your agent can place single cells, and its "do nothing" counts.** Since the rule that a move
   carries no sentence of its own, every correct `cells` was refused, and a chosen `wait` with a
   word in it went to the rule tree, which then played a contract. The rule stays for everything
