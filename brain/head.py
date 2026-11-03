@@ -69,6 +69,7 @@ CONTRACT_ANSWERS = ("accept_contract", "reject_contract")
 # list.
 OWN_FORM = frozenset({"start_mission", *CONTRACT_ANSWERS, "wait"})
 FORM_CHARS = 700  # the forms of one move in the situation (market_list has one per kind)
+FIELDS_TOLD = 8  # field ids in the situation (an id is 36 characters)
 Forms = dict[str, list[dict[str, Any]]]
 _NOISE = {"sichtbarkeits_schwelle", "cost_by_cube_size", "reference_prices", "mission_types"}
 
@@ -240,6 +241,12 @@ def contracts_in(state: Any) -> list[str]:
     return lines
 
 
+def field_ids(state: Any) -> list[str]:
+    """The ids of its own fields, at most ``FIELDS_TOLD``, each one word of the world's."""
+    fields = tuple(getattr(state, "fields", None) or ())[:FIELDS_TOLD]
+    return [advisor.word(getattr(field, "id", "")) for field in fields]
+
+
 def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str, Any]]],
           lesson: str, recent: list[str], forms: Forms | None = None) -> str:
     """The situation for the head, at most ``BRIEF_CHARS``; a cut says so. ``forms``: what the
@@ -276,6 +283,9 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
             own.extend(form_lines(forms[action]))
             continue
         (own if action in OWN_FORM else other).append(line)
+    fields = field_ids(state)
+    if fields:  # a move it writes needs them, and the rules' lines name one only when they place
+        parts.append("Your fields (field_id): " + ", ".join(fields))
     parts.append("Moves you write yourself:\n" + "\n".join(own))
     if other:
         parts.append("Other moves the world offers now (take them only as one of the rules' "
@@ -335,8 +345,11 @@ def mission_form(params: dict[str, Any], state: Any) -> str:
 # (``speak``, ``speech.usable``). At f2c7212 only ``message``/``say`` were held back
 # (``NEVER_ITS_OWN``), and a contract's clause, a cube's name, a counter offer's slots or a
 # mission's title went out in the head's own sentences, with or without a learning budget.
+# A key may also be a cell, as ``place_cells`` names them: at 1524d09 no correct ``cells`` passed
+# (cos20 #527, 02.11.2026).
 NAME_CHARS = 64  # an id is 36
 NAME = re.compile(rf"[A-Za-z0-9][A-Za-z0-9_.:\-]{{0,{NAME_CHARS - 1}}}")
+CELL = re.compile(r"\d{1,4},\d{1,4}")
 
 
 def own_words(value: Any) -> str:
@@ -346,7 +359,9 @@ def own_words(value: Any) -> str:
         return "" if NAME.fullmatch(value) else (f"{advisor.word(value)} is no name or id: a move "
                                                  "carries no sentence of yours")
     if isinstance(value, dict):
-        named = next((k for k in value if not advisor.MOVE_WORD.fullmatch(str(k))), None)
+        named = next((k for k in value
+                      if not advisor.MOVE_WORD.fullmatch(str(k)) and not CELL.fullmatch(str(k))),
+                     None)  # fmt: skip
         if named is not None:
             return f"{advisor.word(named)} is no field name"
         value = list(value.values())
@@ -579,7 +594,9 @@ class HeadDecider:
         if move is not None:  # the form, before anything goes out (panel §12)
             why_not = form_problem(move[0], move[1], self._state, self._suggested, self.forms)
             line = any(move[0] == a and _same(move[1], p) for a, p in self._suggested)
-            if not why_not and not line:  # no sentence of its own goes out in a move
+            # No sentence of its own goes out in a move. ``wait`` sends nothing (``_take``), and
+            # at 1524d09 the rules played a contract where the head had chosen to do nothing.
+            if not why_not and not line and move[0] != "wait":
                 why_not = own_words(move[1])
             if why_not:
                 return None, why_not

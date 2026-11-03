@@ -170,7 +170,7 @@ def test_a_release_never_read_is_not_asked(says: str) -> None:
         return SimpleNamespace(returncode=0, stdout=says + "\n", stderr="")
 
     why = connections.untried("pi", run)
-    assert why.startswith("pi is not asked") and "1.2.0, 1.3.0, 1.4.0" in why, why
+    assert why.startswith("pi is not asked") and "1.2.0, 1.3.0, 1.4.0, 1.5.0" in why, why
 
 
 # --- 5: every call of a model is counted ----------------------------------------------------------

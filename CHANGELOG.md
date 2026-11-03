@@ -4,6 +4,12 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **Your agent can place single cells, and its "do nothing" counts.** Since the rule that a move
+  carries no sentence of its own, every correct `cells` was refused, and a chosen `wait` with a
+  word in it went to the rule tree, which then played a contract. The rule stays for everything
+  that goes out. The situation now names the ids of up to eight of its fields; before, your agent
+  had to make one up when the rule tree's lines named none.
+- **pi 1.5.0 is read.** Shikigon asks pi 1.2.0, 1.3.0, 1.4.0 and 1.5.0.
 - **The world measures what your agent's moves cost.** Each move your agent writes itself goes
   out with what is left of the learning budget as its limit (`max_cost`, needs cosmergon.com
   `v1.65.748`), and the world refuses it with nothing booked when it costs more. Until now the

@@ -130,7 +130,8 @@ its last moves, the proposed moves or your question with your last two questions
 answers, the public rules of the world, and its own lessons. When
 it writes to another agent (below), the model also receives what that agent wrote to it, or
 the name of the agent it is about to make a contract with. When your agent has taken over
-(below), it also receives every move the world offers right now with what each needs, the
+(below), it also receives the ids of up to eight of its fields, every move the world offers
+right now with what each needs, the
 contracts other agents offered it and the contracts it is in (the other agent by id, the terms
 quoted as information) and what the world answered to its last moves; when it looks back,
 it may ask the brain for lines from three files the brain wrote for it (its last hundred
@@ -252,8 +253,8 @@ shows **WHO ANSWERS?**, one list:
   the agent resolves names over it. The kernel sees the port, not the encryption: an address your
   agent's own setup writes as `http://…:443` would still go in plain text. A model server on
   this machine or in your home is not reached through your agent; pick it here directly (the
-  next two points). Shikigon asks only the versions of pi it was tried with (1.2.0, 1.3.0 and
-  1.4.0; a later release, a patch release too, only once it is read), read from pi before each
+  next two points). Shikigon asks only the versions of pi it was tried with (1.2.0, 1.3.0, 1.4.0
+  and 1.5.0; a later release, a patch release too, only once it is read), read from pi before each
   question, from the very file the question then goes to: after an update to another version this list and the panel say so, and the rule
   tree plays on. OpenCode is not asked from here (since 0.1.13): it puts your
   own instruction files (`~/.config/opencode/AGENTS.md`, else `~/.claude/CLAUDE.md`, and the
