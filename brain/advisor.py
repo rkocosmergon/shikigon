@@ -262,7 +262,7 @@ def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
     shown["ok"] = entry.get("ok") is True
     if type(entry.get("fields")) is int:
         shown["fields"] = entry["fields"]
-    for key in ("energy", "total"):
+    for key in ("energy", "total", "items", "cells"):
         number = files.finite(entry.get(key))
         if number is not None:
             shown[key] = number

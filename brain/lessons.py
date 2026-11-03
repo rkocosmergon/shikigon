@@ -28,13 +28,12 @@ import reading
 Send = Callable[[list[dict[str, str]], int], Awaitable[str]]
 
 LEARN_EVERY = 100  # moves between two lessons; at one move a tick about two hours
-HORIZON = 10  # a move is judged by the energy ten moves later (the server's "short" horizon)
+HORIZON = 10  # fewer moves than this tell nothing to look back on
 # ``learn`` on demand needs this many: a lesson from two or three judged moves read as a
 # rule on the device (14.10.2026: "avoid missions" from two of them)
 FORCED_MIN = HORIZON + 20
 TAIL = 400  # journal lines read from its end: a hundred moves and what came between them
 KEPT = 3  # lessons kept in lessons.json, newest last
-SHOWN = 5  # best and worst moves the advisor is told
 LESSON_TOKENS = 450  # room for the three texts in JSON
 LESSONS_FILE = "lessons.json"
 JOURNAL_FILE = "journal.jsonl"
@@ -52,7 +51,9 @@ LESSON_SYSTEM = (
     "Conway's Game of Life, and say what it should learn from them. Use only the numbers "
     "you are given; never invent rules, prices or moves. Its player reads what you write: "
     "name moves in plain words (selling on the market, starting a mission, evolving), never "
-    "by their function names. Answer in English with exactly three lines and nothing else:\n"
+    "by their function names. Every rule names the number it rests on: a move's own effect, "
+    "or a count. A change from all causes is no move's effect. Answer in English with exactly "
+    "three lines and nothing else:\n"
     "LESSON: <100 to 500 characters: what worked and what did not>\n"
     "LESS: <one short sentence, 50 to 90 characters: what to do less>\n"
     "MORE: <one short sentence, 50 to 90 characters: what to do more>"
@@ -127,16 +128,6 @@ def measured(moves: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return moves[start:]
 
 
-def rated(moves: list[dict[str, Any]]) -> list[tuple[dict[str, Any], float]]:
-    """Each move with the change of its measure until ``HORIZON`` moves later; the last ones
-    have none."""
-    key = measure(moves)
-    return [
-        (move, float(moves[number + HORIZON][key]) - float(move[key]))
-        for number, move in enumerate(moves[:-HORIZON] if len(moves) > HORIZON else [])
-    ]
-
-
 def _signed(value: float) -> str:
     return f"{value:+,.0f}"
 
@@ -153,53 +144,58 @@ def own_effect(move: dict[str, Any]) -> float | None:
     return sum(float(effect.get(k) or 0.0) for k in ("free", "held", "items"))
 
 
-def _kind_line(rows: list[tuple[dict[str, Any], float]]) -> str:
-    """``3 played, 1 refused, +1,200, own effect -500`` for one kind of move."""
-    changes = [change for move, change in rows if move.get("ok") is not False]
-    mean = _signed(sum(changes) / len(changes)) if changes else "-"
-    refused = len(rows) - len(changes)
-    line = f"{len(changes)} played, {refused} refused, {mean}"
-    own = [e for e in (own_effect(move) for move, _ in rows) if e is not None]
-    return line + (f", own effect {_signed(sum(own) / len(own))}" if own else "")
+def _kind_line(moves: list[dict[str, Any]]) -> str:
+    """``3 played, 1 refused, own effect -500 each, -1,500 in all`` for one kind of move."""
+    played = [move for move in moves if move.get("ok") is not False]
+    line = f"{len(played)} played, {len(moves) - len(played)} refused"
+    own = [e for e in (own_effect(move) for move in played) if e is not None]
+    if not own:
+        return f"{line}, nothing booked"
+    return f"{line}, own effect {_signed(sum(own) / len(own))} each, {_signed(sum(own))} in all"
+
+
+def _held_line(moves: list[dict[str, Any]]) -> str:
+    """Balance, items and cells across the same moves, as far as the journal has them."""
+    told = []
+    for key, name in (("energy", "balance"), ("items", "items"),
+                      ("cells", "living cells on its fields")):  # fmt: skip
+        first, last = moves[0].get(key), moves[-1].get(key)
+        if key != measure(moves) and first is not None and last is not None:
+            told.append(f"{name} {first:,.0f} -> {last:,.0f}")
+    return f"Over the same moves: {', '.join(told)}." if told else ""
 
 
 def summary(moves: list[dict[str, Any]]) -> str:
-    """The moves in numbers, for the advisor: per action, then the best and worst ones.
+    """The moves in numbers, for the advisor: what changed from all causes, apart from what each
+    kind of move itself booked.
 
-    A refused move did nothing, so the energy after it is the world's, not its own: it is
-    counted as refused and left out of every average and of the best and worst (seen on
-    the device, 14.10.2026: a refused move stood first among the best).
+    Until cos20 #533 each kind and a list of best and worst moves carried the change of the next
+    ten moves. A window holds income, decay and loot, so whatever was played most came out best:
+    on the device 03.11.2026 placing cells, -25 each, read as +348,711, and the lesson was that
+    building cells added four million. A refused move did nothing and books nothing.
     """
-    judged = rated(moves)
-    played = [(move, change) for move, change in judged if move.get("ok") is not False]
-    if not judged:
+    if len(moves) <= HORIZON:
         return ""
-    overall = _signed(sum(c for _, c in played) / len(played)) if played else "-"
     key = measure(moves)
     said = "total energy" if key == "total" else "energy"
     lines = [
         (f"{len(moves)} moves, {said} {moves[0][key]:,.0f} -> {moves[-1][key]:,.0f}, "
          f"fields {moves[0].get('fields', '?')} -> {moves[-1].get('fields', '?')}."),
-        (f"Change of {said} in the {HORIZON} moves after a played move, all causes: "
-         f"{overall} on average."),
-        ("Per kind of move (played, refused, that change for the kind; and own effect: what "
-         "the move itself booked, as the world said it):"),
+        ("That change has all causes together (income, decay, loot, other agents): it is no "
+         "move's effect, never credit or blame a move with it."),
     ]
+    held = _held_line(moves)
+    if held:
+        lines.append(held)
+    lines.append("Per kind of move (played, refused, and own effect: what the move itself "
+                 "booked, as the world said it):")
     from words import move_words  # the player's words, so the lesson comes back in them
 
-    per_action: dict[str, list[tuple[dict[str, Any], float]]] = {}
-    for move, change in judged:
-        per_action.setdefault(move_words(move), []).append((move, change))
+    per_action: dict[str, list[dict[str, Any]]] = {}
+    for move in moves:
+        per_action.setdefault(move_words(move), []).append(move)
     for action, rows in sorted(per_action.items(), key=lambda item: -len(item[1])):
         lines.append(f"- {action}: {_kind_line(rows)}")
-    ordered = sorted(played, key=lambda row: row[1])
-    shown = min(SHOWN, len(ordered) // 2)  # best and worst never share a move
-    for title, rows in (("Best", ordered[::-1][:shown]), ("Worst", ordered[:shown])):
-        lines.append(f"{title} moves:")
-        lines.extend(
-            f"- tick {move.get('tick', '?')}: {move_words(move)}, {_signed(change)}"
-            for move, change in rows
-        )
     return "\n".join(lines)
 
 

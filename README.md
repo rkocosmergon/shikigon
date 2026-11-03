@@ -320,8 +320,9 @@ you three things:
   would have made alone. Through a coding agent there is no advice on every move: each call is
   on your allowance with its provider.
 - **It learns from its own moves.** Every 100 moves (about two hours) the brain looks back on
-  them in its journal: for each move, its energy then and ten moves later; per kind of move,
-  and the best and worst ones. Refused moves count as refused, nothing more. The model turns
+  them in its journal: per kind of move, how often it played and what the move itself booked;
+  apart from that, how its energy, items and living cells changed from all causes together.
+  Refused moves count as refused, nothing more. The model turns
   these numbers into three short texts: what it learned, what to avoid, what to do more of.
   The newest goes along with every later advice and every answer, and stays in its panel under
   LEARNED: what it does more, what less, and how many moves that rests on; the journal shows
@@ -372,8 +373,8 @@ tree plays again.
 It sees what each move did. The world answers every move with what the move itself booked
 (`energy_effect`): energy spent, energy now held in its own offers or contracts, goods at the
 house price; not income, decay or what other agents did meanwhile. Your agent reads this next to
-its last moves (`this move: -214,612`), and when it looks back, each kind of move shows its own
-effect beside the change of total energy that followed it from all causes.
+its last moves (`this move: -214,612`), and when it looks back, each kind of move shows only its
+own effect. The change of total energy stands apart, as the sum of all causes.
 
 **What it may lose is up to you.** `learning_budget_pct` (default 5) is the share of its total
 energy at the start of the UTC day that its own moves may lose in a day, counted as the world

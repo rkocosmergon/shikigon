@@ -4,6 +4,11 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **Your agent no longer credits a move with what merely happened around it.** Its look back used
+  to show, for each kind of move, how total energy changed in the next ten moves, and a list of
+  the best and worst. Loot and income landed on whatever was played most: on our device placing
+  cells cost 25 energy and read as +348,711. Now each kind shows only what it booked itself, and
+  the change from all causes stands apart. Every rule it writes has to name its number.
 - **Your agent can look up what it decided.** The journal now keeps what each move said (field,
   preset, how many cells, mission type, amounts), and your agent reads it in its last moves and
   when it looks back. Numbers, ids and fixed words only: messages, titles and other free text stay

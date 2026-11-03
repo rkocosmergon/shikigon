@@ -89,11 +89,9 @@ def test_an_energy_offer_is_judged_by_the_total_not_by_the_balance() -> None:
         moves.append({"tick": number, "energy": 100_000.0 - held, "total": 100_000.0,
                       "fields": 0, "action": "propose_contract", "ok": True, "why": ""})
     assert lessons.measure(moves) == "total"
-    assert {change for _, change in lessons.rated(moves)} == {0.0}
     assert "total energy 100,000 -> 100,000" in lessons.summary(moves)
     by_balance = [{k: v for k, v in move.items() if k != "total"} for move in moves]
     assert lessons.measure(by_balance) == "energy", "without the total: the balance, as before"
-    assert max(change for _, change in lessons.rated(by_balance)) == 70_000.0
     mixed = by_balance[:1] + moves[1:]
     assert lessons.measure(mixed) == "energy", "never two measures in one look back"
     assert lessons.measured(mixed) == moves[1:], "once the total came: only the moves since"
@@ -124,20 +122,11 @@ def test_a_lesson_is_due_after_a_hundred_moves_since_the_last_one() -> None:
 
 def test_the_numbers_say_what_paid_and_what_did_not() -> None:
     moves = _moves(30)
-    judged = lessons.rated(moves)
-    assert len(judged) == 20, "the last ten moves have no ten moves after them yet"
     text = lessons.summary(moves)
     assert "30 moves, energy 5,000 -> 5,610, fields 1 -> 1." in text
-    assert "- start a mission: 7 played, 3 refused, +" in text
-    assert "- sell on the market: 7 played, 3 refused, +" in text
-    best = text.split("Best moves:\n")[1].split("Worst moves:")[0].splitlines()
-    worst = text.split("Worst moves:\n")[1].splitlines()
-    assert len(best) == len(worst) == 5 and not set(best) & set(worst)
-    refused = {f"tick {m['tick']}:" for m in moves if m["ok"] is False}
-    assert not any(tick in line for tick in refused for line in best + worst), (
-        "a refused move did nothing")
-    few = lessons.summary(_moves(13))  # three judged moves, two of them played
-    assert few.count("- tick") == 2, "one best, one worst: never the same move twice"
+    assert "- start a mission: 10 played, 5 refused" in text
+    assert "- sell on the market: 10 played, 5 refused" in text
+    assert lessons.summary(_moves(13)), "more than ten moves are enough to look back on"
     assert lessons.summary(_moves(5)) == "", "too few moves to judge"
 
 

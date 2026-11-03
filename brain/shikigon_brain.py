@@ -964,7 +964,7 @@ async def tick(
     # energy out of the balance but not out of the total.
     entry = {"at": int(time.time()), "tick": getattr(state, "tick", 0),
              "energy": round(float(getattr(state, "energy", 0.0)), 1),
-             "fields": len(getattr(state, "fields", []) or []), **last}
+             "fields": len(getattr(state, "fields", []) or []), **holdings(state), **last}
     total = getattr(getattr(state, "ranking", None), "gesamtenergie", None)
     if total is not None:
         entry["total"] = round(float(total), 1)
@@ -989,6 +989,20 @@ def write_status(status: dict[str, Any]) -> None:
         kept = {"action": str(last.get("action") or "")[:64], "ok": bool(last.get("ok"))}
         status = {"mood": str(status.get("mood") or "")[:32], "cut": True, "last": kept}
     files.write_json(state_dir() / "status.json", status)
+
+
+def holdings(state: Any) -> dict[str, Any]:
+    """Living cells on its fields and what its items are worth, for the journal: what its look
+    back sets beside the moves (cos20 #533). Numbers only."""
+    counts = [files.finite(getattr(field, "active_cell_count", None))
+              for field in getattr(state, "fields", None) or ()]  # fmt: skip
+    known = [count for count in counts if count is not None]
+    held: dict[str, Any] = {"cells": int(sum(known))} if known else {}
+    parts = getattr(getattr(state, "ranking", None), "gesamtenergie_teile", None)
+    items = files.finite(parts.get("inventar")) if isinstance(parts, dict) else None
+    if items is not None:
+        held["items"] = round(items, 1)
+    return held
 
 
 def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
