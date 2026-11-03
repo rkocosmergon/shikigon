@@ -72,6 +72,8 @@ FORM_CHARS = 700  # the forms of one move in the situation (market_list has one 
 FIELDS_TOLD = 8  # fields in the situation (an id is 36 characters)
 FIELD_TYPES = frozenset({"still_life", "oscillator", "spaceship", "gun", "breeder"})
 TIERS_TOLD = 9  # lines of the tier table, whatever the world publishes
+PRESETS_TOLD = 12  # presets named in the situation, whatever the world publishes
+_PRESET_NAME = re.compile(r"[a-z][a-z_]{0,31}")
 Forms = dict[str, list[dict[str, Any]]]
 _NOISE = {"sichtbarkeits_schwelle", "cost_by_cube_size", "reference_prices", "mission_types"}
 
@@ -345,15 +347,26 @@ def _tier_lines(evolve: dict[str, Any]) -> list[str]:
     return ["Tiers of a field, and what evolve needs to reach one:", *lines] if lines else []
 
 
+def _preset_line(place: dict[str, Any]) -> list[str]:
+    """The presets a move may name, with their price: valid values, no advice (cos20 #527)."""
+    told = [f"{name} {_shown(price)}" for name, cost in _as_dict(place.get("preset_costs")).items()
+            if _PRESET_NAME.fullmatch(name) and (price := _amount(cost)) is not None]  # fmt: skip
+    if not told:
+        return []
+    return [f"Presets of place_cells, name and cost: {', '.join(told[:PRESETS_TOLD])}"]
+
+
 def world_lines(info: Any) -> list[str]:
-    """How the world counts, from its ``game/info`` (cos20 #533): income, decay, the tiers. Only
-    its numbers and closed words in sentences of ours; a world that does not say leaves no line."""
+    """How the world counts, from its ``game/info`` (cos20 #533): income, decay, the tiers, the
+    presets. Only its numbers and closed words in sentences of ours; a world that does not say
+    leaves no line."""
     if not isinstance(info, dict):
         return []
     economy = _as_dict(info.get("economy"))
-    evolve = _as_dict(_as_dict(info.get("actions")).get("evolve"))
+    actions = _as_dict(info.get("actions"))
     return [*_income_line(economy), *_decay_line(economy), *_tick_line(economy),
-            *_tier_lines(evolve)]  # fmt: skip
+            *_tier_lines(_as_dict(actions.get("evolve"))),
+            *_preset_line(_as_dict(actions.get("place_cells")))]  # fmt: skip
 
 
 def _move_lines(moves: dict[str, Any], forms: Forms) -> tuple[list[str], list[str]]:
