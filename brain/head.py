@@ -21,6 +21,7 @@ Measured why it chooses freely and may try again (cos20 #525, #527): an agent wi
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import time
@@ -40,6 +41,15 @@ BRIEF_CHARS = 8000  # the whole situation; a small model reads it in a few secon
 FACTS_CHARS = 300  # what the world says about one move
 PARAMS_BYTES = 1024  # parameters of one move, as JSON
 WHY_CHARS = 120
+# An answer that could not be played stays here, each with its start, end and length: the journal
+# holds only the sentence of our own check (device 03.11.2026: 25 of 55 fallbacks said "not JSON",
+# and nobody could say what the model had written). The file has no reader, in this code or
+# towards a model, the status or the bar: the model is not trusted, and what the journal holds
+# travels on (cos20 #533). Past twice ``UNUSABLE_KEEP_BYTES`` it is cut to that, some hours of
+# head moves at the 16 answers an hour measured.
+UNUSABLE_FILE = "unusable_answers.jsonl"
+UNUSABLE_KEEP_BYTES = 64 * 1024
+ANSWER_END_CHARS = 200  # kept of each end: what surrounds a move in JSON is at either
 TOLD_CHARS = 400  # what the head is told back about its move: one line (``told``)
 # A move's name, as the world gives it: the longest it has is 22 characters (cos20
 # ``app/schemas/actions.py`` ``VALID_ACTIONS``, 31.10.2026). A longer one is no move: it would go
@@ -734,8 +744,24 @@ class HeadDecider:
             if not why_not and not line and move[0] != "wait":
                 why_not = own_words(move[1])
             if why_not:
-                return None, why_not
+                move = None
+        if why_not:
+            self._keep_unusable(text, why_not)
         return move, why_not
+
+    def _keep_unusable(self, text: str, why: str) -> None:
+        """The answer just added to the talk, for whoever looks into why it could not be played.
+        A file that cannot be written costs no move."""
+        asked = self._talk[:-1]
+        entry = {"at": int(time.time()), "tick": getattr(self._state, "tick", 0),
+                 "model": advisor.who(self.conf),
+                 "round": 1 + sum(said["role"] == "assistant" for said in asked),
+                 "asked": sum(len(said["content"]) for said in asked),
+                 "why": why[:WHY_CHARS], "chars": len(text),
+                 "start": text[:ANSWER_END_CHARS],
+                 "end": text[ANSWER_END_CHARS:][-ANSWER_END_CHARS:]}  # fmt: skip
+        with contextlib.suppress(OSError):
+            files.append(self.home / UNUSABLE_FILE, entry, keep_bytes=UNUSABLE_KEEP_BYTES)
 
     def _rules_play(self, why: str) -> tuple[str, dict[str, Any]]:
         if self.last is not None:

@@ -4,6 +4,11 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **An answer of your agent that could not be played now stays on record.** The journal says only
+  why it was turned down, so nobody could say what the model had written. A new local file holds
+  the start and end of each such answer and how long it was. Nothing reads it but you: not the
+  look back, not the next question, not the bar. It stays on this machine, readable by you only,
+  and is cut once it passes 128 KiB.
 - **When it looks back, your agent can read what the world booked on its energy.** Income per
   field, decay, upkeep, loot and market by the hour, in a new file beside its moves. Needs
   cosmergon-agent with `get_energy_events`; without it the file stays away.

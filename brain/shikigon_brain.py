@@ -346,7 +346,8 @@ def register(
 def agent_paths(home: Path) -> list[Path]:
     """What belongs to the agent that lives here, not to the player: its moves, what it learned
     from them, the day its learning budget is measured against, its words, the missions it saw,
-    its snapshot, the moves the world kept refusing it. The talk with the advisor is the
+    its snapshot, the moves the world kept refusing it, the answers of its head that could not be
+    played. The talk with the advisor is the
     player's (cos20 #468), as are the choice of advisor, its counter of calls and the bar's
     hints."""
     import head
@@ -355,7 +356,8 @@ def agent_paths(home: Path) -> list[Path]:
 
     return [home / lessons.JOURNAL_FILE, home / BAR_JOURNAL, home / lessons.LESSONS_FILE,
             home / lessons.REVIEW_FOLDER, home / head.BUDGET_FILE, speech.memo_path(home),
-            home / seen_path().name, home / "status.json", home / REFUSALS_FILE]  # fmt: skip
+            home / seen_path().name, home / "status.json", home / REFUSALS_FILE,
+            home / head.UNUSABLE_FILE]  # fmt: skip
 
 
 def leave_the_old_one(home: Path) -> None:

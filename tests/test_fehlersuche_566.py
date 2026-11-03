@@ -192,7 +192,8 @@ def test_f1_the_new_one_does_not_play_the_old_ones_announced_proposal(home: Path
 
 
 AGENT_FILES = {"journal.jsonl", "journal_recent.json", "lessons.json", "review", "budget.json",
-               "speech.json", "tournament_seen.json", "status.json", "refusals.json"}
+               "speech.json", "tournament_seen.json", "status.json", "refusals.json",
+               "unusable_answers.jsonl"}
 PLAYER_FILES = {"credentials.json", "advisor.json", "advisor_key", "advisor_count.json",
                 "chat.jsonl", "talk.json"}
 NOT_IN_STATE = {"moves.txt", "rated.txt", "world.txt", "ledger.txt",  # inside review/

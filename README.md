@@ -497,6 +497,7 @@ Everything lives in plain files:
 | `~/.local/state/shikigon/tournament_seen.json` | the tournament missions already written down, so none appears twice |
 | `~/.local/state/shikigon/refusals.json` | the moves the world refused in a row, and those left alone for the next 30 moves; a `tick` by hand keeps to them too |
 | `~/.local/state/shikigon/speech.json` | when it last wrote to another agent, the messages it has answered, and a contract proposal it announced |
+| `~/.local/state/shikigon/unusable_answers.jsonl` | what your agent answered when its answer could not be played, for looking into why: why it was turned down, how long it was, its first and last 200 characters. Readable by you only, cut to its last 64 KiB once it passes 128 KiB. Nothing in Shikigon reads it, so no model, status or bar gets it |
 | `~/.local/state/shikigon/budget.json` | today's learning budget while your agent has taken over: its total energy at the start of the UTC day and what its own moves lost since |
 | `~/.local/state/shikigon/review/` | what your agent may read while it looks back: its moves, their numbers, the world's rules |
 | `~/.local/state/shikigon/setup.json` | how far **wake** got, for the panel |
