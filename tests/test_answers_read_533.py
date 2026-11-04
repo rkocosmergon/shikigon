@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -113,7 +114,7 @@ async def test_its_sentence_beside_an_empty_field_still_goes_to_the_rules() -> N
     ('{"action": "wait", "params": {"amount": 1e999}}', "the answer was not JSON"),
     ('{"action": "wait", "params": {"amount": NaN}}', "the answer was not JSON"),
     ("{" + '"a":[' * 70 + "]" * 70 + "}", "the answer was not JSON"),
-    ('{"action": "wait", "params": "do nothing"}', "params must be a JSON object"),
+    ('{"action": "place_cells", "params": "do nothing"}', "params must be a JSON object"),
     ('{"action": "sell_items", "params": {}}', "not among the moves offered"),
     ('{"action": "wait", "params": {"self": ""}}{}', ""),
 ])  # fmt: skip
@@ -155,3 +156,20 @@ def test_the_reader_is_the_one_every_answer_goes_through() -> None:
         files.json_in("{" + '"a":[' * 70 + "]" * 70 + "}")
     with pytest.raises(ValueError):
         files.json_in("{" + "[" * 100_000 + "}")
+
+
+@pytest.mark.parametrize("written", [
+    '"none: do nothing this tick"',  # the device, 04.11.2026: our own words came back as params
+    '"{}"',
+    '"no cells now, conserve"',
+    "[1]",
+])  # fmt: skip
+def test_a_wait_is_a_wait_whatever_its_params_say(written: str) -> None:
+    answer = f'{{"action": "wait", "params": {written}, "why": "Energy declining"}}'
+    assert head.parse_move(answer, ALLOWED) == (("wait", {}, "Energy declining"), "")
+
+
+def test_what_a_wait_is_offered_is_no_sentence_to_copy() -> None:
+    """Nine answers took the old words for parameters, some of them broke the JSON with them."""
+    moves = head.offered(SimpleNamespace(available_actions={}), frozenset())
+    assert moves["wait"] == {"params": {}}

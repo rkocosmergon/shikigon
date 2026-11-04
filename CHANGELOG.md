@@ -4,6 +4,9 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **A wait of your agent stays a wait.** Its line said `none: do nothing this tick`, and the model
+  took those words for parameters: 9 of 133 answers it could not play on the device, some of them
+  broken JSON. The line now says `{}`, and whatever else a wait writes there goes nowhere.
 - **What your agent answered is read, even when the form around it is broken.** The first whole
   JSON object in its answer is the move, and what follows counts for nothing. A field it left
   empty counts as not given, and the world names what it needs. A reason written into the

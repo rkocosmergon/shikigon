@@ -136,7 +136,7 @@ def test_an_answer_outside_the_offer_or_too_big_never_goes_out() -> None:
     assert head.parse_move(_move("transfer_energy"), allowed)[0] is None
     assert head.parse_move(_move("pause"), allowed | {"pause"})[0] is None
     assert head.parse_move(_move("place_cells", {"x": "y" * 2000}), allowed)[0] is None
-    assert head.parse_move('{"action": "wait", "params": [1]}', allowed)[0] is None
+    assert head.parse_move('{"action": "place_cells", "params": [1]}', allowed)[0] is None
     assert head.parse_move("I would place a glider.", allowed)[0] is None
 
 

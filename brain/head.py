@@ -192,7 +192,7 @@ def offered(state: Any, blocked: frozenset[str]) -> dict[str, Any]:
         for action in CONTRACT_ANSWERS:
             if action not in blocked:
                 moves[action] = {"params": "contract_id (from the offers above), escrow_amount"}
-    moves["wait"] = {"params": "none: do nothing this tick"}
+    moves["wait"] = {"params": {}}
     return moves
 
 
@@ -627,6 +627,8 @@ def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     if action in OPERATOR_SWITCHES or action not in allowed:
         return None, f"'{_short(action, 40)}' is not among the moves offered now"
     params = data.get("params") or {}
+    if action == "wait" and not isinstance(params, dict):
+        params = {}  # nothing of a wait goes out, whatever stands there (cos20 #533)
     if not isinstance(params, dict):
         return None, "params must be a JSON object"
     params = without_empty(params)
