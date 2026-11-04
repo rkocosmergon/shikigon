@@ -36,6 +36,8 @@ TAIL = 400  # journal lines read from its end: a hundred moves and what came bet
 KEPT = 3  # lessons kept in lessons.json, newest last
 SALES_TOLD = 6  # sales it is told of in a look back, the newest
 SOLD = ("market_sale", "npc_market_maker_buy")  # what the world books when an offer sells
+RETURNS_TOLD = 6  # offers it is told came back; apart from the sales, there are many more of them
+CAME_BACK = "market_escrow_return"  # booked when an offer of energy ends unsold, energy only
 PASSIVE = {"conway_tick": "income", "energy_decay": "decay", "field_maintenance": "upkeep"}
 LESSON_TOKENS = 450  # room for the three texts in JSON
 LESSONS_FILE = "lessons.json"
@@ -192,20 +194,52 @@ def _sale_line(row: Any, offers: dict[str, str]) -> str:
     details = details if isinstance(details, dict) else {}
     given, what = files.finite(details.get("amount")), _type_word(details.get("item_type"))
     sold = f"sold {given:,.0f} {what}" if given is not None and what else "an offer sold"
+    return f"- {hour} {sold} for {got:,.0f}{_whose(details, offers)}"
+
+
+def _whose(details: dict[str, Any], offers: dict[str, str]) -> str:
+    """Whose offer the world's row is about, as far as its journal still knows."""
     listing = details.get("listing_id")
     who = offers.get(listing, "") if isinstance(listing, str) else ""
-    whose = {"head": ", its own offer", "rules": ", the rules' offer"}.get(who, "")
-    return f"- {hour} {sold} for {got:,.0f}{whose}"
+    return {"head": ", its own offer", "rules": ", the rules' offer"}.get(who, "")
+
+
+def _offers(journal: list[dict[str, Any]]) -> dict[str, str]:
+    """Who made each offer the journal still holds."""
+    import advisor
+
+    return {entry["listing_id"]: advisor.move_for_model(entry)["by"] for entry in journal
+            if isinstance(entry.get("listing_id"), str)}  # fmt: skip
+
+
+def _return_line(row: Any, offers: dict[str, str]) -> str:
+    """One offer of energy that came back from the world's row: numbers only."""
+    if not isinstance(row, dict) or row.get("transaction_type") != CAME_BACK:
+        return ""
+    hour, amount = _ledger_hour(row.get("created_at")), files.finite(row.get("amount"))
+    if not hour or amount is None:
+        return ""
+    details = row.get("source_details")
+    details = details if isinstance(details, dict) else {}
+    price = files.finite(details.get("price_energy"))  # worlds before cos20 #533 do not name it
+    at = f" offered at {price:,.0f}" if price is not None else ""
+    return f"- {hour} {amount:,.0f} energy{at} came back, nobody bought it{_whose(details, offers)}"
+
+
+def return_lines(rows: Any, journal: list[dict[str, Any]]) -> list[str]:
+    """The newest offers that came back (cos20 #533): on the device 14 offers sold and 125 did
+    not, and only the sales were told. It may also have taken one back itself; nobody bought
+    that one either. The price is the agent's to judge: no mark here, no comparison."""
+    offers = _offers(journal)
+    lines = [_return_line(row, offers) for row in (rows if isinstance(rows, list) else [])]
+    return [line for line in lines if line][:RETURNS_TOLD]
 
 
 def sale_lines(rows: Any, journal: list[dict[str, Any]]) -> list[str]:
     """The newest sales, what went and what came back (cos20 #533). An offer books 0 on the total
     when it is made, so a sale of 75,546 energy for 130 stood nowhere in its numbers. The rate is
     the agent's to judge: no mark here, no comparison."""
-    import advisor
-
-    offers = {entry["listing_id"]: advisor.move_for_model(entry)["by"] for entry in journal
-              if isinstance(entry.get("listing_id"), str)}  # fmt: skip
+    offers = _offers(journal)
     lines = [_sale_line(row, offers) for row in (rows if isinstance(rows, list) else [])]
     return [line for line in lines if line][:SALES_TOLD]
 
@@ -214,8 +248,10 @@ def with_bookings(numbers: str, bookings: tuple[Any, Any], journal: list[dict[st
     """The numbers of its moves, then what the world booked beside them."""
     events, rows = bookings
     income, sales = income_line(events), sale_lines(rows, journal)
+    back = return_lines(rows, journal)
     extra = ([income] if income else []) + (
-        ["Its last sales, what went and what came back:", *sales] if sales else [])
+        ["Its last sales, what went and what came back:", *sales] if sales else []) + (
+        ["Its last offers that found no buyer:", *back] if back else [])
     return "\n".join([numbers, *extra])
 
 

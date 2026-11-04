@@ -10,6 +10,9 @@ What changed for someone who uses Shikigon. Newest first.
 - **It sees what came of an offer.** A sale says what went and what came back, and whose offer it
   was. The rate is for it to judge. The numbers it reads also carry income, decay and upkeep,
   credited to no move.
+- **It also sees the offers nobody bought.** Those came back with no word: on the device 14 offers
+  sold and 125 did not, and it heard only of the sales. Amount and price, nothing else; what it
+  makes of them is its own.
 - **A wait of your agent stays a wait.** Its line said `none: do nothing this tick`, and the model
   took those words for parameters: 9 of 133 answers it could not play on the device, some of them
   broken JSON. The line now says `{}`, and whatever else a wait writes there goes nowhere.
