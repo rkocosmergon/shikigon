@@ -748,6 +748,9 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
     told = advisor.move_params(params)  # what it decided, for its own look back (cos20 #533)
     if told:
         done["params"] = told
+    listing = listing_of(action, result)
+    if listing:  # when the offer sells, the sale names it: whose offer it was (cos20 #533)
+        done["listing_id"] = listing
     if not result.success:
         done["refused"] = True  # the world answered and said no; a 429 or no answer is not that
     kind = mission_kind(action, params)
@@ -764,6 +767,15 @@ async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any
         done["effect"] = {k: files.finite(effect.get(k) or 0) or 0.0
                           for k in ("free", "held", "items")}  # fmt: skip
     return done
+
+
+def listing_of(action: str, result: Any) -> str:
+    """The id of the offer a ``market_list`` made, from the world's answer; else empty."""
+    import advisor
+
+    data = getattr(result, "data", None)
+    listing = data.get("listing_id") if action == "market_list" and isinstance(data, dict) else ""
+    return listing if isinstance(listing, str) and advisor.PARAM_ID.fullmatch(listing) else ""
 
 
 TICK_BUFFER_S = 2.0  # after the server's "next tick at": a hair early is still the old tick
@@ -1424,17 +1436,16 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
 LEDGER_EVENTS, LEDGER_BOOKINGS = 72, 500  # rows of the world: a day of hours, hours of loot
 
 
-async def read_ledger(agent: Any) -> str:
-    """What the world booked on its energy, for its look back (cos20 #533); empty with an SDK that
-    cannot read it, or when the world does not answer. The SDK's own calls say ``None`` then."""
+async def read_bookings(agent: Any) -> tuple[Any, Any]:
+    """The world's rows of what it booked on its energy, for its look back (cos20 #533);
+    ``(None, None)`` with an SDK that cannot read them. The SDK's own calls say ``None`` when the
+    world does not answer."""
     events = getattr(agent, "get_energy_events", None)
     bookings = getattr(agent, "get_energy_transactions", None)
     if events is None or bookings is None:
-        return ""
-    import lessons
-
-    return "\n".join(lessons.ledger_lines(await events(tier="hourly", limit=LEDGER_EVENTS),
-                                          await bookings(limit=LEDGER_BOOKINGS)))  # fmt: skip
+        return None, None
+    return (await events(tier="hourly", limit=LEDGER_EVENTS),
+            await bookings(limit=LEDGER_BOOKINGS))  # fmt: skip
 
 
 async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
@@ -1459,9 +1470,11 @@ async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
         world = await asyncio.to_thread(world_rules, cfg, connections.bounded_get)
         # it reads through the brain, never with a tool of its own (cos20 #492, K28)
         reader = functools.partial(reading.mediated, send)
-    ledger = await read_ledger(agent) if head else ""
+    bookings = await read_bookings(agent) if head else (None, None)
     entry = await lessons.learn(home, conf, advisor.facts(state), send, force=force, head=head,
-                                world=world, reader=reader, secret=secret, ledger=ledger)
+                                world=world, reader=reader, secret=secret,
+                                ledger="\n".join(lessons.ledger_lines(*bookings)),
+                                bookings=bookings)  # fmt: skip
     if entry is not None:
         journal(entry)
     return entry

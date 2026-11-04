@@ -294,8 +294,9 @@ def test_a_move_for_the_model_is_numbers_words_of_moves_and_the_quoted_reason() 
            "effect": {"free": "lots", "held": 1e300, "items": None}}  # fmt: skip
     for entry in [*JOURNAL, odd]:
         shown = advisor.move_for_model(entry)
-        assert set(shown) <= {"tick", "action", "kind", "ok", "fields", "energy", "total",
-                              "effect", "why"}
+        assert set(shown) <= {"tick", "action", "kind", "ok", "by", "fell_back", "tries", "fields",
+                              "energy", "total", "effect", "why"}
+        assert shown["by"] in {"head", "rules"}, "two fixed words"
         assert all(re.fullmatch(r"[a-z][a-z0-9_]*", shown[k]) for k in ("action", "kind")
                    if k in shown)  # fmt: skip
         if "why" in shown:

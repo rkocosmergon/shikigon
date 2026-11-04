@@ -4,6 +4,12 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **Your agent's look back now tells apart who moved.** Its own choices and the moves the rules
+  played stand apart, also in its last moves. Every move the world refused counts, not only the
+  last one of a tick.
+- **It sees what came of an offer.** A sale says what went and what came back, and whose offer it
+  was. The rate is for it to judge. The numbers it reads also carry income, decay and upkeep,
+  credited to no move.
 - **A wait of your agent stays a wait.** Its line said `none: do nothing this tick`, and the model
   took those words for parameters: 9 of 133 answers it could not play on the device, some of them
   broken JSON. The line now says `{}`, and whatever else a wait writes there goes nowhere.

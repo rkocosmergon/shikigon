@@ -34,6 +34,9 @@ HORIZON = 10  # fewer moves than this tell nothing to look back on
 FORCED_MIN = HORIZON + 20
 TAIL = 400  # journal lines read from its end: a hundred moves and what came between them
 KEPT = 3  # lessons kept in lessons.json, newest last
+SALES_TOLD = 6  # sales it is told of in a look back, the newest
+SOLD = ("market_sale", "npc_market_maker_buy")  # what the world books when an offer sells
+PASSIVE = {"conway_tick": "income", "energy_decay": "decay", "field_maintenance": "upkeep"}
 LESSON_TOKENS = 450  # room for the three texts in JSON
 LESSONS_FILE = "lessons.json"
 JOURNAL_FILE = "journal.jsonl"
@@ -52,7 +55,8 @@ LESSON_SYSTEM = (
     "you are given; never invent rules, prices or moves. Its player reads what you write: "
     "name moves in plain words (selling on the market, starting a mission, evolving), never "
     "by their function names. Every rule names the number it rests on: a move's own effect, "
-    "or a count. A change from all causes is no move's effect. Answer in English with exactly "
+    "or a count. A change from all causes is no move's effect. Moves the rules played are no "
+    "choice of its own. Answer in English with exactly "
     "three lines and nothing else:\n"
     "LESSON: <100 to 500 characters: what worked and what did not>\n"
     "LESS: <one short sentence, 50 to 90 characters: what to do less>\n"
@@ -150,6 +154,71 @@ def ledger_lines(events: Any, transactions: Any) -> list[str]:
     )
 
 
+def income_line(events: Any) -> str:
+    """Income, decay and upkeep over the hours of the world's rows, in one line and on no move
+    (cos20 #533): on the device 1 lesson in 30 named income, and the newest said to stop placing
+    cells while income, which hangs on them, stood nowhere. Empty without income."""
+    hours: dict[str, dict[str, float]] = {word: {} for word in PASSIVE.values()}
+    for row in events if isinstance(events, list) else []:
+        kind = row.get("event_type") if isinstance(row, dict) else None
+        word = PASSIVE.get(kind) if isinstance(kind, str) else None
+        if word is None:
+            continue
+        hour, amount = _ledger_hour(row.get("hour")), files.finite(row.get("total_amount"))
+        if hour and amount is not None:
+            hours[word][hour] = hours[word].get(hour, 0.0) + amount
+    income = hours["income"]
+    if not income:
+        return ""
+    parts = ", ".join(f"{word} {_signed(sum(by_hour.values()))}"
+                      for word, by_hour in hours.items() if by_hour)  # fmt: skip
+    line = (f"Over the last {len(income)} hours the world booked this whatever was played, no "
+            f"move's effect: {parts}.")
+    ordered = sorted(income)
+    if len(ordered) > 1:  # the newest hour may be unfinished
+        last = ordered[-2] if len(ordered) > 2 else ordered[-1]
+        line += f" Income an hour: {_signed(income[ordered[0]])} -> {_signed(income[last])}."
+    return line
+
+
+def _sale_line(row: Any, offers: dict[str, str]) -> str:
+    """One sale from the world's row: numbers, a word in its form and whose offer it was."""
+    if not isinstance(row, dict) or row.get("transaction_type") not in SOLD:
+        return ""
+    hour, got = _ledger_hour(row.get("created_at")), files.finite(row.get("amount"))
+    if not hour or got is None:
+        return ""
+    details = row.get("source_details")
+    details = details if isinstance(details, dict) else {}
+    given, what = files.finite(details.get("amount")), _type_word(details.get("item_type"))
+    sold = f"sold {given:,.0f} {what}" if given is not None and what else "an offer sold"
+    listing = details.get("listing_id")
+    who = offers.get(listing, "") if isinstance(listing, str) else ""
+    whose = {"head": ", its own offer", "rules": ", the rules' offer"}.get(who, "")
+    return f"- {hour} {sold} for {got:,.0f}{whose}"
+
+
+def sale_lines(rows: Any, journal: list[dict[str, Any]]) -> list[str]:
+    """The newest sales, what went and what came back (cos20 #533). An offer books 0 on the total
+    when it is made, so a sale of 75,546 energy for 130 stood nowhere in its numbers. The rate is
+    the agent's to judge: no mark here, no comparison."""
+    import advisor
+
+    offers = {entry["listing_id"]: advisor.move_for_model(entry)["by"] for entry in journal
+              if isinstance(entry.get("listing_id"), str)}  # fmt: skip
+    lines = [_sale_line(row, offers) for row in (rows if isinstance(rows, list) else [])]
+    return [line for line in lines if line][:SALES_TOLD]
+
+
+def with_bookings(numbers: str, bookings: tuple[Any, Any], journal: list[dict[str, Any]]) -> str:
+    """The numbers of its moves, then what the world booked beside them."""
+    events, rows = bookings
+    income, sales = income_line(events), sale_lines(rows, journal)
+    extra = ([income] if income else []) + (
+        ["Its last sales, what went and what came back:", *sales] if sales else [])
+    return "\n".join([numbers, *extra])
+
+
 def review_folder(home: Path, moves: list[dict[str, Any]], numbers: str, world: str,
                   ledger: str = "") -> Path:  # fmt: skip
     """Write what the head may read while it looks back; the folder is inside the state
@@ -210,10 +279,10 @@ def own_effect(move: dict[str, Any]) -> float | None:
     return sum(float(effect.get(k) or 0.0) for k in ("free", "held", "items"))
 
 
-def _kind_line(moves: list[dict[str, Any]]) -> str:
+def _kind_line(moves: list[dict[str, Any]], tried: int = 0) -> str:
     """``3 played, 1 refused, own effect -500 each, -1,500 in all`` for one kind of move."""
     played = [move for move in moves if move.get("ok") is not False]
-    line = f"{len(played)} played, {len(moves) - len(played)} refused"
+    line = f"{len(played)} played, {len(moves) - len(played) + tried} refused"
     own = [e for e in (own_effect(move) for move in played) if e is not None]
     if not own:
         return f"{line}, nothing booked"
@@ -253,16 +322,36 @@ def summary(moves: list[dict[str, Any]]) -> str:
     held = _held_line(moves)
     if held:
         lines.append(held)
-    lines.append("Per kind of move (played, refused, and own effect: what the move itself "
-                 "booked, as the world said it):")
-    from words import move_words  # the player's words, so the lesson comes back in them
+    what = "(played, refused, and own effect: what the move itself booked, as the world said it)"
+    own = [move for move in moves if move.get("by") == "head"]
+    if not own:
+        return "\n".join([*lines, f"Per kind of move {what}:", *_kinds(moves)])
+    rules = [move for move in moves if move.get("by") != "head"]
+    fell = sum(1 for move in rules if move.get("fell_back"))
+    return "\n".join([
+        *lines,
+        f"Moves it chose itself, {len(own)} of {len(moves)}, per kind {what}:", *_kinds(own),
+        (f"Moves the rules played, not its choice, {len(rules)} of {len(moves)}, "
+         f"{fell} of them because it had no usable answer:"), *_kinds(rules),
+    ])
+
+
+def _kinds(moves: list[dict[str, Any]]) -> list[str]:
+    """One line per kind of move, in the player's words so the lesson comes back in them, with
+    the refused tries of each (cos20 #533: three refused offers in a tick stood nowhere)."""
+    from words import move_words
 
     per_action: dict[str, list[dict[str, Any]]] = {}
+    tried: dict[str, int] = {}
     for move in moves:
         per_action.setdefault(move_words(move), []).append(move)
-    for action, rows in sorted(per_action.items(), key=lambda item: -len(item[1])):
-        lines.append(f"- {action}: {_kind_line(rows)}")
-    return "\n".join(lines)
+        tries = move.get("tries")
+        for action, count in (tries.items() if isinstance(tries, dict) else ()):
+            word = move_words({"action": action})
+            per_action.setdefault(word, [])
+            tried[word] = tried.get(word, 0) + count
+    return [f"- {action}: {_kind_line(rows, tried.get(action, 0))}" for action, rows in
+            sorted(per_action.items(), key=lambda item: -len(item[1]))]  # fmt: skip
 
 
 def lesson_messages(facts: str, numbers: str, before: str = "",
@@ -388,6 +477,7 @@ def latest_as_answer(home: Path) -> str:
 async def learn(
     home: Path, conf: dict[str, Any], facts: str, send: Send, force: bool = False,
     head: bool = False, world: str = "", reader: Any = None, secret: str = "", ledger: str = "",
+    bookings: tuple[Any, Any] = (None, None),
 ) -> dict[str, Any] | None:
     """Look back and keep a lesson. ``None`` without an advisor, or when it is not time
     (forced: fewer than ``FORCED_MIN`` moves).
@@ -418,7 +508,8 @@ async def learn(
     advisor.count_call(home)
     # the numbers as a model may read them (``advisor.move_for_model``): a mission type the world
     # named went into them raw until 0.1.13, also into ``rated.txt`` (sixth review, finding 4)
-    numbers = summary([m for m in map(advisor.move_for_model, moves) if "energy" in m])
+    numbers = with_bookings(summary([m for m in map(advisor.move_for_model, moves)
+                                     if "energy" in m]), bookings, entries)  # fmt: skip
     before = latest_as_answer(home) if head else ""
     note = ""
     stopped: list[bool] = []  # set when the day's limit ended its reading

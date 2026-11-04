@@ -213,6 +213,8 @@ def _param_value(key: str, value: Any, nested: bool) -> Any:
     """What the journal keeps of one parameter; ``None`` keeps nothing."""
     if key == "params" and nested:
         return move_params(value, nested=False) or None
+    if key == "item_data" and nested:  # an offer's amount: its price says nothing without it
+        return move_params(value, nested=False) or None
     if key == "cells" and isinstance(value, dict | list):
         return len(value)  # how many, not which: the field shows where they are
     if isinstance(value, str):
@@ -248,7 +250,8 @@ def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
     (``lessons.summary``) and the last moves in a prompt all come through here. Never
     ``words`` or ``advice``: they name the agent it wrote to and carry what a model wrote to it.
     Of ``advice`` only the last move the world refused in that tick (``_tried``): a refusal the
-    head does not see it repeats in the next one (cos20 #527: 30 of 54).
+    head does not see it repeats in the next one (cos20 #527: 30 of 54); how many it tried of
+    each kind (``_refused_tries``); and who played the move (``_who_played``), in fixed words.
     Move words only in their form (``MOVE_WORD``): the world names the moves it offers and its
     mission types. Until 0.1.13 the head's look back read each journal line raw
     (``review/moves.txt``), another player's name outside the quote, and the lesson it wrote went
@@ -260,6 +263,10 @@ def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
         if isinstance(entry.get(key), str) and MOVE_WORD.fullmatch(entry[key]):
             shown[key] = entry[key]
     shown["ok"] = entry.get("ok") is True
+    shown["by"] = _who_played(entry)
+    advice = entry.get("advice")
+    if isinstance(advice, dict) and advice.get("head") and advice.get("fallback"):
+        shown["fell_back"] = True
     if type(entry.get("fields")) is int:
         shown["fields"] = entry["fields"]
     for key in ("energy", "total", "items", "cells"):
@@ -278,7 +285,34 @@ def move_for_model(entry: dict[str, Any]) -> dict[str, Any]:
     tried = _tried(entry)
     if tried:
         shown["tried"] = tried
+    tries = _refused_tries(entry)
+    if tries:
+        shown["tries"] = tries
     return shown
+
+
+def _who_played(entry: dict[str, Any]) -> str:
+    """``head`` for a move the head chose, ``rules`` for any other: a look back that counted both
+    as its own wrote "no cells" where 57 of 67 were not its own (cos20 #533)."""
+    advice = entry.get("advice")
+    chose = isinstance(advice, dict) and advice.get("head") and not advice.get("fallback")
+    return "head" if chose else "rules"
+
+
+def _refused_tries(entry: dict[str, Any]) -> dict[str, int]:
+    """How often the world refused each kind of move in this tick before the last one. A last
+    move that was refused itself is counted as that move, not again here (cos20 #533)."""
+    advice = entry.get("advice")
+    tries = advice.get("tries") if isinstance(advice, dict) else None
+    counts: dict[str, int] = {}
+    for attempt in tries if isinstance(tries, list) else []:
+        action = attempt.get("action") if isinstance(attempt, dict) else None
+        if isinstance(action, str) and MOVE_WORD.fullmatch(action):
+            counts[action] = counts.get(action, 0) + 1
+    last = entry.get("action")
+    if entry.get("ok") is not True and isinstance(last, str) and last in counts:
+        counts[last] -= 1
+    return {action: count for action, count in counts.items() if count}
 
 
 def _tried(entry: dict[str, Any]) -> dict[str, str] | None:

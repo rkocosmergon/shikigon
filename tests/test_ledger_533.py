@@ -96,10 +96,11 @@ async def test_the_brain_reads_it_through_the_sdk() -> None:
         async def get_energy_transactions(self, limit: int) -> list[dict[str, Any]]:
             return [_booking(5.0)]
 
-    text = await brain.read_ledger(Agent())
+    text = "\n".join(lessons.ledger_lines(*await brain.read_bookings(Agent())))
     assert "conway_tick +62,138" in text and "encounter_spoils_in +5" in text
 
 
 async def test_an_older_sdk_has_no_ledger() -> None:
-    assert await brain.read_ledger(object()) == ""
-    assert await brain.read_ledger(None) == ""
+    assert await brain.read_bookings(object()) == (None, None)
+    assert await brain.read_bookings(None) == (None, None)
+    assert lessons.ledger_lines(None, None) == []

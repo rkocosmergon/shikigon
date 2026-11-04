@@ -61,8 +61,9 @@ async def test_the_journal_keeps_what_the_move_booked() -> None:
 def test_the_head_sees_what_its_last_moves_did() -> None:
     home = brain.state_dir()
     home.mkdir(parents=True, exist_ok=True)
-    rows = [{"tick": 7, "action": "transfer_energy", "ok": True, "effect": GIFT},
-            {"tick": 8, "action": "market_list", "ok": True, "effect": OFFER}]
+    chose = {"head": True, "choice": "x"}
+    rows = [{"tick": 7, "action": "transfer_energy", "ok": True, "effect": GIFT, "advice": chose},
+            {"tick": 8, "action": "market_list", "ok": True, "effect": OFFER, "advice": chose}]
     (home / "journal.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     lines = head.recent_moves(home)
     assert lines[0] == "- tick 7: transfer_energy — taken, this move: -214,612"

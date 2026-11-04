@@ -207,7 +207,9 @@ def recent_moves(home: Path, count: int = RECENT) -> list[str]:
         said = "taken" if move["ok"] else f"refused: {move.get('why', '')}"
         tried = move.get("tried")
         before = f" (first refused: {tried['action']} {tried['why']})" if tried else ""
-        lines.append(f"- tick {move['tick']}: {move['action']} — {said}{_effect(move)}{before}")
+        who = " (the rules played this, not you)" if move.get("by") == "rules" else ""
+        lines.append(f"- tick {move['tick']}: {move['action']} — "
+                     f"{said}{_effect(move)}{before}{who}")
     return lines[-count:]
 
 
