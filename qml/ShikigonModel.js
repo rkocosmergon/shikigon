@@ -60,9 +60,11 @@ function grouped(number) {
 // move. `ok` is false only for a failure.
 function journalLine(entry) {
   var failed = entry.ok === false
-  if (entry.instruction) // a word the world did not take is said (shikigon.toml, cos20 #628 F5)
-    return failed ? { text: "you: " + entry.instruction + " → not taken, try again later", ok: false }
-                  : { text: "you: " + entry.instruction + " → " + entry.preset, ok: true }
+  if (entry.instruction) { // a word the world did not take is said (shikigon.toml, cos20 #628 F5)
+    var word = "you: " + entry.instruction + " → "
+    return failed ? { text: word + "not taken, try again later", ok: false }
+                  : { text: word + entry.preset, ok: true }
+  }
   if (entry.learned !== undefined)
     return failed ? { text: "could not learn: " + (entry.why || ""), ok: false }
                   : { text: "learned: " + entry.learned, ok: true }
