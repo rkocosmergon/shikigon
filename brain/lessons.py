@@ -19,6 +19,7 @@ import json
 import re
 import time
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,7 @@ TAIL = 400  # journal lines read from its end: a hundred moves and what came bet
 KEPT = 3  # lessons kept in lessons.json, newest last
 SALES_TOLD = 6  # sales it is told of in a look back, the newest
 SOLD = ("market_sale", "npc_market_maker_buy")  # what the world books when an offer sells
+HOURS_TOLD = 6  # finished hours of income it is told, beside their living cells
 RETURNS_TOLD = 6  # offers it is told came back; apart from the sales, there are many more of them
 CAME_BACK = "market_escrow_return"  # booked when an offer of energy ends unsold, energy only
 PASSIVE = {"conway_tick": "income", "energy_decay": "decay", "field_maintenance": "upkeep"}
@@ -57,7 +59,8 @@ LESSON_SYSTEM = (
     "you are given; never invent rules, prices or moves. Its player reads what you write: "
     "name moves in plain words (selling on the market, starting a mission, evolving), never "
     "by their function names. Every rule names the number it rests on: a move's own effect, "
-    "or a count. A change from all causes is no move's effect. Moves the rules played are no "
+    "a count, or income beside living cells. A change from all causes is no move's effect. "
+    "Moves the rules played are no "
     "choice of its own. Answer in English with exactly "
     "three lines and nothing else:\n"
     "LESSON: <100 to 500 characters: what worked and what did not>\n"
@@ -156,10 +159,33 @@ def ledger_lines(events: Any, transactions: Any) -> list[str]:
     )
 
 
-def income_line(events: Any) -> str:
-    """Income, decay and upkeep over the hours of the world's rows, in one line and on no move
-    (cos20 #533): on the device 1 lesson in 30 named income, and the newest said to stop placing
-    cells while income, which hangs on them, stood nowhere. Empty without income."""
+def _cells_by_hour(journal: list[dict[str, Any]]) -> dict[str, float]:
+    """The living cells at the end of each hour the journal still holds."""
+    hours: dict[str, float] = {}
+    for entry in journal:
+        moment, cells = files.finite(entry.get("at")), files.finite(entry.get("cells"))
+        if moment is not None and cells is not None:
+            when = datetime.fromtimestamp(moment, UTC)
+            hours[when.strftime("%Y-%m-%dT%H")] = cells
+    return hours
+
+
+def _income_by_hour(income: dict[str, float], journal: list[dict[str, Any]]) -> str:
+    """Income of each finished hour with the living cells at its end, numbers only."""
+    cells = _cells_by_hour(journal)
+    finished = sorted(income)[:-1][-HOURS_TOLD:]  # the newest hour may be unfinished
+    shown = []
+    for hour in finished:
+        at = f" at {cells[hour]:,.0f} cells" if hour in cells else ""
+        shown.append(f"{hour} {_signed(income[hour])}{at}")
+    return "; ".join(shown)
+
+
+def income_line(events: Any, journal: list[dict[str, Any]] | None = None) -> str:
+    """Income, decay and upkeep over the hours of the world's rows, and income beside the living
+    cells it hangs on (cos20 #533): a placement shows its price at once and its income never, so
+    41 of 46 lessons on the device said placing cells only cost, while income stood at 120,000
+    an hour. No mark and no advice: the numbers are the agent's to read. Empty without income."""
     hours: dict[str, dict[str, float]] = {word: {} for word in PASSIVE.values()}
     for row in events if isinstance(events, list) else []:
         kind = row.get("event_type") if isinstance(row, dict) else None
@@ -174,13 +200,10 @@ def income_line(events: Any) -> str:
         return ""
     parts = ", ".join(f"{word} {_signed(sum(by_hour.values()))}"
                       for word, by_hour in hours.items() if by_hour)  # fmt: skip
-    line = (f"Over the last {len(income)} hours the world booked this whatever was played, no "
-            f"move's effect: {parts}.")
-    ordered = sorted(income)
-    if len(ordered) > 1:  # the newest hour may be unfinished
-        last = ordered[-2] if len(ordered) > 2 else ordered[-1]
-        line += f" Income an hour: {_signed(income[ordered[0]])} -> {_signed(income[last])}."
-    return line
+    line = (f"Over the last {len(income)} hours the world booked: {parts}. No single move made "
+            "them. A field earns each tick by its living cells (world.txt: income_per_tick).")
+    each = _income_by_hour(income, [entry for entry in journal or [] if isinstance(entry, dict)])
+    return f"{line} Income an hour: {each}." if each else line
 
 
 def _sale_line(row: Any, offers: dict[str, str]) -> str:
@@ -247,7 +270,7 @@ def sale_lines(rows: Any, journal: list[dict[str, Any]]) -> list[str]:
 def with_bookings(numbers: str, bookings: tuple[Any, Any], journal: list[dict[str, Any]]) -> str:
     """The numbers of its moves, then what the world booked beside them."""
     events, rows = bookings
-    income, sales = income_line(events), sale_lines(rows, journal)
+    income, sales = income_line(events, journal), sale_lines(rows, journal)
     back = return_lines(rows, journal)
     extra = ([income] if income else []) + (
         ["Its last sales, what went and what came back:", *sales] if sales else []) + (

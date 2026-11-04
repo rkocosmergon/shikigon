@@ -10,6 +10,9 @@ What changed for someone who uses Shikigon. Newest first.
 - **It sees what came of an offer.** A sale says what went and what came back, and whose offer it
   was. The rate is for it to judge. The numbers it reads also carry income, decay and upkeep,
   credited to no move.
+- **It sees what its cells earn.** A placement showed its price at once and its income never: 41 of 46
+  lessons on the device said placing cells only cost. Income now stands beside the living cells of
+  each hour, and a lesson may rest on them. No advice; what it makes of them is its own.
 - **It also sees the offers nobody bought.** Those came back with no word: on the device 14 offers
   sold and 125 did not, and it heard only of the sales. Amount and price, nothing else; what it
   makes of them is its own.

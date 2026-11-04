@@ -8,6 +8,7 @@ books 0 on the total, so 75,546 energy sold for 130 left no trace in its numbers
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import sys
 from pathlib import Path
@@ -176,11 +177,55 @@ def _hours() -> list[dict[str, Any]]:
         _hour("field_maintenance", 11, -500.0), _hour("invasion_income", 11, 7.0)]
 
 
-def test_income_stands_beside_decay_and_upkeep_and_is_nobodys_effect() -> None:
+def _at(hour: int, cells: float, minute: int = 30) -> dict[str, Any]:
+    when = dt.datetime(2026, 11, 3, hour, minute, tzinfo=dt.UTC)
+    return {"at": when.timestamp(), "action": "wait", "cells": cells}
+
+
+def test_income_stands_beside_decay_and_upkeep() -> None:
     line = lessons.income_line(_hours())
     assert "income +202,000" in line and "decay -120,000" in line and "upkeep -500" in line
-    assert "no move's effect" in line
-    assert "Income an hour: +49,000 -> +51,000" in line, "the last hour may be unfinished"
+    assert "+49,000" in line and "+51,000" in line
+    assert "+52,000" not in line, "the last hour may be unfinished"
+
+
+def test_it_is_not_told_that_income_comes_whatever_it_plays() -> None:
+    """Income hangs on its living cells, and those on its moves. 41 of 46 lessons on the device
+    said placing cells only cost, and 0 said it earned: the line told it so (cos20 #533)."""
+    line = lessons.income_line(_hours()).lower()
+    assert "whatever was played" not in line and "no move's effect" not in line
+    assert "no single move" in line
+    assert "living cells" in line
+
+
+def test_income_of_each_hour_stands_beside_its_living_cells() -> None:
+    journal = [_at(9, 700.0), _at(10, 800.0, 10), _at(10, 850.0, 50), _at(11, 900.0), _at(12, 1.0)]
+    line = lessons.income_line(_hours(), journal)
+    assert "2026-11-03T09 +49,000 at 700 cells" in line
+    assert "2026-11-03T10 +50,000 at 850 cells" in line, "the cells at the end of the hour"
+    assert "2026-11-03T11 +51,000 at 900 cells" in line
+    assert "2026-11-03T12" not in line.split("Income an hour")[1], "still unfinished"
+
+
+def test_an_hour_the_journal_no_longer_holds_tells_the_income_alone() -> None:
+    line = lessons.income_line(_hours(), [_at(11, 900.0)])
+    assert "2026-11-03T09 +49,000;" in line and "2026-11-03T11 +51,000 at 900 cells" in line
+
+
+def test_entries_without_cells_or_time_do_not_break_the_hours() -> None:
+    journal: list[Any] = [{"at": "x", "cells": 5}, {"at": 1, "cells": "many"}, {"cells": 3}, {}]
+    assert "cells;" not in lessons.income_line(_hours(), journal)
+
+
+def test_income_says_nothing_about_good_or_bad() -> None:
+    line = lessons.income_line(_hours(), [_at(11, 900.0)]).lower()
+    assert not any(word in line for word in ("should", "better", "worth", "more cells"))
+
+
+def test_a_lesson_may_rest_on_income_beside_living_cells() -> None:
+    """Its rules had to rest on a move's own effect or a count: for a placement that is its price
+    alone, so "place more" could not be argued at all (cos20 #533)."""
+    assert "income beside living cells" in lessons.LESSON_SYSTEM
 
 
 def test_no_income_rows_no_line() -> None:
@@ -274,6 +319,7 @@ def test_the_numbers_it_reads_carry_income_and_sales() -> None:
     text = lessons.with_bookings("the numbers", (_hours(), [_sale(130.0)]), [])
     assert text.startswith("the numbers\n")
     assert "income +202,000" in text
+    assert "at 900 cells" in lessons.with_bookings("n", (_hours(), None), [_at(11, 900.0)])
     assert "Its last sales" in text and "sold 75,546 energy for 130" in text
 
 
