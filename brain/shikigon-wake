@@ -37,8 +37,11 @@ mkdir -p "$state" "$(dirname "$venv")"
 chmod 700 "$state"
 
 say() {  # stage [sentence]
+    # Without python3 the panel still gets a sentence: an empty file showed it nothing (#628, F10).
     python3 -I -c 'import json, sys; print(json.dumps({"stage": sys.argv[1], "said": sys.argv[2]}))' \
-        "$1" "${2:-}" > "$state/setup.json.tmp"
+        "$1" "${2:-}" > "$state/setup.json.tmp" 2>/dev/null ||
+        echo '{"stage": "failed", "said": "python3 is missing: install it, then wake it again."}' \
+            > "$state/setup.json.tmp"
     mv "$state/setup.json.tmp" "$state/setup.json"
     echo "$1${2:+: $2}"
 }

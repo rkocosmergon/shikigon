@@ -30,6 +30,7 @@ import asyncio
 import contextlib
 import functools
 import json
+import math
 import os
 import re
 import shutil
@@ -242,7 +243,7 @@ def world_peer_check(cfg: dict[str, Any]) -> Callable[[str, int], str]:
     # this machine is still checked in ``peer_refusal``. Until 0.1.13 every world's name was
     # resolved here, when the agent was made, outside any deadline (cos20 #492, seventh review,
     # a variant of finding 4).
-    local = urllib.parse.urlsplit(world).scheme == "http" and connections.on_this_machine(world)
+    local = connections.split_address(world).scheme == "http" and connections.on_this_machine(world)
 
     def check(host: str, port: int) -> str:
         return connections.peer_refusal(host, port, local, True)
@@ -1359,7 +1360,7 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
             result["label"] = advisor.who(tried)
         return result
     if what == "advise" and rest:
-        if rest[0] not in ("off", "head") and not rest[0].isdigit():
+        if rest[0] not in ("off", "head") and not rest[0].isdecimal():
             return {"ok": False, "why": "advise off, a number of moves, or head"}
         often: int | str = rest[0] if rest[0] in ("off", "head") else max(1, int(rest[0]))
         kept = {key: value for key, value in connections.chosen(home).items() if key != "every"}
@@ -1503,7 +1504,7 @@ def learning_next(cfg: dict[str, Any], state: Any, learning: Any, agent: Any = N
     every = lessons.LEARN_EVERY
     conf = advisor_settings(cfg)
     if decider_name(cfg, conf) == "head":  # it has taken over: it looks back often (#527)
-        every = max(1, int(conf.get("review_every", 5) or 5))
+        every = lessons.review_every(conf)
     if lessons.due(lessons.journal_tail(state_dir()), every):
         return asyncio.create_task(learn(cfg, state, agent=agent))
     return None
@@ -1540,6 +1541,21 @@ async def guarded_tick(
         return fall_asleep(WORLD_SILENT, why)
 
 
+def decider_for_now(
+    cfg: dict[str, Any], decider: Any, chosen: dict[str, Any]
+) -> tuple[Any, dict[str, Any]]:
+    """The model the player picks holds from the next move on: "that one, and only that one".
+
+    ``advisor forget`` and ``advisor try`` change the file while the brain runs. Its decider held
+    what it read at its start, and went on sending every move to the old address (cos20 #628, F2).
+    A decider someone installed is theirs: it stays, and what it asks is its own.
+    """
+    now = advisor_settings(cfg)
+    if now == chosen:
+        return decider, chosen
+    return (make_decider(cfg) if decider_name(cfg, now) in BUILT_IN else decider), now
+
+
 async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
     """A move, a pause, a move: the pause follows the world's tick, not only the clock.
 
@@ -1551,10 +1567,12 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
     done_in: int | None = None
     learning: Any = None
     refusals = Refusals(refusals_path())
+    chosen = advisor_settings(cfg)
     while True:
         if why := world_refusal(cfg):  # the world's port can change hands while it runs (H9)
             fall_asleep(CONFIG, why)
             return
+        decider, chosen = decider_for_now(cfg, decider, chosen)
         last = await guarded_tick(agent, decider, done_in, refusals)
         if last.get("skipped"):  # the world's tick is late: one choice per tick, so wait for it
             await asyncio.sleep(LATE_TICK_S)
@@ -1736,6 +1754,18 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     return 0
 
 
+def keep_unasked(question: str, said: Any) -> None:
+    """A question that never reached ``ask`` still stands in the talk, with why. The bar shows
+    only the talk: it waited 90 s for an answer and then showed nothing (cos20 #628, F7)."""
+    import advisor
+
+    if isinstance(said, dict) and "q" not in said:
+        why = advisor.cut(str(said.get("why") or "it could not finish this"), 220)
+        files.append(chat_path(), {"at": int(time.time()), "q": question[:QUESTION_CHARS],
+                                   "a": "", "ok": False, "why": why})  # fmt: skip
+        show_talk()
+
+
 def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     """A word from the player: a question for the advisor (ask) or for the compass (instruct)."""
     if args.text:
@@ -1750,7 +1780,10 @@ def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     table = cfg.get("instructions", {})
     work = (lambda a: ask(a, cfg, text)) if args.command == "ask" else (
         lambda a: instruct(a, text, table))
-    print(json.dumps(connections.run_loop(with_agent(cfg, work))))
+    said = connections.run_loop(with_agent(cfg, work))
+    if args.command == "ask":
+        keep_unasked(text, said)
+    print(json.dumps(said))
     return 0
 
 
@@ -1807,10 +1840,44 @@ def end_with_its_agents() -> None:
         signal.signal(signum, end)
 
 
+def config_refusal(cfg: dict[str, Any], shipped: dict[str, Any] | None = None, at: str = "") -> str:
+    """Why the config cannot be followed, or ``""``: a section that is none, a number that is none.
+
+    The shipped file says what is a section and what is a number, so this list cannot lag behind
+    it. A word there used to end whichever line read it first, some only on a later move, and
+    the bar started the brain again every 30 s without a sentence (cos20 #628, F9)."""
+    if shipped is None:
+        with REPO_DEFAULT_CONFIG.open("rb") as handle:
+            shipped = tomllib.load(handle)
+    for key, value in shipped.items():
+        if key not in cfg:
+            continue
+        given, name = cfg[key], f"{at}{key}"
+        if isinstance(value, dict):
+            if not isinstance(given, dict):
+                return f"{name} in the config is not a section: fix {config_path()}"
+            if why := config_refusal(given, value, f"{name}."):
+                return why
+        elif isinstance(value, int | float) and not isinstance(value, bool) and not (
+            isinstance(given, int | float) and not isinstance(given, bool)
+            and math.isfinite(given)
+        ):
+            return f"{name} in the config is not a number: fix {config_path()}"
+    return ""
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     private_state()
-    return COMMANDS[args.command](args, load_config())
+    try:
+        cfg = load_config()
+        why = config_refusal(cfg)
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+        why = f"the config could not be read: {type(exc).__name__}, fix {config_path()}"
+    if why:  # exit 1, as for a decider it does not know: the bar tries again (#628 F9, #621)
+        print(json.dumps(fall_asleep(CONFIG, why)))
+        return 1
+    return COMMANDS[args.command](args, cfg)
 
 if __name__ == "__main__":
     INHERITED_UMASK = os.umask(0o077)  # what it makes is the player's alone (K2)

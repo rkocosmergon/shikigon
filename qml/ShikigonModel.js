@@ -59,9 +59,10 @@ function grouped(number) {
 // writes it in a player's words, cos20 #475), a lesson from its last moves (#451), or a
 // move. `ok` is false only for a failure.
 function journalLine(entry) {
-  if (entry.instruction)
-    return { text: "you: " + entry.instruction + " → " + entry.preset, ok: true }
   var failed = entry.ok === false
+  if (entry.instruction) // a word the world did not take is said (shikigon.toml, cos20 #628 F5)
+    return failed ? { text: "you: " + entry.instruction + " → not taken, try again later", ok: false }
+                  : { text: "you: " + entry.instruction + " → " + entry.preset, ok: true }
   if (entry.learned !== undefined)
     return failed ? { text: "could not learn: " + (entry.why || ""), ok: false }
                   : { text: "learned: " + entry.learned, ok: true }

@@ -38,6 +38,7 @@ import itertools
 import json
 import os
 import re
+import select
 import shutil
 import signal
 import socket
@@ -403,9 +404,19 @@ def choose(home: Path, choice: dict[str, Any]) -> None:
     files.write_json(home / CHOICE_FILE, choice)
 
 
+def split_address(url: str) -> urllib.parse.SplitResult:
+    """``urlsplit`` for an address someone typed: one it cannot read (``http://[``) is an empty
+    one, which no key goes to and no talk, instead of a ``ValueError`` wherever it is first read
+    (cos20 #628, F9)."""
+    try:
+        return urllib.parse.urlsplit(url)
+    except ValueError:
+        return urllib.parse.urlsplit("")
+
+
 def origin(url: str) -> str:
     """``scheme://host:port`` of an address, the port always named: what a key is bound to."""
-    parts = urllib.parse.urlsplit(url.strip())
+    parts = split_address(url.strip())
     scheme = parts.scheme.lower()
     try:
         port = parts.port or {"http": 80, "https": 443}.get(scheme, 0)
@@ -502,7 +513,7 @@ def key_may_go_to(base_url: str) -> bool:
     key; one that does is reached over https. Up to 0.1.3 the home network counted as safe
     (``.local``, names without a dot, private addresses).
     """
-    parts = urllib.parse.urlsplit(base_url)
+    parts = split_address(base_url)
     if parts.scheme == "https":
         return True
     host = (parts.hostname or "").lower()
@@ -561,7 +572,7 @@ def talk_may_go_to(base_url: str) -> bool:
     plain http went to any address that got no key (cos20 #492, third review; panel 22.10.2026,
     decision A). Unlike for a key, a proxy in the environment does not count against this
     machine here: the brain's own calls to it never use one (``trust_env``)."""
-    parts = urllib.parse.urlsplit(base_url)
+    parts = split_address(base_url)
     if parts.scheme == "https":
         return True
     return parts.scheme == "http" and on_this_machine(base_url)
@@ -849,7 +860,7 @@ def own_port(port: int, tables: list[str] | None = None, me: int | None = None, 
 
 def port_of(base_url: str) -> int | None:
     """The port an address goes to, also when it names none (``http`` 80, ``https`` 443)."""
-    parts = urllib.parse.urlsplit(base_url)
+    parts = split_address(base_url)
     try:
         return parts.port or {"http": 80, "https": 443}.get(parts.scheme)
     except ValueError:  # a port that is no number
@@ -1010,7 +1021,7 @@ def on_this_machine(
     """True if the address leads to this machine: ``localhost``, a loopback address,
     ``0.0.0.0``, one of the machine's own addresses, or a name that resolves to one of
     these (the machine's own name is ``127.0.1.1`` on many systems)."""
-    host = (urllib.parse.urlsplit(base_url).hostname or "").lower()
+    host = (split_address(base_url).hostname or "").lower()
     if not host:
         return False
     if host == "localhost" or host.endswith(".localhost"):
@@ -1045,7 +1056,7 @@ def ours(base_url: str, tables: list[str] | None = None, me: int | None = None, 
     address. For the world, the SDK asks this right before every request it sends, retries
     included (``world_send_check`` in shikigon_brain.py, cosmergon-agent ``send_check``).
     """
-    if urllib.parse.urlsplit(base_url).scheme == "https":
+    if split_address(base_url).scheme == "https":
         return True
     return not on_this_machine(base_url) or own_server(base_url, tables, me,
                                                        system_ok=not with_key)
@@ -1128,7 +1139,7 @@ def found(
 
 def short_host(base_url: str) -> str:
     """The host alone, never a name or password an address may carry (``https://me:pw@…``)."""
-    return urllib.parse.urlsplit(base_url).hostname or ""
+    return split_address(base_url).hostname or ""
 
 
 AGENT_OUTPUT_BYTES = 1024 * 1024  # what an agent may print; an answer is a few KB
@@ -1242,9 +1253,11 @@ def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str]
     with a limit (K29, cos20 #492 S9; until 0.1.11 ``communicate`` kept all of it). The group
     is ended while its leader is not yet reaped, so its number cannot belong to anyone else.
     A child that opens a session of its own (``setsid``) leaves the group; that stays named
-    (threat model K14). While it runs, the group stands in ``GROUPS``: when the brain itself is
-    stopped, ``end_groups`` ends it too (``shikigon_brain.end_with_its_agents``). The group's
-    leader is ``GUARD``: when the brain ends without a word (SIGKILL), the guard ends the group."""
+    (threat model K14), and the move does not wait for it: ``ANSWER_TAIL_S`` after the leader the
+    pipes are given up, whoever still holds them (cos20 #628, F4). While it runs, the group stands
+    in ``GROUPS``: when the brain itself is stopped, ``end_groups`` ends it too
+    (``shikigon_brain.end_with_its_agents``). The group's leader is ``GUARD``: when the brain ends
+    without a word (SIGKILL), the guard ends the group."""
     del capture_output, check  # always captured, never raised on the exit code
     stdin = subprocess.PIPE if input is not None else subprocess.DEVNULL
     with subprocess.Popen(guarded(argv, env), cwd=cwd, env=env, stdin=stdin,
@@ -1252,11 +1265,11 @@ def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str]
                           start_new_session=True) as proc:
         GROUPS.add(proc.pid)
         try:  # out of GROUPS before the leader is reaped: its number may then be anyone's
-            out, err, over = bytearray(), bytearray(), threading.Event()
-            threads = [threading.Thread(target=_drain, args=(pipe, into, over), daemon=True)
+            out, err, over, stop = bytearray(), bytearray(), threading.Event(), threading.Event()
+            threads = [threading.Thread(target=_drain, args=(pipe, into, over, stop), daemon=True)
                        for pipe, into in ((proc.stdout, out), (proc.stderr, err))]
             if input is not None:
-                threads.append(threading.Thread(target=_feed, args=(proc.stdin, input),
+                threads.append(threading.Thread(target=_feed, args=(proc.stdin, input, stop),
                                                 daemon=True))
             for thread in threads:
                 thread.start()
@@ -1266,8 +1279,12 @@ def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str]
         finally:
             GROUPS.discard(proc.pid)
         proc.wait()
+        until = time.monotonic() + ANSWER_TAIL_S
+        for thread in threads:  # what it printed last; a child that left may hold a pipe open
+            thread.join(timeout=max(0.0, until - time.monotonic()))
+        stop.set()  # the threads leave the pipes, so closing them here waits for nobody
         for thread in threads:
-            thread.join(timeout=2)  # a child that left the group may still hold a pipe
+            thread.join()
     if over.is_set():
         raise TooMuchOutput(f"the agent printed more than {AGENT_OUTPUT_BYTES} bytes")
     if not ended:
@@ -1277,6 +1294,8 @@ def run_in_group(argv: list[str], *, cwd: str | None = None, env: dict[str, str]
 
 
 GROUPS: set[int] = set()  # process groups of agents still running (``run_in_group``)
+ANSWER_TAIL_S = 2.0  # after the agent ended: what it printed last still arrives
+PIPE_POLL_MS = 100
 
 
 def end_groups() -> None:
@@ -1287,19 +1306,39 @@ def end_groups() -> None:
             os.killpg(group, signal.SIGKILL)
 
 
-def _drain(pipe: Any, into: bytearray, over: threading.Event) -> None:
-    """Read a pipe into ``into`` until it ends or the agent has printed too much in all."""
-    for chunk in iter(lambda: pipe.read1(64 * 1024), b""):
+def _ready(pipe: Any, event: int, stop: threading.Event) -> bool:
+    """Wait until ``pipe`` is ready; ``False`` once ``stop`` is set. A thread blocked in a read
+    or write holds the buffer's lock, and closing the pipe then waits for that lock, as long as a
+    child that left the group holds the other end (cos20 #628, F4)."""
+    poller = select.poll()
+    poller.register(pipe, event)
+    while not stop.is_set():
+        if poller.poll(PIPE_POLL_MS):
+            return True
+    return False
+
+
+def _drain(pipe: Any, into: bytearray, over: threading.Event, stop: threading.Event) -> None:
+    """Read a pipe into ``into`` until it ends, the agent has printed too much in all, or the
+    brain stopped waiting."""
+    while _ready(pipe, select.POLLIN, stop):
+        chunk = pipe.read1(64 * 1024)
+        if not chunk:
+            return
         into += chunk
         if len(into) > AGENT_OUTPUT_BYTES:
             over.set()
             return
 
 
-def _feed(pipe: Any, text: str) -> None:
+def _feed(pipe: Any, text: str, stop: threading.Event) -> None:
     """Give the agent its prompt on stdin; an agent that stops reading ends the writing."""
+    data = memoryview(text.encode("utf-8"))
     with contextlib.suppress(OSError):
-        pipe.write(text.encode("utf-8"))
+        os.set_blocking(pipe.fileno(), False)
+        while data and _ready(pipe, select.POLLOUT, stop):
+            with contextlib.suppress(BlockingIOError):
+                data = data[os.write(pipe.fileno(), data):]
     with contextlib.suppress(OSError):
         pipe.close()
 

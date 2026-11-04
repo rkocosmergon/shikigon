@@ -121,8 +121,9 @@ def contract_target(action: str, params: dict[str, Any]) -> str:
     """Whom a contract move of the rules is addressed to; empty for any other move."""
     if action == "propose_contract":
         return str(params.get("to_player_id") or "")
-    if action == "propose_from_template":
-        return str((params.get("slots") or {}).get("partner_id") or "")
+    if action == "propose_from_template":  # the model writes ``slots``, in any form (#628, F3)
+        slots = params.get("slots")
+        return str(slots.get("partner_id") or "") if isinstance(slots, dict) else ""
     return ""
 
 
@@ -242,6 +243,14 @@ class TalkingDecider:
         self.last: dict[str, Any] | None = None
         self._then = False  # this move is the proposal it announced: the inner did not choose
         self._word = False  # this move is its own word: the inner did not choose it either
+
+    @property
+    def budget_left(self) -> float | None:
+        """What the inner decider (the head) has left today. ``tick`` reads it for the status
+        file, as the README says; without it the number stood there only without speech
+        (cos20 #628, F1)."""
+        left: float | None = getattr(self.inner, "budget_left", None)
+        return left
 
     async def _inner_choice(
         self, state: Any, blocked: frozenset[str]

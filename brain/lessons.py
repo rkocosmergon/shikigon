@@ -83,6 +83,15 @@ def moves_since_lesson(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [entry for entry in entries[start:] if "action" in entry and "energy" in entry]
 
 
+def review_every(conf: dict[str, Any]) -> int:
+    """After how many moves the head looks back: ``review_every``. A word there is not a crash,
+    the default stands (cos20 #628, F9)."""
+    try:
+        return max(1, int(conf.get("review_every", 5) or 5))
+    except (TypeError, ValueError, OverflowError):
+        return 5
+
+
 def due(entries: list[dict[str, Any]], every: int = LEARN_EVERY) -> bool:
     return len(moves_since_lesson(entries)) >= every
 
@@ -553,7 +562,7 @@ async def learn(
 
     entries = journal_tail(home)
     since = moves_since_lesson(entries)
-    every = max(1, int(conf.get("review_every", 5) or 5)) if head else LEARN_EVERY
+    every = review_every(conf) if head else LEARN_EVERY
     enough = len(since) >= every or (force and len(since) >= FORCED_MIN)
     moves = measured(window(entries) if head else since)
     if not enough or not advisor.configured(conf) or len(moves) <= HORIZON:

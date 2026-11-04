@@ -121,9 +121,16 @@ def forms_of(info: Any) -> Forms:
     found: Forms = {}
     for name, body in actions.items():
         forms = body.get("forms") if isinstance(body, dict) else None
-        if isinstance(forms, list) and forms and all(isinstance(f, dict) for f in forms):
+        if isinstance(forms, list) and forms and all(_is_form(f) for f in forms):
             found[str(name)] = forms
     return found
+
+
+def _is_form(form: Any) -> bool:
+    """A form is an object whose ``params`` and ``required`` are lists; the world said so in
+    no other way, and ``form_lines`` walks them (cos20 #628, F8)."""
+    return isinstance(form, dict) and all(
+        isinstance(form.get(field) or [], list) for field in ("params", "required"))
 
 
 def form_lines(forms: list[dict[str, Any]]) -> list[str]:

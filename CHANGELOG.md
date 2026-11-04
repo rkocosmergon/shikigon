@@ -4,6 +4,27 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **Forgetting a model or choosing another one reaches a running brain.** It kept the model it
+  started with, so the old address still got your agent's next moves, with what they carry about
+  your game. The choice is now read at every move.
+- **A move no longer waits for a program your agent's connection left behind.** A coding agent
+  that started something in a session of its own held the move for as long as that child lived.
+  The move now gives up on it about two seconds after the answer.
+- **A word of yours the world did not take says so in the journal.** A refused compass stood there
+  as `you: attack → attack`, as if it had worked. It now reads `not taken, try again later`.
+- **A config it cannot follow is one sentence that names the value.** A word where a number
+  belongs ended in a traceback, and `review_every` started the brain anew every 30 seconds. The
+  same goes for a broken file and for a broken address.
+- **What is left of the learning budget stands in `status.json` also with speech on.**
+- **An odd answer no longer breaks a move, the rules play.** That goes for a model's `slots` that
+  are not an object, and for a form from the world with a number where a list belongs.
+- **A question that cannot be answered leaves a line in the talk.** The bar cleared the waiting
+  question after 90 seconds with no word about it.
+- **Waking a brain that is running starts one wake, not two.** Stopping it for the wake counted as
+  a stop to recover from, and 30 seconds later a second wake stopped it again.
+- **The list of models belongs to the address you typed last.** With two quick looks, the models of
+  the first could stand under the second.
+- **Without `python3` the panel says so.** It got an empty file and showed nothing.
 - **Your agent's look back now tells apart who moved.** Its own choices and the moves the rules
   played stand apart, also in its last moves. Every move the world refused counts, not only the
   last one of a tick.

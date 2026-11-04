@@ -149,6 +149,16 @@ TestCase {
                                 { action: "start_mission", kind: "siege_field", ok: true }])[0].count, 2)
   }
 
+  // A word of yours the world turned down was shown as a move that worked (cos20 #628, F5).
+  function test_journal_compass_not_taken() {
+    var taken = Model.journalLine({ instruction: "attack", preset: "attack", ok: true })
+    compare(taken.text, "you: attack → attack")
+    compare(taken.ok, true)
+    var refused = Model.journalLine({ instruction: "attack", preset: "attack", ok: false })
+    compare(refused.text, "you: attack → not taken, try again later")
+    compare(refused.ok, false)
+  }
+
   // A lesson from its last moves (#451): what it learned, or why it could not.
   function test_journal_lesson() {
     compare(Model.journalLine({ learned: "Missions paid, idle market listing did not.", ok: true }).text,

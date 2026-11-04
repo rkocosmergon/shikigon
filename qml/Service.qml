@@ -57,7 +57,7 @@ Item {
 
   function sync() {
     if (wantRunning && !runner.running) runner.running = true
-    else if (!wantRunning && runner.running) runner.running = false
+    else if (!wantRunning && runner.running) { stoppedHere = true; runner.running = false }
   }
 
   function tickNow() {
@@ -235,8 +235,12 @@ Item {
       onRead: data => root.lastError = String(data).slice(0, 200)
     }
     onExited: code => {
+      // Stopped here (the wake script runs): not a crash, or the timer woke it again every 30 s
+      // and stopped it again (cos20 #628, F6). A SIGTERM from outside still brings it back.
+      var mine = root.stoppedHere
+      root.stoppedHere = false
       if (root.restartWanted) { root.restartWanted = false; root.sync() }
-      else if (code !== 0) restartLater.restart()
+      else if (code !== 0 && !mine) restartLater.restart()
     }
   }
 
@@ -248,11 +252,14 @@ Item {
   property bool advisorsRead: false   // read once, on the first ask (not when the panel opens)
   property var tried: null            // what the last probe said; null while it runs
   property bool restartWanted: false
+  property bool stoppedHere: false
 
   function refreshAdvisors() { if (awake && !advisorLister.running) advisorLister.running = true }
   function listModels(where) {
-    modelLister.where = where
     models = ({ where: where, ok: false, models: [], why: "", pending: true })
+    // One asks at a time; the answer of the old address never stands under the new (#628, F11).
+    if (modelLister.running) { modelLister.next = where; return }
+    modelLister.where = where
     modelLister.running = true
   }
   // One real question to a connection; the brain keeps it only if an answer comes.
@@ -309,12 +316,20 @@ Item {
   Process {
     id: modelLister
     property string where: ""
+    property string next: ""
+    onExited: {
+      if (!next) return
+      where = next
+      next = ""
+      running = true
+    }
     command: root.brainCommand(["advisor", "models"])
     stdinEnabled: true
     onStarted: write(JSON.stringify({ where: where }) + "\n")
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        if (modelLister.next) return
         var said = root.parsed(text, { ok: false, models: [], why: "no answer" })
         said.where = modelLister.where
         root.models = said
@@ -384,6 +399,7 @@ Item {
     id: restartLater
     interval: 30000
     onTriggered: {
+      if (runner.running) return // came back meanwhile: waking stops it for nothing (#628, F6)
       if (!root.awake || waker.running) { root.sync(); return }
       waker.fresh = false
       waker.running = true
