@@ -457,8 +457,23 @@ def shaped(params: dict[str, Any]) -> dict[str, Any]:
 Move = tuple[str, dict[str, Any], str]
 
 
+def without_empty(value: Any) -> Any:
+    """``value`` without the fields that say nothing: an empty text or ``null``, at any depth.
+
+    A small model fills in every field a form lists, also the ones it has no value for (device
+    04.11.2026: ``"room_id": "", "field_id": ""`` cost 36 answers). A field left empty is a field
+    not given, and the world names what it needs (``strict``). A list keeps its places:
+    ``own_words`` judges them. Depth is bounded by ``files.MAX_DEPTH``."""
+    if isinstance(value, dict):
+        return {k: without_empty(v) for k, v in value.items() if v is not None and v != ""}
+    if isinstance(value, list):
+        return [without_empty(v) for v in value]
+    return value
+
+
 def _same(one: dict[str, Any], other: dict[str, Any]) -> bool:
-    return json.dumps(one, sort_keys=True) == json.dumps(other, sort_keys=True)
+    return (json.dumps(without_empty(one), sort_keys=True)
+            == json.dumps(without_empty(other), sort_keys=True))
 
 
 def mission_form(params: dict[str, Any], state: Any) -> str:
@@ -592,19 +607,20 @@ def gives_nothing(action: str, params: dict[str, Any], state: Any) -> bool:
 def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     """``((action, params, why), "")`` for a usable answer, else ``(None, why not)``.
 
-    The JSON is read finite (``files.loads``): ``NaN``, ``Infinity`` or ``1e999`` in a parameter
+    The first whole object in the answer is the move (``files.json_in``), its empty fields are
+    not there (``without_empty``), and a reason written into the params is its reason: a broken
+    form is no experience, it only costs the move (cos20 #533). What the move says is judged as
+    before, ``own_words`` after this.
+    The JSON is read finite (``files.json_in``): ``NaN``, ``Infinity`` or ``1e999`` in a parameter
     is no usable answer. Until 0.1.13 such an answer reached ``agent.act``, where httpx refuses
     a number that is not finite, and that ended the brain (sixth review, finding 2)."""
-    start, end = (text or "").find("{"), (text or "").rfind("}")
-    if start < 0 or end <= start:
+    if "{" not in (text or ""):
         return None, "the answer was not JSON"
     try:
-        data = files.loads(text[start : end + 1])
+        data = files.json_in(text)
     except ValueError:
         return None, ("the answer was not JSON, was nested too deep, "
                       "or a number in it was not finite")
-    if not isinstance(data, dict):
-        return None, "the answer was not a JSON object"
     action = str(data.get("action") or "")
     if action in speech.MOVES:
         return None, "your words go out through the brain's speech, never as a move of yours"
@@ -613,11 +629,13 @@ def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     params = data.get("params") or {}
     if not isinstance(params, dict):
         return None, "params must be a JSON object"
+    params = without_empty(params)
+    said_inside = params.pop("why", "")
     if RESERVED_PARAMS & params.keys():
         return None, "params may not name action or self"
     if len(json.dumps(params)) > PARAMS_BYTES:
         return None, "params are too long"
-    why = " ".join(str(data.get("why") or "").split()[: advisor.WHY_WORDS])[:WHY_CHARS]
+    why = " ".join(str(data.get("why") or said_inside).split()[: advisor.WHY_WORDS])[:WHY_CHARS]
     return (action, params, why), ""
 
 

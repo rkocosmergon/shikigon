@@ -4,6 +4,12 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **What your agent answered is read, even when the form around it is broken.** The first whole
+  JSON object in its answer is the move, and what follows counts for nothing. A field it left
+  empty counts as not given, and the world names what it needs. A reason written into the
+  parameters is its reason. A sentence inside a move stays refused. On the device 32 of 52
+  fall-backs to the rules were answers that named a whole move. More of your agent's moves now
+  go out, also the bad ones: that is how it learns.
 - **An answer of your agent that could not be played now stays on record.** The journal says only
   why it was turned down, so nobody could say what the model had written. A new local file holds
   the start and end of each such answer and how long it was. Nothing reads it but you: not the

@@ -94,7 +94,7 @@ async def test_a_short_answer_is_not_written_twice(tmp_path: Path, monkeypatch: 
         (json.dumps({"action": "market_list", "params": {}, "why": "x"}), "among the moves"),
         (json.dumps({"action": "wait", "params": {}, "why": "x"}, indent=9)[:20], "not JSON"),
         (json.dumps({"action": X, "params": {"name": "two words"}, "why": "x"}), "no name or id"),
-        (json.dumps({"action": X, "params": {"field_id": ""}, "why": "x"}), "no name or id"),
+        (json.dumps({"action": X, "params": {"field_id": [""]}, "why": "x"}), "no name or id"),
         (json.dumps({"action": "start_mission", "params": {}, "why": "x"}), "among the moves"),
     ],
 )

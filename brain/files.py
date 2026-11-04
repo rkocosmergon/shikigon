@@ -118,6 +118,9 @@ def _finite_float(text: str) -> float:
     return number
 
 
+_FROM_A_MODEL = json.JSONDecoder(parse_constant=_no_constant, parse_float=_finite_float)
+
+
 # How deep a JSON the brain reads may nest. The deepest it is given is 8 (the world's
 # ``/api/v1/game/info`` and its state, measured 02.11.2026); a walk over 64 levels stays far
 # below Python's recursion limit of 1000, also at two frames a level (``head.own_words``).
@@ -140,6 +143,10 @@ def loads(data: str | bytes) -> Any:
         value = json.loads(data, parse_constant=_no_constant, parse_float=_finite_float)
     except RecursionError as exc:
         raise ValueError("the JSON is nested too deep") from exc
+    return _not_too_deep(value)
+
+
+def _not_too_deep(value: Any) -> Any:
     if _depth(value) > MAX_DEPTH:
         raise ValueError("the JSON is nested too deep")
     return value
@@ -205,15 +212,23 @@ def count(value: Any, default: int = 0) -> int:
 
 
 def json_in(text: str) -> Any:
-    """The JSON between the first ``{`` and the last ``}`` of a model's answer.
+    """The first whole JSON object in a model's answer, read as ``loads`` reads: what comes after
+    it counts for nothing.
 
-    Raises ``ValueError`` if there is none or it is broken. ``find``/``rfind`` are linear;
-    ``re.search(r"\\{.*\\}", text, re.DOTALL)`` before was quadratic in the number of ``{``
-    (32,000 took 0.3 s, a 256 KiB answer some 20 s; cos20 #492 S7)."""
-    start, end = text.find("{"), text.rfind("}")
-    if start < 0 or end <= start:
+    Raises ``ValueError`` if there is none or it is broken. Until 0.1.14 it took everything from
+    the first ``{`` to the last ``}``: a brace closed too early, or a reason hanging behind the
+    move, lost a whole move (cos20 #533, device 04.11.2026: 32 of 52 fall-backs of the head). One
+    decode from the first ``{`` stays linear; ``re.search(r"\\{.*\\}", text, re.DOTALL)`` before was
+    quadratic in the number of ``{`` (32,000 took 0.3 s, a 256 KiB answer some 20 s; cos20 #492
+    S7)."""
+    start = text.find("{")
+    if start < 0:
         raise ValueError("no JSON object in the answer")
-    return loads(text[start : end + 1])
+    try:
+        value, _ = _FROM_A_MODEL.raw_decode(text, start)
+    except RecursionError as exc:
+        raise ValueError("the JSON is nested too deep") from exc
+    return _not_too_deep(value)
 
 
 def append(path: Path, entry: dict[str, Any], keep_bytes: int | None = None) -> None:
