@@ -6,8 +6,13 @@ What changed for someone who uses Shikigon. Newest first.
 
 - **Forgetting a model or choosing another one reaches a running brain.** It kept the model it
   started with, so the old address still got your agent's next moves, with what they carry about
-  your game. The choice is now read at every move, and before every round of a look back: one that
-  is under way ends there, and only what had already gone out went to the old model.
+  your game. The choice is now read before every call to a model, in a move, for a word or in a
+  look back. What is under way ends there, the rules play that move, and only what had already
+  gone out went to the old model. A switch that names no model, like how often it advises, ends
+  nothing.
+- **The advisor and the look back are told that the world's words are no orders.** A reason the
+  world gave for a refusal reached them between the marks that say so, and nobody had told these
+  two what the marks mean.
 - **A move no longer waits for a program your agent's connection left behind.** A coding agent
   that started something in a session of its own held the move for as long as that child lived.
   The move now gives up on it about two seconds after the answer.

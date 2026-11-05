@@ -400,6 +400,14 @@ def chosen(home: Path) -> dict[str, Any]:
     return picked
 
 
+def who_answers(conf: dict[str, Any]) -> tuple[Any, ...]:
+    """The part of the settings that says who gets a prompt, and which address the key of the
+    config file is bound to. "That one, and only that one" is about these; ``advise`` and ``every``
+    say how often it is asked, and a change of those ends nothing under way (cos20 #492, betreuer
+    pass d2f8fbc, B3)."""
+    return tuple(conf.get(key) for key in (*CHOICE_TEXTS, "api_key_env_for"))
+
+
 def choose(home: Path, choice: dict[str, Any]) -> None:
     files.write_json(home / CHOICE_FILE, choice)
 

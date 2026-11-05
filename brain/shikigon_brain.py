@@ -1409,6 +1409,11 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
 
     conf = advisor_settings(cfg)
     name = "advised" if advised else decider_name(cfg, conf)
+
+    def held(decider: Any) -> Any:  # each keeps its own wait: the head's is longer
+        decider.send = while_chosen(cfg, conf, decider.send)
+        return decider
+
     if name in BUILT_IN:
         import contracts
         from cosmergon_decider_tree import TreeDecider
@@ -1416,7 +1421,7 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
         # the rules say no to a contract that would cost it (contracts.py, cos20 #492)
         inner: Any = contracts.Careful(TreeDecider())
         if name == "advised":
-            inner = advisor.AdvisedDecider(inner, conf, state_dir(), dry=advised)
+            inner = held(advisor.AdvisedDecider(inner, conf, state_dir(), dry=advised))
         elif name == "head":  # the player's agent chooses every move (cos20 #527)
             import connections
             import head
@@ -1427,11 +1432,11 @@ def make_decider(cfg: dict[str, Any], advised: bool = False) -> Any:
             def numbers() -> Any:
                 return asyncio.to_thread(world_numbers, cfg, connections.bounded_get)
 
-            inner = head.HeadDecider(inner, conf, state_dir(), forms=forms, world=numbers)
+            inner = held(head.HeadDecider(inner, conf, state_dir(), forms=forms, world=numbers))
         if advised or not speech.wanted(conf):  # a dry run plays and says nothing
             return inner
         key = (load_credentials() or {}).get("api_key", "")
-        return speech.TalkingDecider(inner, conf, state_dir(), key)
+        return held(speech.TalkingDecider(inner, conf, state_dir(), key))
     from importlib.metadata import entry_points
 
     installed = {point.name: point for point in entry_points(group="cosmergon.deciders")}
@@ -1459,17 +1464,20 @@ async def read_bookings(agent: Any) -> tuple[Any, Any]:
 def while_chosen(
     cfg: dict[str, Any], conf: dict[str, Any], send: Callable[..., Awaitable[str]]
 ) -> Callable[[list[dict[str, str]], int], Awaitable[str]]:
-    """``send``, as long as ``conf`` is the model the player has picked.
+    """``send``, as long as ``conf`` names the model the player has picked.
 
-    A look back takes minutes and many rounds, and the player can forget a model or pick another
-    meanwhile: "that one, and only that one" holds for it too, checked before every round (cos20
-    #492, betreuer pass 3eccea1, B2). ``decider_for_now`` does it for the moves. It sends nothing
-    of its own: who awaits the call counts it."""
+    A look back takes minutes and many rounds, a move up to four rounds and a word, and the player
+    can forget a model or pick another meanwhile: "that one, and only that one" holds there too,
+    checked before every round (cos20 #492, betreuer pass 3eccea1, B2, and d2f8fbc, B1). The
+    round fails as any failed call does: in a move the rules play, a look back ends. It sends
+    nothing of its own: who awaits the call counts it."""
     import connections
 
+    answers = connections.who_answers(conf)
+
     def chosen(messages: list[dict[str, str]], tokens: int) -> Awaitable[str]:
-        if advisor_settings(cfg) != conf:
-            raise connections.AgentError("the model was changed while it looked back")
+        if connections.who_answers(advisor_settings(cfg)) != answers:
+            raise connections.AgentError("the model was changed")
         return send(messages, tokens)
 
     return chosen
@@ -1571,10 +1579,11 @@ async def guarded_tick(
 def decider_for_now(
     cfg: dict[str, Any], decider: Any, chosen: dict[str, Any]
 ) -> tuple[Any, dict[str, Any]]:
-    """The model the player picks holds from the next move on: "that one, and only that one".
+    """A decider built from what the player picked: "that one, and only that one".
 
     ``advisor forget`` and ``advisor try`` change the file while the brain runs. Its decider held
     what it read at its start, and went on sending every move to the old address (cos20 #628, F2).
+    The next move is played by a new one; the move under way stops asking (``while_chosen``).
     A decider someone installed is theirs: it stays, and what it asks is its own.
     """
     now = advisor_settings(cfg)
