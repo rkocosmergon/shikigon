@@ -39,6 +39,7 @@ HEAD_RETRIES = 2  # new choices after the world said no, in one tick
 SUGGESTED = 3  # moves of the rules shown as ready lines
 RECENT = 5  # its own last moves it is told
 BRIEF_CHARS = 8000  # the whole situation; a small model reads it in a few seconds
+CUT_SAYS = "\n[cut: the situation was longer]"
 FACTS_CHARS = 300  # what the world says about one move
 PARAMS_BYTES = 1024  # parameters of one move, as JSON
 WHY_CHARS = 120
@@ -434,22 +435,30 @@ def brief(state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str
     if inside:
         parts.append("Contracts you are in:\n" + "\n".join(inside))
     own, other = _move_lines(moves, forms)
+    choice: list[str] = []  # what it chooses from; a cut must not take it (K-D)
     fields = field_lines(state)
     if fields:  # a move it writes needs them, and its income stands on what they hold
-        parts.append("Your fields (field_id: what it holds), the most cells first:\n"
-                     + "\n".join(fields))
-    parts.append("Moves you write yourself:\n" + "\n".join(own))
+        choice.append("Your fields (field_id: what it holds), the most cells first:\n"
+                      + "\n".join(fields))
+    choice.append("Moves you write yourself:\n" + "\n".join(own))
     if other:
-        parts.append("Other moves the world offers now (take them only as one of the rules' "
-                     "lines below, unchanged):\n" + "\n".join(other))
+        choice.append("Other moves the world offers now (take them only as one of the rules' "
+                      "lines below, unchanged):\n" + "\n".join(other))
     rules = [rule for a, p in suggested if (rule := advisor.rule_line(a, p)) is not None]
     if rules:
-        parts.append("The rules would play (copy one exactly, or write one of your own moves):\n"
-                     + "\n".join(rules))
-    text = "\n\n".join(parts)
-    if len(text) > BRIEF_CHARS:
-        text = text[: BRIEF_CHARS - 40] + "\n[cut: the situation was longer]"
-    return text
+        choice.append("The rules would play (copy one exactly, or write one of your own moves):\n"
+                      + "\n".join(rules))
+    return _fitted("\n\n".join(parts), "\n\n".join(choice))
+
+
+def _fitted(before: str, choice: str) -> str:
+    """Both, at most ``BRIEF_CHARS``. A cut says so and takes ``before`` first."""
+    if len(before) + 2 + len(choice) <= BRIEF_CHARS:
+        return f"{before}\n\n{choice}"
+    room = BRIEF_CHARS - len(CUT_SAYS) - 2 - len(choice)
+    if room > 0:
+        return f"{before[:room]}{CUT_SAYS}\n\n{choice}"
+    return choice[: BRIEF_CHARS - len(CUT_SAYS)] + CUT_SAYS
 
 
 def shaped(params: dict[str, Any]) -> dict[str, Any]:

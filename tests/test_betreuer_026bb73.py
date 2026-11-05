@@ -151,8 +151,8 @@ def test_b2_only_the_rules_are_quoted_in_what_the_head_reads(tmp_path: Path) -> 
 
 def test_b2_a_cut_slice_of_the_rules_still_ends_its_quote(tmp_path: Path) -> None:
     (tmp_path / "world.txt").write_text("x" * 10 * reading.SLICE_CHARS + "\n")
-    _, text = reading.serve(tmp_path, "world.txt", 1, 1).split("\n", 1)
-    assert len(_one_quote(text)) == reading.SLICE_CHARS
+    _, text = reading.serve(tmp_path, "world.txt", 1, 40).split("\n", 1)
+    assert reading.SLICE_CHARS - reading.LINE_CHARS < len(_one_quote(text)) <= reading.SLICE_CHARS
 
 
 def test_b2_a_file_it_may_not_read_is_no_quote(tmp_path: Path) -> None:

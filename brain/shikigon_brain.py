@@ -408,7 +408,11 @@ def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
     except advisor.call_errors() as exc:
         return {"ok": False, "why": f"the server did not answer ({type(exc).__name__})"}
     if code != 401 and not 200 <= code < 300:  # a redirect deleted nothing either (cos20 #630)
-        return {"ok": False, "why": f"the server answered {code}; nothing was removed"}
+        # The server knows the way: an agent with an account is deleted by the account holder
+        # with the master key, and without its sentence nothing here told (cos20 #631, K-K).
+        says = advisor.cut(server_says(resp), 220)
+        answered = f"the server answered {code}; nothing was removed"
+        return {"ok": False, "why": f"{says} ({answered})" if says else answered}
     shutil.rmtree(state_dir())
     ended = "the key had ended; the world keeps the agent as a Vagant"
     return {"ok": True, "server": ended if code == 401 else "deleted", "removed": str(state_dir())}
@@ -1819,7 +1823,7 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
 
 def keep_unasked(question: str, said: Any) -> None:
     """A question that never reached ``ask`` still stands in the talk, with why. The bar shows
-    only the talk: it waited 90 s for an answer and then showed nothing (cos20 #628, F7)."""
+    only the talk: it waited for an answer and then showed nothing (cos20 #628, F7)."""
     import advisor
 
     if isinstance(said, dict) and "q" not in said:

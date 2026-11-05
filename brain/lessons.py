@@ -488,15 +488,23 @@ def _json_object(text: str) -> tuple[dict[str, Any] | None, str]:
     return data, ""
 
 
-def read_lesson(text: str) -> tuple[dict[str, str] | None, str]:
+HELD_KEY = "the answer held its key and was dropped"
+
+
+def read_lesson(text: str, secret: str = "") -> tuple[dict[str, str] | None, str]:
     """The three texts, cut to the server's longest, and ``""``; or ``None`` and what did not
     fit, in a few words for the journal (on the device one answer in four did not fit, and
-    "did not fit" alone could not say why, 14.10.2026)."""
+    "did not fit" alone could not say why, 14.10.2026).
+
+    ``secret`` is looked for before the cut: a cut can leave half a key, and half a key is no
+    longer found afterwards (cos20 #631, K-BD; ``speech.usable`` does the same)."""
     data, why = _labelled(text)
     if data is None:
         data, why = _json_object(text)
     if data is None:
         return None, why
+    if secret and any(isinstance(value, str) and secret in value for value in data.values()):
+        return None, HELD_KEY
     lesson = {}
     for key, (shortest, longest) in BOUNDS.items():
         value = data.get(key)
@@ -606,15 +614,15 @@ async def learn(
         return entry
     finally:  # how long a look back takes: the head's must fit between its moves (#527)
         entry["ms"] = int((time.monotonic() - started) * 1000)
-    lesson, unfit = read_lesson(text)
+    # no agent can read the key file any more (cos20 #492, K28); a lesson with the key is
+    # still never kept: it would stand in the bar and go back to the model (G8)
+    lesson, unfit = read_lesson(text, secret)
+    if unfit == HELD_KEY:
+        entry["why"] = HELD_KEY
+        return entry
     if lesson is None:
         entry["why"] = "daily limit reached" if stopped else f"the answer did not fit: {unfit}"
         entry["answer_chars"] = len(text or "")  # cut off or one line; never the text itself
-        return entry
-    if secret and any(secret in value for value in lesson.values()):
-        # no agent can read the key file any more (cos20 #492, K28); a lesson with the key is
-        # still never kept: it would stand in the bar and go back to the model (G8)
-        entry["why"] = "the answer held its key and was dropped"
         return entry
     keep(home, {"at": entry["at"], "tick": entry["tick"], "model": entry["model"],
                 "from_moves": len(moves), **lesson})

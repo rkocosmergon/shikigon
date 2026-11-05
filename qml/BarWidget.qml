@@ -125,6 +125,9 @@ BarWidget {
   // step: talk (the question line) | who (the list) | address | key | models | trying | failed.
   // In a list the arrows move `pick` and Enter takes it; in a line the keys write.
   property string step: "talk"
+  // A key typed and not sent stays with the address it was typed for: left in the field, the
+  // next address that asks for a key would get it on Enter (cos20 #631, K-BO).
+  onStepChanged: if (step !== "key") keyField.text = ""
   property int pick: 0
   property var pickedRow: null      // the row being set up: { id, name, sign_in? }
   property string failure: ""
@@ -278,7 +281,10 @@ BarWidget {
     repeat: true
     onTriggered: {
       chatFile.reload()
-      if (Model.answered(root.chat, root.pending) || root.seconds() - root.pending.at > 90)
+      // An agent may take connections.AGENT_ANSWER_S (240 s) for a question, then the brain has
+      // still to write it down. With 90 here a slow answer came to a bar no longer reading the
+      // file (cos20 #631, K-BN).
+      if (Model.answered(root.chat, root.pending) || root.seconds() - root.pending.at > 270)
         root.pending = null
     }
   }
@@ -292,6 +298,7 @@ BarWidget {
     onLoaded: {
       try { root.chat = JSON.parse(text()) } catch (e) { root.chat = [] }
     }
+    onLoadFailed: root.chat = []  // forgotten or a new agent: the old talk does not stay (K-AC)
   }
 
   FileView {
@@ -328,6 +335,7 @@ BarWidget {
     onLoaded: {
       try { root.journal = JSON.parse(text()).reverse() } catch (e) { root.journal = [] }
     }
+    onLoadFailed: root.journal = []
   }
 
   // ---------- Eyes ----------

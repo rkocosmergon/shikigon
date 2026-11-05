@@ -4,6 +4,23 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **A look back can read the rules it is sent to.** They are one long line, and it saw the first
+  6,000 characters of them; a longer line now comes in pieces. The header names the lines the text
+  really holds, so reading on loses none.
+- **When the head's picture is too long, the cut no longer takes the moves it should copy.** What
+  it sees of the past goes first.
+- **The README says what the journal holds of a tournament.** It promised a line for each mission's
+  end; the world removes the missions with the tournament, so one that ends in the last moments gets
+  none.
+- **Half a key stays out of a lesson too.** On the edge of a lesson's length the cut left part of the
+  key, and the check came after it.
+- **`forget` passes on what the world says.** An agent with an account is deleted by the account
+  holder with the master key; `forget` only said the number.
+- **The bar does not keep a key you typed for another address.** Going back and choosing another
+  address that wants a key sent the one for the first.
+- **The talk and journal of an agent that is gone leave the panel.**
+- **The bar waits as long as your agent may take for an answer.** It stopped after 90 seconds, and a
+  slower answer came to a bar no longer reading the file.
 - **A brain that keeps stopping says why.** It came back every 30 seconds without end, and the panel
   showed the numbers of a brain that was not there. It now comes back later each time, at most half
   an hour apart, and the panel says why in one sentence, with **try again**. A brain that could not

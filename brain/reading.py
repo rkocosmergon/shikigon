@@ -29,6 +29,7 @@ WORLDS = "world.txt"
 READS = 3  # times it may read before it must answer
 SLICE_LINES = 40
 SLICE_CHARS = 6000
+LINE_CHARS = 1199  # a longer line comes in pieces, five fit a slice: the rules are one line (K-E)
 FILE_BYTES = 256 * 1024  # the brain writes far less; a bound all the same (K6)
 _ASKED = re.compile(r"READ\s+(\S+)(?:\s+(\d+)\s*-\s*(\d+))?", re.IGNORECASE)
 WHAT = {
@@ -49,7 +50,11 @@ def lines_of(folder: Path, name: str) -> list[str] | None:
         return None
     with os.fdopen(fd, "rb") as handle:
         data = handle.read(FILE_BYTES)
-    return data.decode("utf-8", errors="replace").splitlines()
+    return [
+        line[start : start + LINE_CHARS]
+        for line in data.decode("utf-8", errors="replace").splitlines()
+        for start in range(0, len(line) or 1, LINE_CHARS)
+    ]
 
 
 def note(folder: Path) -> str:
@@ -83,7 +88,13 @@ def serve(folder: Path, name: str, first: int, last: int) -> str:
         return f"{name[:60]} cannot be read. You may read only {', '.join(READABLE)}."
     first = max(1, first)
     last = min(len(lines), max(first, last), first + SLICE_LINES - 1)
-    text = "\n".join(lines[first - 1 : last])[:SLICE_CHARS]
+    given: list[str] = []
+    for line in lines[first - 1 : last]:  # whole lines only: what the head names is what it got
+        if given and sum(map(len, given)) + len(given) + len(line) > SLICE_CHARS:
+            break
+        given.append(line)
+    last = first + len(given) - 1
+    text = "\n".join(given)
     if name == WORLDS:  # the world's own text, the one file not quoted line by line (K39)
         text = advisor.quoted(text, SLICE_CHARS)
     return f"{name}, lines {first}-{last} of {len(lines)}:\n{text}"
