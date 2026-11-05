@@ -824,11 +824,20 @@ class HeadDecider:
             return action, {**shaped(params), "strict": True, **limited}
         return action, shaped(params)
 
+    def _situation(
+        self, state: Any, moves: dict[str, Any], suggested: list[tuple[str, dict[str, Any]]]
+    ) -> str:
+        """What it is told, made of the world's words: an odd one costs the head this move, never
+        the move. Its caller holds that line; past it nothing played, not even the rules (cos20
+        #492, betreuer pass 3eccea1, B3, B4)."""
+        import lessons
+
+        return brief(state, moves, suggested, lessons.latest_text(self.home),
+                     recent_moves(self.home), self.forms, self.world)
+
     async def decide(
         self, state: Any, blocked: frozenset[str] = frozenset()
     ) -> tuple[str, dict[str, Any]]:
-        import lessons
-
         if not self.forms and self._load_forms is not None:
             self.forms = await self._load_forms()  # empty while the world is silent: next move
         if not self.world and self._load_world is not None:
@@ -848,8 +857,10 @@ class HeadDecider:
         if self.budget_left == 0 and budget_started(self.home):
             # used up: the rules play until the day ends, no call is made
             return self._rules_play("learning budget used up today")
-        situation = brief(state, moves, suggested, lessons.latest_text(self.home),
-                          recent_moves(self.home), self.forms, self.world)
+        try:
+            situation = self._situation(state, moves, suggested)
+        except (ValueError, LookupError, TypeError, AttributeError) as exc:
+            return self._rules_play(f"its situation could not be written ({type(exc).__name__})")
         self.last["chars"] = len(situation)  # measured against BRIEF_CHARS (cos20 #533)
         self._talk = [{"role": "system", "content": HEAD_SYSTEM},
                       {"role": "user", "content": situation}]

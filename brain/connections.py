@@ -1333,7 +1333,7 @@ def _drain(pipe: Any, into: bytearray, over: threading.Event, stop: threading.Ev
 
 def _feed(pipe: Any, text: str, stop: threading.Event) -> None:
     """Give the agent its prompt on stdin; an agent that stops reading ends the writing."""
-    data = memoryview(text.encode("utf-8"))
+    data = memoryview(text.encode("utf-8", "replace"))  # a lone surrogate must not end this
     with contextlib.suppress(OSError):
         os.set_blocking(pipe.fileno(), False)
         while data and _ready(pipe, select.POLLOUT, stop):

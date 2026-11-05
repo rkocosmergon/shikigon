@@ -58,6 +58,7 @@ import files
 
 SOURCE = "shikigon"  # registration source the server counts (api/v1/auth.py:_QUELLEN)
 REPO_DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config" / "shikigon.toml"
+HOME_WORLD = "https://cosmergon.com"
 
 # The face vocabulary of the Cosmergon pet, kept so a Shikigon is recognisable.
 THRIVING, CONTENT, STRUGGLING, ASLEEP = "thriving", "content", "struggling", "asleep"
@@ -200,12 +201,18 @@ WORLD_KEY_SAFE = ("the world's address must be https (or this machine, localhost
                   "its key would travel readable for anyone on the way")
 
 
+def world_url(cfg: dict[str, Any]) -> str:
+    """The address of its world: the one way to read it. Missing or empty is the home world.
+    Until 0.1.14 five readers assumed that and four did not: no ``[world]`` passed every check
+    and ended in a traceback, every 30 s (cos20 #492, betreuer pass 3eccea1, B5)."""
+    return str(cfg.get("world", {}).get("base_url") or HOME_WORLD)
+
+
 def world_is_safe(cfg: dict[str, Any]) -> bool:
     """The agent's key goes only where an advisor's key may go (H3, cos20 #492 F6)."""
     import connections
 
-    world = cfg.get("world", {}).get("base_url") or "https://cosmergon.com"
-    return connections.key_may_go_to(str(world))
+    return connections.key_may_go_to(world_url(cfg))
 
 
 def world_send_check(url: str) -> str:
@@ -226,7 +233,7 @@ def world_send_check(url: str) -> str:
 
 def world_refusal(cfg: dict[str, Any]) -> str:
     """``world_send_check`` for the configured world: read before opening anything to it."""
-    return world_send_check(str(cfg.get("world", {}).get("base_url") or "https://cosmergon.com"))
+    return world_send_check(world_url(cfg))
 
 
 def world_peer_check(cfg: dict[str, Any]) -> Callable[[str, int], str]:
@@ -236,7 +243,7 @@ def world_peer_check(cfg: dict[str, Any]) -> Callable[[str, int], str]:
     ``world_send_check``, and a proxy from the environment connects to itself."""
     import connections
 
-    world = str(cfg.get("world", {}).get("base_url") or "https://cosmergon.com")
+    world = world_url(cfg)
     # Whether the world leads to this machine is asked only of a plain-http world: one the key
     # may go to is ``localhost`` or a loopback address (``key_may_go_to``), and that needs no
     # name resolution. Over https the certificate decides, as in ``connections.ours``; a peer on
@@ -251,7 +258,7 @@ def world_peer_check(cfg: dict[str, Any]) -> Callable[[str, int], str]:
     return check
 
 
-DASHBOARD_WORLD = "https://cosmergon.com"  # the terminal client's world (--base-url default)
+DASHBOARD_WORLD = HOME_WORLD  # the terminal client's world (--base-url default)
 TERMINAL_ELSEWHERE = ("the terminal client talks only to cosmergon.com, and this Shikigon "
                       "lives in another world: its key stays out of it")
 
@@ -269,7 +276,7 @@ def terminal_refusal(cfg: dict[str, Any], creds: dict[str, str]) -> str:
     if not (creds.get("agent_id") and creds.get("api_key")):
         return KEY_LOST_WHY
     home = connections.origin(DASHBOARD_WORLD)
-    world = connections.origin(str(cfg.get("world", {}).get("base_url") or DASHBOARD_WORLD))
+    world = connections.origin(world_url(cfg))
     given_by = connections.origin(creds.get("world") or world)
     return "" if world == home and given_by == home else TERMINAL_ELSEWHERE
 
@@ -281,7 +288,7 @@ def key_refusal(cfg: dict[str, Any], creds: dict[str, str]) -> str:
     configured one, as before."""
     import connections
 
-    world = connections.origin(str(cfg.get("world", {}).get("base_url") or "https://cosmergon.com"))
+    world = connections.origin(world_url(cfg))
     given_by = creds.get("world") or ""
     if not given_by:
         write_private(credentials_path(), {**creds, "world": world})
@@ -309,7 +316,7 @@ def register(
         raise SystemExit("A Shikigon already lives here. Use `register --new` to replace it.")
     if why := world_refusal(cfg):
         raise SystemExit(why)
-    url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/auth/register/anonymous-agent"
+    url = world_url(cfg).rstrip("/") + "/api/v1/auth/register/anonymous-agent"
     try:
         resp = post(url, json=registration_body(cfg), timeout=30)
         code = int(resp.status_code)
@@ -394,7 +401,7 @@ def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
         return {"ok": True, "server": lost, "removed": str(state_dir())}
     if why := world_refusal(cfg) or key_refusal(cfg, creds):
         return {"ok": False, "why": why}
-    url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/players/me"
+    url = world_url(cfg).rstrip("/") + "/api/v1/players/me"
     try:
         resp = delete(url, headers={"Authorization": f"api-key {creds['api_key']}"}, timeout=30)
         code = int(resp.status_code)
@@ -1087,7 +1094,7 @@ def make_agent(cfg: dict[str, Any]) -> Any:
     return CosmergonAgent(
         api_key=creds["api_key"],
         agent_id=creds["agent_id"],
-        base_url=cfg["world"]["base_url"],
+        base_url=world_url(cfg),
         send_check=world_send_check,  # asked right before every request, retries included
         peer_check=world_peer_check(cfg),  # and at the socket of every new connection
     )
@@ -1138,7 +1145,7 @@ def world_info(cfg: dict[str, Any], get: Callable[..., Any]) -> dict[str, Any]:
 
     if world_refusal(cfg):
         return {}
-    url = cfg["world"]["base_url"].rstrip("/") + "/api/v1/game/info"
+    url = world_url(cfg).rstrip("/") + "/api/v1/game/info"
     try:
         resp = get(url, timeout=15)
         resp.raise_for_status()
@@ -1449,6 +1456,25 @@ async def read_bookings(agent: Any) -> tuple[Any, Any]:
             await bookings(limit=LEDGER_BOOKINGS))  # fmt: skip
 
 
+def while_chosen(
+    cfg: dict[str, Any], conf: dict[str, Any], send: Callable[..., Awaitable[str]]
+) -> Callable[[list[dict[str, str]], int], Awaitable[str]]:
+    """``send``, as long as ``conf`` is the model the player has picked.
+
+    A look back takes minutes and many rounds, and the player can forget a model or pick another
+    meanwhile: "that one, and only that one" holds for it too, checked before every round (cos20
+    #492, betreuer pass 3eccea1, B2). ``decider_for_now`` does it for the moves. It sends nothing
+    of its own: who awaits the call counts it."""
+    import connections
+
+    def chosen(messages: list[dict[str, str]], tokens: int) -> Awaitable[str]:
+        if advisor_settings(cfg) != conf:
+            raise connections.AgentError("the model was changed while it looked back")
+        return send(messages, tokens)
+
+    return chosen
+
+
 async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
                 send: Any = None, agent: Any = None) -> dict[str, Any] | None:
     """A lesson from its last moves if one is due (``force``: now), written to the journal."""
@@ -1459,7 +1485,8 @@ async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
     conf = advisor_settings(cfg)
     if not advisor.configured(conf):
         return None
-    send = send or advisor.sender(conf, home, patience=advisor.ANSWER_PATIENCE)
+    send = while_chosen(cfg, conf, send or advisor.sender(conf, home,
+                                                          patience=advisor.ANSWER_PATIENCE))
     head = decider_name(cfg, conf) == "head"
     world, secret = "", ""
     reader: Callable[[Path], Any] | None = None
@@ -1702,8 +1729,7 @@ def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
         result = advisor_command(cfg, args.what, args.rest)
         print(json.dumps(result))
         return 0 if result.get("ok", True) else 1
-    path = state_dir() / "status.json"
-    print(path.read_text(encoding="utf-8") if path.exists() else json.dumps({"mood": ASLEEP}))
+    print(json.dumps(files.read_object(state_dir() / "status.json") or {"mood": ASLEEP}))
     return 0
 
 
@@ -1840,29 +1866,37 @@ def end_with_its_agents() -> None:
         signal.signal(signum, end)
 
 
-def config_refusal(cfg: dict[str, Any], shipped: dict[str, Any] | None = None, at: str = "") -> str:
-    """Why the config cannot be followed, or ``""``: a section that is none, a number that is none.
+def config_kind(value: Any) -> str:
+    """What a value of the config is, in the words of its sentence."""
+    if isinstance(value, dict):
+        return "a section"
+    if isinstance(value, bool):
+        return "yes or no"
+    if isinstance(value, int | float):
+        return "a number" if math.isfinite(value) else "no number"
+    if isinstance(value, list):
+        return "a list"
+    return "text" if isinstance(value, str) else "something else"
 
-    The shipped file says what is a section and what is a number, so this list cannot lag behind
-    it. A word there used to end whichever line read it first, some only on a later move, and
-    the bar started the brain again every 30 s without a sentence (cos20 #628, F9)."""
+
+def config_refusal(cfg: dict[str, Any], shipped: dict[str, Any] | None = None, at: str = "") -> str:
+    """Why the config cannot be followed, or ``""``: a value of another kind than the shipped one.
+
+    The shipped file says what is a section, a number, a word, a list or a yes or no, so this
+    cannot lag behind it. A value of another kind used to end whichever line read it first, some
+    only on a later move, and the bar started the brain again every 30 s without a sentence (cos20
+    #628, F9; beyond sections and numbers #492, betreuer pass 3eccea1, B5)."""
     if shipped is None:
         with REPO_DEFAULT_CONFIG.open("rb") as handle:
             shipped = tomllib.load(handle)
     for key, value in shipped.items():
         if key not in cfg:
             continue
-        given, name = cfg[key], f"{at}{key}"
-        if isinstance(value, dict):
-            if not isinstance(given, dict):
-                return f"{name} in the config is not a section: fix {config_path()}"
-            if why := config_refusal(given, value, f"{name}."):
-                return why
-        elif isinstance(value, int | float) and not isinstance(value, bool) and not (
-            isinstance(given, int | float) and not isinstance(given, bool)
-            and math.isfinite(given)
-        ):
-            return f"{name} in the config is not a number: fix {config_path()}"
+        kind, name = config_kind(value), f"{at}{key}"
+        if config_kind(cfg[key]) != kind:
+            return f"{name} in the config is not {kind}: fix {config_path()}"
+        if isinstance(value, dict) and (why := config_refusal(cfg[key], value, f"{name}.")):
+            return why
     return ""
 
 

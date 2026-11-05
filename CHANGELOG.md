@@ -6,7 +6,8 @@ What changed for someone who uses Shikigon. Newest first.
 
 - **Forgetting a model or choosing another one reaches a running brain.** It kept the model it
   started with, so the old address still got your agent's next moves, with what they carry about
-  your game. The choice is now read at every move.
+  your game. The choice is now read at every move, and before every round of a look back: one that
+  is under way ends there, and only what had already gone out went to the old model.
 - **A move no longer waits for a program your agent's connection left behind.** A coding agent
   that started something in a session of its own held the move for as long as that child lived.
   The move now gives up on it about two seconds after the answer.
@@ -14,10 +15,18 @@ What changed for someone who uses Shikigon. Newest first.
   as `you: attack → attack`, as if it had worked. It now reads `not taken, try again later`.
 - **A config it cannot follow is one sentence that names the value.** A word where a number
   belongs ended in a traceback, and `review_every` started the brain anew every 30 seconds. The
-  same goes for a broken file and for a broken address.
+  same goes for a broken file, a broken address, and any value of another kind than in the shipped
+  file: a number where a word belongs, a word where a list belongs, `speak = 1` where it says
+  `true`. No `[world]` or an empty address means cosmergon.com, everywhere; until now some places
+  ended in a traceback there.
 - **What is left of the learning budget stands in `status.json` also with speech on.**
 - **An odd answer no longer breaks a move, the rules play.** That goes for a model's `slots` that
-  are not an object, and for a form from the world with a number where a list belongs.
+  are not an object, and for a form from the world with a number where a list belongs. It goes for
+  everything your agent is told about the situation: a list inside a form or as the type of a
+  contract cost every move, and not even the rules played.
+- **`status` counts a status file it cannot read as none.** It ended in a traceback or said nothing.
+- **A broken character in someone's text no longer holds up a question to your agent.** A single
+  lone surrogate let the question wait for its whole time, and could end a look back.
 - **A question that cannot be answered leaves a line in the talk.** The bar cleared the waiting
   question after 90 seconds with no word about it.
 - **Waking a brain that is running starts one wake, not two.** Stopping it for the wake counted as

@@ -157,8 +157,9 @@ def unmarked(text: str) -> str:
     ``›``. The one place they are taken out, for another player's text (``quoted``), the world's
     words (``word``) and the world's rules (``world_rules``): until 0.1.14 the rules reached the
     advisor and the head's look back with the marks in them (cos20 #492, betreuer pass
-    0f44aeb, B2)."""
-    return text.replace("<", "‹").replace(">", "›")
+    0f44aeb, B2). A lone surrogate, which JSON can carry and no file or pipe takes, goes here too
+    (betreuer pass 3eccea1, B7)."""
+    return text.encode("utf-8", "replace").decode("utf-8").replace("<", "‹").replace(">", "›")
 
 
 MOVE_WORD_CHARS, WHY_QUOTED = 40, 120

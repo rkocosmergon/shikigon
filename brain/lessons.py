@@ -298,11 +298,14 @@ def review_folder(home: Path, moves: list[dict[str, Any]], numbers: str, world: 
     folder.mkdir(parents=True, exist_ok=True)
     lines = [json.dumps(advisor.move_for_model(move), ensure_ascii=False)[:LINE_CHARS]
              for move in moves]  # fmt: skip
-    (folder / "moves.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    (folder / "rated.txt").write_text(numbers + "\n", encoding="utf-8")
-    (folder / "world.txt").write_text(world[:8000] + "\n", encoding="utf-8")
+    def put(name: str, text: str) -> None:  # the world's words: a lone surrogate ends no look back
+        (folder / name).write_text(text + "\n", encoding="utf-8", errors="replace")
+
+    put("moves.txt", "\n".join(lines))
+    put("rated.txt", numbers)
+    put("world.txt", world[:8000])
     if ledger:
-        (folder / "ledger.txt").write_text(ledger + "\n", encoding="utf-8")
+        put("ledger.txt", ledger)
     else:  # an old one would read as now
         (folder / "ledger.txt").unlink(missing_ok=True)
     return folder
