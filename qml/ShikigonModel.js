@@ -132,6 +132,21 @@ function hostText(text) {
   return String(text === undefined || text === null ? "" : text).replace(/</g, "‹")
 }
 
+// The host of an address someone typed, never the name or password it may carry
+// (`https://me:pw@…`, cos20 #492, betreuer pass 026bb73, B3): what `connections.short_host` shows,
+// read the way `urlsplit` reads it (an authority only after `scheme://`, the last `@` ends the
+// user part). "" when it names no host.
+function addressHost(where) {
+  var authority = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^\/?#]*)/.exec(String(where || "").trim())
+  if (!authority) return ""
+  var host = authority[1].slice(authority[1].lastIndexOf("@") + 1)
+  if (host.charAt(0) === "[") {
+    var end = host.indexOf("]")
+    return end > 0 ? host.slice(1, end).toLowerCase() : ""
+  }
+  return host.split(":")[0].toLowerCase()
+}
+
 // The words the IPC target takes (cos20 #492): the compass presets, nothing else. A command's
 // arguments are readable by every local user, so free words and questions never come this way.
 var COMPASS_WORDS = ["grow", "defend", "attack", "trade", "cooperate", "explore", "free"]
@@ -607,6 +622,7 @@ if (typeof module !== "undefined") {
     nextTip: nextTip,
     typedText: typedText,
     hostText: hostText,
+    addressHost: addressHost,
     pastedLine: pastedLine,
     lineInsert: lineInsert,
     lineKey: lineKey,

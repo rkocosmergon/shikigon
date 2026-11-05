@@ -5,6 +5,10 @@ their console scripts: an empty entry of ``PYTHONPATH`` is the folder they were 
 before the standard library. A relative ``BASH_ENV`` ran from there before the first line of a
 script, also before the rule for ``PATH``. B2: the world's rules reached the advisor's system
 message and the look back outside the marks that the prompt calls information. Red on 026bb73.
+
+Two of its lesser findings, built after the fault search of 05.11.2026 (cos20 #631): B3 the bar
+showed a typed address whole, with the name and password it may carry; B4 the head, which does
+not scroll, showed the server's sentence (up to 8 KiB) without a limit. Red on eff69b7.
 """
 
 from __future__ import annotations
@@ -12,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -23,8 +28,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "brain"))
 
 import advisor
+import connections
 import reading
 from conftest import terminal_env
+from test_qml import _blocks as blocks
 
 SCRIPTS = ("shikigon-wake", "shikigon-terminal")
 # With -I itself: it stands in for a module started so, and would load the planted file.
@@ -157,3 +164,56 @@ def test_b2_a_cut_slice_of_the_rules_still_ends_its_quote(tmp_path: Path) -> Non
 
 def test_b2_a_file_it_may_not_read_is_no_quote(tmp_path: Path) -> None:
     assert advisor.QUOTE[0] not in reading.serve(tmp_path, "secret.txt", 1, 1)
+
+
+QML = ROOT / "qml"
+
+
+def _bar() -> str:
+    return (QML / "BarWidget.qml").read_text(encoding="utf-8")
+
+
+def test_b3_a_typed_address_is_shown_by_its_host_alone() -> None:
+    typed = re.search(r"function submitAddress\(\) \{(.*?)\n  \}", _bar(), re.DOTALL)
+    assert typed, "submitAddress not found"
+    names = re.findall(r"name:\s*([^}\n]*)", typed.group(1))
+    assert names and all(n.startswith("Model.addressHost(where)") for n in names), names
+
+
+def test_b3_the_bar_reads_an_address_as_the_brain_does() -> None:
+    """The cases of `tst_model.qml` (run by `qmltestrunner`) against `connections.short_host`:
+    the bar shows what the brain would."""
+    test = (ROOT / "tests" / "qml" / "tst_model.qml").read_text(encoding="utf-8")
+    cases = re.findall(r'compare\(Model\.addressHost\("([^"]*)"\), "([^"]*)"\)', test)
+    assert len(cases) >= 6
+    assert any("pw@" in typed for typed, _ in cases)
+    for typed, shown in cases:
+        assert connections.short_host(typed) == shown, typed
+
+
+def head_lines_without_limit(source: str) -> list[str]:
+    """B4: a `Line` of the head that shows what the panel state carries (the server's sentence,
+    the brain's word on a failed wake) and has no `maximumLineCount`. The head does not scroll."""
+    start = source.rfind("{", 0, source.index("id: head"))
+    depth, end = 0, start
+    for end in range(start, len(source)):
+        depth += {"{": 1, "}": -1}.get(source[end], 0)
+        if depth == 0:
+            break
+    head = source[start:end + 1]
+    shown = [b for b in blocks(head, "Line") if "root.view." in b]
+    for repeater in blocks(head, "Repeater"):
+        if re.search(r"model:\s*root\.view\.", repeater):
+            shown += blocks(repeater, "Line")
+    return [b for b in shown if "maximumLineCount" not in b]
+
+
+def test_b4_the_head_shows_no_sentence_without_a_limit() -> None:
+    assert head_lines_without_limit(_bar()) == []
+
+
+def test_b4_the_guard_sees_both_lines() -> None:
+    plain = ("Column {\n  id: head\n  Line { text: root.view.sentence }\n  Repeater {\n"
+             "    model: root.view.lines\n    Line { text: String(modelData) }\n  }\n}")
+    assert len(head_lines_without_limit(plain)) == 2
+    assert head_lines_without_limit(plain.replace("Line {", "Line { maximumLineCount: 5;")) == []

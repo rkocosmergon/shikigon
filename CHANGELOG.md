@@ -4,6 +4,10 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **An address you type is shown by its host alone.** The panel showed it whole while asking it for
+  models, with a name and password it may carry (`https://me:pw@…`).
+- **The head shows at most five lines of the world's sentence.** It does not scroll, and a long
+  sentence pushed the rest of the panel out of view.
 - **A look back can read the rules it is sent to.** They are one long line, and it saw the first
   6,000 characters of them; a longer line now comes in pieces. The header names the lines the text
   really holds, so reading on loses none.

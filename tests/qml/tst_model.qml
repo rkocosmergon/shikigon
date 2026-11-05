@@ -691,4 +691,18 @@ TestCase {
     compare(Model.hostText(undefined), "")
     compare(Model.hostText(null), "")
   }
+
+  // cos20 #492, betreuer pass 026bb73, B3: a typed address is shown by its host alone, as
+  // `connections.short_host` shows it (test_betreuer_026bb73.py holds these cases against it).
+  function test_address_host_never_shows_a_name_or_password() {
+    compare(Model.addressHost("https://me:pw@llm.example.org:8443/v1"), "llm.example.org")
+    compare(Model.addressHost("https://me:p@ss@Host.Example"), "host.example")
+    compare(Model.addressHost("http://user@[::1]:11434"), "::1")
+    compare(Model.addressHost("http://127.0.0.1:11434/v1"), "127.0.0.1")
+    compare(Model.addressHost("https://me:pw@"), "")
+    compare(Model.addressHost("me:pw@host.example"), "")
+    compare(Model.addressHost("https://me:pw@host.example?k=1#x"), "host.example")
+    compare(Model.addressHost(""), "")
+    compare(Model.addressHost(undefined), "")
+  }
 }

@@ -212,7 +212,8 @@ BarWidget {
     var where = addressField.text.trim()
     if (where === "") return
     failure = ""
-    pickedRow = { id: "http:" + where, name: where }
+    // Shown as its host alone: an address can carry a name and a password (cos20 #492, B3).
+    pickedRow = { id: "http:" + where, name: Model.addressHost(where) || "the address" }
     service.listModels(where)
   }
   function submitKey() {
@@ -571,15 +572,20 @@ BarWidget {
 
         // What is going on, in one sentence (awake: the server's own word on what is next),
         // and the few lines that explain a state that needs explaining.
+        // Five lines each at most: the head does not scroll, and a server sentence may be 8 KiB
+        // (cos20 #492, betreuer pass 026bb73, B4). 200 characters took five lines on the device
+        // (14.10., see LEARNED), the cut `stuckSaid` already makes; the fixed lines stay whole.
         Column {
           visible: root.view.sentence !== "" || root.view.lines.length > 0
           width: parent.width
           spacing: Style.space(6)
 
-          Line { visible: text !== ""; text: root.view.sentence }
+          Line { visible: text !== ""; maximumLineCount: 5; elide: Text.ElideRight
+                 text: root.view.sentence }
           Repeater {
             model: root.view.lines
-            Line { required property var modelData; color: root.dim; text: String(modelData) }
+            Line { required property var modelData; color: root.dim
+                   maximumLineCount: 5; elide: Text.ElideRight; text: String(modelData) }
           }
         }
 
