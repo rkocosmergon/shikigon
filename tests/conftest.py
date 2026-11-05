@@ -37,6 +37,23 @@ REAL_OURS: Callable[..., bool] | None = getattr(connections, "ours", None)
 TRIED = {"pi": "1.4.0"}
 
 
+def terminal_env(bin_: Path, dashboard: str) -> None:
+    """The environment ``shikigon-terminal`` starts: the real Python, a stand-in for the dashboard.
+    The script starts the dashboard as ``python -I -m cosmergon_agent.dashboard``."""
+    stand_in = bin_ / "dashboard-stand-in"
+    stand_in.write_text(dashboard)
+    stand_in.chmod(0o755)
+    python = bin_ / "python"
+    python.write_text(
+        '#!/bin/sh\n'
+        'if [ "$1 $2 $3" = "-I -m cosmergon_agent.dashboard" ]; then\n'
+        f'    shift 3; exec "{stand_in}" "$@"\n'
+        'fi\n'
+        f'exec "{sys.executable}" "$@"\n'
+    )
+    python.chmod(0o755)
+
+
 def is_command(argv: list[str], command: list[str]) -> bool:
     """``argv`` is ``command`` as the brain starts it: its program as the file ``program`` found
     (a path), the rest as written."""

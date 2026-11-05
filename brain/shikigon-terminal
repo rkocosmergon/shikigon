@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/bin/bash -p
+# -p: no BASH_ENV, no exported function. A relative one ran from the folder this was started in,
+# before any line here (cos20 #492, betreuer pass 026bb73, B1).
 # Opens the Cosmergon terminal client (cosmergon-dashboard) for this Shikigon's agent.
 # The key goes to the dashboard over a pipe (--api-key-fd), never as an argument and never in
 # its environment: arguments are visible in the process list, and /proc/<pid>/environ keeps a
@@ -29,11 +31,11 @@ fi
 brain="$(cd "$(dirname "$0")" && pwd)/shikigon_brain.py"
 # The dashboard talks only to cosmergon.com and has no port check of its own: a Shikigon of
 # another world keeps its key out of it (terminal_refusal in shikigon_brain.py; H3, K9).
-# Started as a script, like every other call of the brain. Not with -I, which leaves its folder
-# off sys.path: the brain could not import its own modules and the terminal never opened (0.1.13
-# candidate 22802ba, cos20 #492). Since 0.1.14 the brain puts its folder there itself, also
-# under PYTHONSAFEPATH (betreuer pass c01ec84, F3).
-if ! why=$("$venv/bin/python" "$brain" terminal); then
+# With -I, like every other start of Python here: without it an empty entry of PYTHONPATH is the
+# folder this was started in, before the standard library (betreuer pass 026bb73, B1). -I leaves
+# the brain's folder off sys.path, which kept the terminal shut at 22802ba; since 0.1.14 the brain
+# puts it there itself (betreuer pass c01ec84, F3).
+if ! why=$("$venv/bin/python" -I "$brain" terminal); then
     echo "$why"
     read -r -p "Press Enter to close." _
     exit 1
@@ -42,13 +44,13 @@ fi
 # command, gives it the question on stdin (cosmergon-agent >= 0.27.10; never as an argument,
 # which every local user could read) and shows what it prints. The command gets no key; the
 # brain reads its own key file.
-COSMERGON_ADVISOR_CMD="$(printf '%q %q ask' "$venv/bin/python" "$brain")"
+COSMERGON_ADVISOR_CMD="$(printf '%q %s %q ask' "$venv/bin/python" -I "$brain")"
 export COSMERGON_ADVISOR_CMD
 # The talk so far: the brain writes every question and answer to this file (chat_path() in
 # shikigon_brain.py). The dashboard reads it and opens [M] with the last ten exchanges; PgUp
 # fetches older ones. Needs cosmergon-agent >= 0.27.6; an older dashboard ignores it.
 export COSMERGON_ADVISOR_HISTORY="$state/chat.jsonl"
 # The key on descriptor 3, from a pipe the dashboard reads to its end and closes
-# (cosmergon-agent >= 0.27.30).
-exec "$venv/bin/cosmergon-dashboard" --api-key-fd 3 \
+# (cosmergon-agent >= 0.27.30). Through its module: the console script starts Python without -I.
+exec "$venv/bin/python" -I -m cosmergon_agent.dashboard --api-key-fd 3 \
     3< <("$venv/bin/python" -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["api_key"])' "$state/credentials.json")

@@ -236,6 +236,27 @@ def test_every_python_call_of_the_scripts_is_isolated() -> None:
     assert unisolated('"$venv/bin/python" -c \'import json\'') != [], "the guard sees one"
 
 
+_VENV_START = re.compile(r'"\$venv/bin/([\w.-]+)"(\s+-I\b)?')
+
+
+def not_isolated_starts(text: str) -> list[str]:
+    """Each start from the environment that is not its Python under ``-I``. Also a script path,
+    and ``pip`` or a console script, whose first line starts Python without it: ``PYTHONPATH``
+    stands before the standard library there, and an empty entry is the folder it runs in
+    (cos20 #492, betreuer pass 026bb73, B1)."""
+    return [m.group(0) for m in _VENV_START.finditer(text)
+            if m.group(1) != "python" or m.group(2) is None]  # fmt: skip
+
+
+def test_every_start_from_the_environment_of_the_scripts_is_isolated() -> None:
+    found = {name: not_isolated_starts((BRAIN / name).read_text(encoding="utf-8"))
+             for name in SCRIPTS}  # fmt: skip
+    assert {name: starts for name, starts in found.items() if starts} == {}
+    assert sum(len(_VENV_START.findall((BRAIN / n).read_text())) for n in SCRIPTS) >= 6
+    assert not_isolated_starts('"$venv/bin/python" "$here/x.py"') != [], "a script path"
+    assert not_isolated_starts('"$venv/bin/pip" install') != [], "a console script"
+
+
 # --- S12, S13: what the brain writes ----------------------------------------------------------
 
 

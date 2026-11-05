@@ -37,7 +37,7 @@ import connections
 import head
 import shikigon_brain as brain
 import speech
-from conftest import fake_mise
+from conftest import fake_mise, terminal_env
 from test_advisor import _state
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -175,9 +175,7 @@ def test_the_terminal_runs_with_umask_077(tmp_path: Path) -> None:
     home = tmp_path / "home"
     bin_ = home / ".local" / "share" / "shikigon" / "venv" / "bin"
     bin_.mkdir(parents=True)
-    (bin_ / "python").symlink_to(sys.executable)
-    (bin_ / "cosmergon-dashboard").write_text(UMASK.format(python=sys.executable))
-    (bin_ / "cosmergon-dashboard").chmod(0o755)
+    terminal_env(bin_, UMASK.format(python=sys.executable))
     state = tmp_path / "state" / "shikigon"
     state.mkdir(parents=True)
     creds = {"agent_id": "a-1", "api_key": "AGENT-x:y", "world": "https://cosmergon.com:443"}

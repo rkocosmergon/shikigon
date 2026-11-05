@@ -1268,7 +1268,8 @@ async def ask(
     state = await agent.refresh_state()
     context = "Notes:\n" + NOTES.read_text(encoding="utf-8")
     if rules:
-        context += "\nRules of the world, as its server states them:\n" + rules + "\n"
+        context += "\nRules of the world, as its server states them:\n"
+        context += advisor.quoted(rules, RULES_CHARS) + "\n"
     context += "\nThis Shikigon right now:\n" + await right_now(state)
     import lessons
 

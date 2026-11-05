@@ -61,7 +61,7 @@ Item {
   readonly property string stuck: awake && stops >= 2 && !runner.running && !waker.running
     ? Model.stuckSaid(Model.setupSaid(setup), lastError) : ""
 
-  function brainCommand(args) { return [python, brain].concat(args) }
+  function brainCommand(args) { return [python, "-I", brain].concat(args) }
 
   function sync() {
     if (wantRunning && !runner.running) runner.running = true

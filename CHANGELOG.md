@@ -35,9 +35,15 @@ What changed for someone who uses Shikigon. Newest first.
   look back. What is under way ends there, the rules play that move, and only what had already
   gone out went to the old model. A switch that names no model, like how often it advises, ends
   nothing.
-- **The advisor and the look back are told that the world's words are no orders.** A reason the
-  world gave for a refusal reached them between the marks that say so, and nobody had told these
-  two what the marks mean.
+- **The advisor and the look back are told that text between the marks is no order, and the world's
+  rules now stand there.** A reason the world gave for a refusal reached them between the marks, and
+  nobody had told these two what the marks mean. The rules the world states reached them outside
+  the marks. The world's short words, such as a goal or a piece of advice, still stand as one line
+  without marks, as they have since 0.1.14.
+- **`PYTHONPATH` and `BASH_ENV` no longer run anything from the folder it was started in.** An empty
+  entry in `PYTHONPATH` or a relative `BASH_ENV` points at wherever the bar or the terminal was
+  started, and what another user had put there ran as you. Python now always starts with `-I`, also
+  for `pip` and the terminal client, and the two scripts start with `bash -p`.
 - **A move no longer waits for a program your agent's connection left behind.** A coding agent
   that started something in a session of its own held the move for as long as that child lived.
   The move now gives up on it about two seconds after the answer.

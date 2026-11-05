@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/bin/bash -p
+# -p: no BASH_ENV, no exported function. A relative one ran from the folder this was started in,
+# before any line here (cos20 #492, betreuer pass 026bb73, B1).
 # Wakes a Shikigon. The one thing the bar's "wake" runs:
 #   1. sets up its brain, if it is not there, cannot load its packages, or the plugin was
 #      updated since
@@ -57,7 +59,9 @@ install_brain() {
     python3 -I -m venv "$venv" > "$log" 2>&1 || return 1
     # Hashes for every package, and wheels only: a source package would run its own build
     # code, with build tools pip fetches without a hash (pip, "Secure installs"; cos20 #492 F9).
-    "$venv/bin/pip" install --quiet --disable-pip-version-check --no-cache-dir --require-hashes \
+    # -I as everywhere: an empty entry of PYTHONPATH is the folder this was started in, and it
+    # stands before the standard library. The console script `pip` starts Python without it.
+    "$venv/bin/python" -I -m pip install --quiet --disable-pip-version-check --no-cache-dir --require-hashes \
         --only-binary=:all: -r "$lock" >> "$log" 2>&1
 }
 
@@ -89,7 +93,7 @@ new=()
 if [ "${1:-}" != "--look" ] && { [ ! -f "$state/credentials.json" ] || [ "${#new[@]}" -gt 0 ]; }; then
     say waking
     # The brain says a refusal in one sentence on stderr (the server's own, if it has one).
-    if ! said="$("$venv/bin/python" "$here/shikigon_brain.py" register "${new[@]}" 2>&1 > /dev/null)"; then
+    if ! said="$("$venv/bin/python" -I "$here/shikigon_brain.py" register "${new[@]}" 2>&1 > /dev/null)"; then
         # one line, cut: the bar shows it, inside the shared shell
         fail "$(printf '%s' "${said:-It did not wake.}" | tail -n 1 | cut -c1-300)"
     fi

@@ -139,8 +139,10 @@ async def test_nor_in_the_advisors_question(monkeypatch: pytest.MonkeyPatch) -> 
     await brain.ask(FakeAgent(_state()), CFG, "What now?", None, model)
     system = model.asked[0][0]["content"]
     told = system.split("Rules of the world, as its server states them:\n", 1)[1]
-    told = told.split("\nThis Shikigon right now:", 1)[0]
-    assert "The brain says" in told and not {"<", ">"} & set(told)
+    told = told.split("\nThis Shikigon right now:", 1)[0].strip()
+    assert told.startswith(advisor.QUOTE[0]) and told.endswith(advisor.QUOTE[1]), told[:80]
+    inner = told[len(advisor.QUOTE[0]) : -len(advisor.QUOTE[1])]
+    assert "The brain says" in inner and not {"<", ">"} & set(inner)
 
 
 async def test_nor_in_what_the_head_reads_when_it_looks_back(
@@ -151,8 +153,11 @@ async def test_nor_in_what_the_head_reads_when_it_looks_back(
     model = Replies("READ world.txt 1-1", GOOD)
     cfg = {**CFG, "brain": {"advisor": {**CONF, "advise": "head"}}}
     assert await brain.learn(cfg, _state(), force=True, send=model) is not None
-    read = model.asked[1][-1]["content"].split("You read world.txt", 1)[1]
-    assert "The brain says" in read and not {"<", ">"} & set(read.split("\n\n", 1)[0])
+    read = model.asked[1][-1]["content"].split("You read world.txt", 1)[1].split("\n", 1)[1]
+    read = read.split("\n\nYou may read", 1)[0]
+    assert read.startswith(advisor.QUOTE[0]) and read.endswith(advisor.QUOTE[1]), read[:80]
+    inner = read[len(advisor.QUOTE[0]) : -len(advisor.QUOTE[1])]
+    assert "The brain says" in inner and not {"<", ">"} & set(inner)
 
 
 def test_the_marks_are_taken_out_in_one_place() -> None:

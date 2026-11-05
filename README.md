@@ -92,7 +92,7 @@ is open keeps the version it started with until you close it (`q`) and open it a
 
 ```bash
 # 1. delete its agent on the server (this needs the brain, so do it first; optional)
-~/.local/share/shikigon/venv/bin/python ~/.config/omarchy/plugins/cosmergon.shikigon/brain/shikigon_brain.py forget --yes
+~/.local/share/shikigon/venv/bin/python -I ~/.config/omarchy/plugins/cosmergon.shikigon/brain/shikigon_brain.py forget --yes
 # 2. remove the plugin
 omarchy plugin remove cosmergon.shikigon
 # 3. remove its environment, its state and your configuration
@@ -465,7 +465,7 @@ The brain is `brain/shikigon_brain.py` in the plugin folder, and it runs with th
 own environment:
 
 ```bash
-alias shikigon='~/.local/share/shikigon/venv/bin/python ~/.config/omarchy/plugins/cosmergon.shikigon/brain/shikigon_brain.py'
+alias shikigon='~/.local/share/shikigon/venv/bin/python -I ~/.config/omarchy/plugins/cosmergon.shikigon/brain/shikigon_brain.py'
 
 shikigon status              # what the bar shows (JSON)
 shikigon tick                # one move now, for testing (the running brain moves by itself)

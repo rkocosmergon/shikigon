@@ -20,9 +20,12 @@ import re
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
+import advisor
+
 Send = Callable[[list[dict[str, str]], int], Awaitable[str]]
 
 READABLE = ("moves.txt", "rated.txt", "world.txt", "ledger.txt")  # from lessons.review_folder
+WORLDS = "world.txt"
 READS = 3  # times it may read before it must answer
 SLICE_LINES = 40
 SLICE_CHARS = 6000
@@ -81,6 +84,8 @@ def serve(folder: Path, name: str, first: int, last: int) -> str:
     first = max(1, first)
     last = min(len(lines), max(first, last), first + SLICE_LINES - 1)
     text = "\n".join(lines[first - 1 : last])[:SLICE_CHARS]
+    if name == WORLDS:  # the world's own text, the one file not quoted line by line (K39)
+        text = advisor.quoted(text, SLICE_CHARS)
     return f"{name}, lines {first}-{last} of {len(lines)}:\n{text}"
 
 

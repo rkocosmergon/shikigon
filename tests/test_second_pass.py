@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "brain"))
 import advisor
 import connections
 import shikigon_brain as brain
-from conftest import fake_mise, hostile, sends, version_answer
+from conftest import fake_mise, hostile, sends, terminal_env, version_answer
 from test_sending import ASK, ME, Kernel, _chat
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -219,9 +219,7 @@ def _terminal(tmp_path: Path, world: str) -> tuple[int, dict[str, Any] | None]:
     home = tmp_path / "home"
     bin_ = home / ".local" / "share" / "shikigon" / "venv" / "bin"
     bin_.mkdir(parents=True)
-    (bin_ / "python").symlink_to(sys.executable)
-    (bin_ / "cosmergon-dashboard").write_text(DASHBOARD.format(python=sys.executable))
-    (bin_ / "cosmergon-dashboard").chmod(0o755)
+    terminal_env(bin_, DASHBOARD.format(python=sys.executable))
     state = tmp_path / "state" / "shikigon"
     state.mkdir(parents=True)
     creds = {"agent_id": "a-1", "api_key": KEY, "world": world}
