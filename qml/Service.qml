@@ -104,6 +104,7 @@ Item {
     if (waker.running) return "busy"
     if (awake && !fresh) return "awake"
     waker.fresh = !!fresh
+    waker.look = false
     waker.running = true
     return "ok"
   }
@@ -118,7 +119,9 @@ Item {
   Process {
     id: waker
     property bool fresh: false
-    command: [root.wakeScript].concat(fresh ? ["--new"] : [])
+    // Started here without a click: it looks after the brain and registers nothing (cos20 #630).
+    property bool look: false
+    command: [root.wakeScript].concat(fresh ? ["--new"] : (look ? ["--look"] : []))
     onExited: {
       root.brainChecked = true
       setupFile.reload()
@@ -402,6 +405,7 @@ Item {
       if (runner.running) return // came back meanwhile: waking stops it for nothing (#628, F6)
       if (!root.awake || waker.running) { root.sync(); return }
       waker.fresh = false
+      waker.look = true
       waker.running = true
     }
   }
@@ -413,6 +417,7 @@ Item {
       root.awake = (code === 0)
       if (root.awake && !root.brainChecked && !waker.running) {
         waker.fresh = false
+        waker.look = true
         waker.running = true
       } else if (!root.awake && !root.greeted) {
         root.greeted = true

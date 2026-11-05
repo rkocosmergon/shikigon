@@ -590,7 +590,7 @@ BarWidget {
             width: stats.cell; label: "compass"
             value: root.compass === "autonomous" ? "free" : (root.compass || "–")
           }
-          // Shown publicly (cos20 #504)? Read only; the consent is given in the terminal ([S]).
+          // Shown publicly (cos20 #504)? Read only; the consent is given in the terminal ([O]).
           Stat {
             width: stats.cell; label: "public"
             value: root.status.public === undefined ? "–" : (root.status.public === true ? "yes" : "no")

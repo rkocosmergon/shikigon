@@ -223,7 +223,7 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
 
 - **Left click** opens the panel. On top: its name, mood and energy, and one sentence on what
   is going on (while it is awake, the server's own word on what comes next). Below: fields,
-  rank, compass, whether it is shown publicly (you change that in the terminal with S), the
+  rank, compass, whether it is shown publicly (you change that in the terminal with O), the
   last move (with its advisor's reason, if a model advises it), what it
   learned last, the journal, and buttons for the compass, **open terminal** and **ask**.
 - **ask** turns the panel to the talk with its advisor: type a question, Enter sends it, the

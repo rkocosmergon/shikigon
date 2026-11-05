@@ -4,6 +4,22 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **The bar no longer brings a new agent without your click.** When its key file had gone and the
+  brain stopped, the bar's restart ran the wake script, and that registered a new agent. What the
+  bar starts on its own now only looks after the brain (`shikigon-wake --look`). A brain that
+  crashes still comes back; a new agent takes the click on **wake**.
+- **`forget` removes your files only if the server said yes or that the key had ended.** A redirect
+  counted as a yes: your only key was gone and the agent lived on.
+- **A move that went out stays played.** When the disk would not take its line, the move was called
+  not played, and the Shikigon fell asleep although the world had the move. It now says the move was
+  played and could not be written down.
+- **Rules of the world it cannot read cost your agent's model that move, not the move.** A tier with
+  thousands of digits ended the move on the way to the model, and not even the rules played.
+- **A config it cannot open is one sentence.** It ended in a traceback.
+- **The README names the right key for showing it publicly:** `O` in the terminal. `S` is the shop.
+- **Large scores read in the bar as in the terminal.** 1,150,000 stood as 1.2M here and 1.1M there.
+- **A question with double spaces, or a very long one, is seen as answered.** It stayed on its way
+  for a minute and a half, with `…` under the answer.
 - **Forgetting a model or choosing another one reaches a running brain.** It kept the model it
   started with, so the old address still got your agent's next moves, with what they carry about
   your game. The choice is now read before every call to a model, in a move, for a word or in a

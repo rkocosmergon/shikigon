@@ -24,6 +24,7 @@ from __future__ import annotations
 import contextlib
 import json
 import re
+import sys
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -835,13 +836,21 @@ class HeadDecider:
         return brief(state, moves, suggested, lessons.latest_text(self.home),
                      recent_moves(self.home), self.forms, self.world)
 
+    async def _read_the_world(self) -> None:
+        """Forms and numbers, made of the world's words like the situation: an odd one leaves them
+        empty, the rules' line holds and the next move asks again (cos20 #630, the way to B3)."""
+        try:
+            if not self.forms and self._load_forms is not None:
+                self.forms = await self._load_forms()  # empty while the world is silent: next move
+            if not self.world and self._load_world is not None:
+                self.world = await self._load_world()
+        except (ValueError, LookupError, TypeError, AttributeError) as exc:
+            print(f"the world's rules could not be read ({type(exc).__name__})", file=sys.stderr)
+
     async def decide(
         self, state: Any, blocked: frozenset[str] = frozenset()
     ) -> tuple[str, dict[str, Any]]:
-        if not self.forms and self._load_forms is not None:
-            self.forms = await self._load_forms()  # empty while the world is silent: next move
-        if not self.world and self._load_world is not None:
-            self.world = await self._load_world()
+        await self._read_the_world()
         suggested = await advisor.proposals(self.tree, state, limit=SUGGESTED, paused=blocked)
         self._rules = suggested[0] if suggested else ("wait", {})
         self._suggested, self._state = suggested, state

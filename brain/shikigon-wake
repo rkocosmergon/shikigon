@@ -6,6 +6,8 @@
 #      named there with its version and hashes, and nothing else is fetched);
 #   2. registers an agent of its own on the Cosmergon server, if none lives here
 #      (`--new` replaces the one that does, e.g. after its key ended).
+# `--look` is the bar on its own, without a click: step 1 only. It never registers: a key file
+# that went missing does not bring a new agent (cos20 #630).
 # Where it stands is written to setup.json for the bar: "brain", "waking", "done", or
 # "failed" with one sentence. The same goes to the terminal when you run it by hand.
 # Not guarded against running twice at once, and an update rebuilds the environment under a
@@ -84,7 +86,7 @@ fi
 
 new=()
 [ "${1:-}" = "--new" ] && new=(--new)
-if [ ! -f "$state/credentials.json" ] || [ "${#new[@]}" -gt 0 ]; then
+if [ "${1:-}" != "--look" ] && { [ ! -f "$state/credentials.json" ] || [ "${#new[@]}" -gt 0 ]; }; then
     say waking
     # The brain says a refusal in one sentence on stderr (the server's own, if it has one).
     if ! said="$("$venv/bin/python" "$here/shikigon_brain.py" register "${new[@]}" 2>&1 > /dev/null)"; then

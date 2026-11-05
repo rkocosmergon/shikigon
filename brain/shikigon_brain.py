@@ -407,7 +407,7 @@ def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
         code = int(resp.status_code)
     except advisor.call_errors() as exc:
         return {"ok": False, "why": f"the server did not answer ({type(exc).__name__})"}
-    if code >= 400 and code != 401:
+    if code != 401 and not 200 <= code < 300:  # a redirect deleted nothing either (cos20 #630)
         return {"ok": False, "why": f"the server answered {code}; nothing was removed"}
     shutil.rmtree(state_dir())
     ended = "the key had ended; the world keeps the agent as a Vagant"
@@ -538,7 +538,7 @@ def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
         "rank_of": rank_of,
         # Whether it is shown publicly (cos20 #504): yes or no, never the server's text (the bar
         # runs in the shared shell, threat model §1b). Read from the state only; the switch is
-        # the terminal's dialog [S], not the bar's.
+        # the terminal's dialog [O], not the bar's.
         "public": bool(getattr(getattr(state, "showcase", None), "consented_version", None)),
         "compass": short(getattr(state, "compass_preset", None) or "autonomous", WORD_CHARS),
         "tick": getattr(state, "tick", 0),
@@ -715,7 +715,10 @@ ASLEEP_FOR = {"reason": ""}  # why it last fell asleep in this process (``_moves
 def fall_asleep(reason: str, why: str) -> dict[str, Any]:
     """Write the sleeping snapshot and return what is said about it."""
     last = {"action": "none", "ok": False, "why": why}
-    write_status({"mood": ASLEEP, "reason": reason, "last": last})
+    try:
+        write_status({"mood": ASLEEP, "reason": reason, "last": last})
+    except OSError as exc:  # a full disk: it still sleeps and says why (cos20 #630)
+        print(f"its status could not be written ({type(exc).__name__})", file=sys.stderr)
     ASLEEP_FOR["reason"] = reason
     return last
 
@@ -870,7 +873,10 @@ class Refusals:
         """Count one move; ``True`` when this refusal pauses it."""
         self._load()
         pauses = self._count(last)
-        self._save()
+        try:
+            self._save()
+        except OSError as exc:  # the move is out: counted in memory, for this tick (cos20 #630)
+            print(f"the count could not be written ({type(exc).__name__})", file=sys.stderr)
         return pauses
 
     def _count(self, last: dict[str, Any]) -> bool:
@@ -961,8 +967,8 @@ async def tick(
         return fall_asleep(WORLD_SILENT, "no state from the world")
     if done_in and getattr(state, "tick", 0) == done_in:
         return {"action": "", "ok": True, "why": "", "skipped": "same tick"}
-    import speech
-    from words import action_words, move_words
+    from cosmergon_agent.exceptions import AuthenticationError, SendRefusedError
+    from words import action_words
 
     paused = refusals.paused() if refusals else frozenset()
     action, params = await choose(decider, state, paused)
@@ -974,6 +980,23 @@ async def tick(
     else:
         last = await play(agent, action, params)
     last = await try_again(agent, decider, state, last, refusals)  # counts it, once
+    try:
+        await write_down(agent, decider, state, last)
+    except (AuthenticationError, SendRefusedError):
+        raise
+    except Exception as exc:  # noqa: BLE001 - what went out stays played (cos20 #630)
+        said = f"{NOT_WRITTEN} ({type(exc).__name__})"
+        print(said, file=sys.stderr)
+        last["why"] = f"{last['why']} — {said}" if last.get("why") else said
+    return last
+
+
+async def write_down(agent: Any, decider: Any, state: Any, last: dict[str, Any]) -> None:
+    """What follows a move: its words, its budget, the journal, the bar's view. By now the world
+    has the move: what fails here is no move that could not be played (``tick``, cos20 #630)."""
+    import speech
+    from words import move_words
+
     last["words"] = move_words(last)  # what the panel and its advisor show (words.py)
     advice = getattr(decider, "last", None)  # what an advisor did on this move, if one was asked
     if advice:
@@ -997,7 +1020,6 @@ async def tick(
     if left is not None:  # a number only, for the bar (threat model §1b)
         status["learning_budget_left"] = round(float(left))
     write_status(status)
-    return last
 
 
 def write_status(status: dict[str, Any]) -> None:
@@ -1546,6 +1568,7 @@ def learning_next(cfg: dict[str, Any], state: Any, learning: Any, agent: Any = N
 
 
 NOT_PLAYED = "this move could not be played"
+NOT_WRITTEN = "this move was played, but could not be written down"
 NOT_PLAYED_COUNT = {"since_start": 0}  # how many, in the sentence of each (status.json, the bar)
 
 
@@ -1915,7 +1938,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         cfg = load_config()
         why = config_refusal(cfg)
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as exc:
         why = f"the config could not be read: {type(exc).__name__}, fix {config_path()}"
     if why:  # exit 1, as for a decider it does not know: the bar tries again (#628 F9, #621)
         print(json.dumps(fall_asleep(CONFIG, why)))

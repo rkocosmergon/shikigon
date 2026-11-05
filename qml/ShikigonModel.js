@@ -241,7 +241,12 @@ function roundHalfEven(x) {
 // 1,200 · 63k · 1.2M.
 function shortNumber(value) {
   var v = Number(value) || 0
-  if (v >= 999500) return (roundHalfEven(v / 100000) / 10).toFixed(1) + "M"
+  if (v >= 999500) {
+    // As Python's .1f: an exact tie goes to the even digit, anything else by its true value.
+    // 1,150,000 is just below 1.15 in binary and stays 1.1M (cos20 #630).
+    var m = v / 1000000
+    return (m % 0.5 === 0.25 ? roundHalfEven(m * 10) / 10 : m).toFixed(1) + "M"
+  }
   if (v >= 10000) return roundHalfEven(v / 1000) + "k"
   return grouped(roundHalfEven(v))
 }
@@ -445,9 +450,17 @@ function chatLines(turns, limit) {
 // same words, not older than the asking (`pending` is { q, at }, `at` in seconds).
 function answered(turns, pending) {
   if (!pending || !pending.q) return true
+  var asked = asWritten(pending.q)
   return (turns || []).some(function(turn) {
-    return turn.q === pending.q && Number(turn.at) >= Number(pending.at) - 1
+    return asWritten(turn.q) === asked && Number(turn.at) >= Number(pending.at) - 1
   })
+}
+
+// A question as the talk keeps it: one line (Service.oneLine), the brain's QUESTION_CHARS. What
+// the bar remembered had only its ends trimmed, so double spaces or a long question stayed on
+// their way for a minute and a half (cos20 #630).
+function asWritten(text) {
+  return String(text || "").replace(/\s+/g, " ").trim().slice(0, 500)
 }
 
 // The talk as the panel shows it: the last exchanges, and a question still on its way at
@@ -543,6 +556,7 @@ if (typeof module !== "undefined") {
     adviseText: adviseText,
     callsText: callsText,
     answered: answered,
+    asWritten: asWritten,
     talkLines: talkLines,
     serverSentence: serverSentence,
     panelState: panelState,

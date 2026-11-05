@@ -196,7 +196,10 @@ TestCase {
     // Every expectation computed with the terminal's own formula (_kurz, Python).
     var cases = [[0, "0"], [1200, "1,200"], [1200.5, "1,200"], [9999.5, "10,000"],
                  [12500, "12k"], [13500, "14k"], [19861.125, "20k"], [60788.25, "61k"],
-                 [999499, "999k"], [999500, "1.0M"], [1250000, "1.2M"], [180, "180"]]
+                 [999499, "999k"], [999500, "1.0M"], [1250000, "1.2M"], [180, "180"],
+                 // cos20 #630, K70: not a tie in binary, so by its true value
+                 [1150000, "1.1M"], [1350000, "1.4M"], [2250000, "2.2M"], [1750000, "1.8M"],
+                 [1450000, "1.4M"], [1050000, "1.1M"]]
     for (var i = 0; i < cases.length; i++)
       compare(Model.shortNumber(cases[i][0]), cases[i][1], "shortNumber(" + cases[i][0] + ")")
   }
@@ -429,6 +432,17 @@ TestCase {
     // the same words asked again: the old answer does not count for the new question
     compare(Model.answered(turns, { q: "one?", at: 300 }), false)
     compare(Model.talkLines(turns, null, 1).length, 2, "nothing on its way")
+  }
+
+  // cos20 #630, K50 and K13: the talk keeps a question in one line and cut. What the bar
+  // remembered counts as the same words.
+  function test_a_question_as_the_talk_keeps_it_counts_as_answered() {
+    var turn = function(q) { return [{ at: 100, q: q, a: "x", ok: true }] }
+    compare(Model.answered(turn("how are you"), { q: "how are  you", at: 100 }), true)
+    var many = new Array(601).join("x")
+    compare(Model.answered(turn(many.slice(0, 500)), { q: many, at: 100 }), true)
+    compare(Model.answered(turn("how are you"), { q: "how are they", at: 100 }), false, "other")
+    compare(Model.answered(turn("how are you"), { q: "how are you", at: 200 }), false, "older turn")
   }
 
   function test_who_answers_is_one_list_found_first_then_the_two_ways_to_get_one() {
