@@ -370,7 +370,7 @@ def test_f9_the_sentence_names_the_value(text: str, name: str) -> None:
     _config(text)
     done = _program("status")
     assert name in done.stdout and "Traceback" not in done.stderr, (done.stdout, done.stderr[-300:])
-    assert done.returncode == 1
+    assert done.returncode == brain.CONFIG_EXIT
 
 
 @pytest.mark.parametrize("text", ["[decider]\n", "[world\n", '[world]\nbase_url = "http://["\n'],

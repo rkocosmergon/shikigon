@@ -277,6 +277,78 @@ TestCase {
     compare(Model.eyeSize(5), 8, "never below 8 px")
   }
 
+  // ---------- A brain that keeps stopping (cos20 #492, betreuer pass 1bf33b4, B1) ----------
+
+  function test_the_wait_grows_with_the_stops_and_has_an_end() {
+    compare(Model.restartWait(0), 30000, "a config it cannot follow: half a minute")
+    compare(Model.restartWait(1), 30000, "the first stop: half a minute, the repair path")
+    compare(Model.restartWait(2), 60000)
+    compare(Model.restartWait(3), 120000)
+    compare(Model.restartWait(7), 1800000, "never more than half an hour")
+    compare(Model.restartWait(5000), 1800000, "however many")
+  }
+
+  function test_stops_count_only_what_ended_soon() {
+    compare(Model.stopsAfter(0, 100, 1), 1)
+    compare(Model.stopsAfter(1, 100, 1), 2)
+    compare(Model.stopsAfter(2, 100, -1), 3, "could not even start")
+    compare(Model.stopsAfter(3, 100, 137), 4)
+  }
+
+  function test_a_brain_that_ran_is_not_stuck() {
+    compare(Model.stopsAfter(5, 1800000, 1), 1, "it lived as long as the longest wait: starts anew")
+    compare(Model.stopsAfter(5, 1799999, 1), 6, "just under it: still in a row")
+    compare(Model.stopsAfter(1, 40000, 1), 2, "dying after 40 s each time is no way out of the count")
+    compare(Model.stopsAfter(0, 3600000, 15), 1, "a SIGTERM on the hour stays at half a minute")
+    compare(Model.restartWait(Model.stopsAfter(1, 3600000, 15)), 30000)
+  }
+
+  function test_what_is_no_crash_does_not_count() {
+    compare(Model.stopsAfter(6, 100, 0), 0, "it ended by itself: its key, say")
+    compare(Model.stopsAfter(6, 100, Model.CONFIG_EXIT), 0, "the config has a sentence of its own")
+    compare(Model.restartWait(Model.stopsAfter(6, 100, Model.CONFIG_EXIT)), 30000,
+            "a config set right is followed after half a minute (cos20 #621, K17)")
+  }
+
+  function test_stuck_says_why_and_offers_try_again() {
+    var view = Model.panelState({ agent: true, stuck: "ImportError: no socksio",
+                                  status: { mood: "content" } })
+    compare(view.name, "stuck")
+    compare(view.sentence, "ImportError: no socksio")
+    verify(view.lines.length === 1 && /by itself/.test(view.lines[0]), view.lines)
+    compare(view.actions, ["try again"])
+    compare(view.full, false, "the numbers would be those of a brain that is not there")
+  }
+
+  function test_stuck_goes_before_what_a_stopped_brain_left_behind() {
+    var left = [{ mood: "asleep", reason: "config", last: { why: "an old sentence" } },
+                { mood: "asleep", reason: "key_ended" }, { mood: "asleep", reason: "key_lost" },
+                { mood: "asleep", reason: "world_silent" }]
+    for (var i = 0; i < left.length; i++)
+      compare(Model.panelState({ agent: true, stuck: "why", status: left[i] }).name, "stuck")
+  }
+
+  function test_stuck_gives_way_to_what_is_at_work_and_to_no_shikigon() {
+    compare(Model.panelState({ agent: true, setup: "brain", stuck: "why" }).name, "setup")
+    compare(Model.panelState({ agent: true, setup: "waking", stuck: "why" }).name, "setup")
+    compare(Model.panelState({ agent: false, stuck: "why" }).name, "unborn")
+  }
+
+  function test_without_stuck_the_panel_is_as_it_was() {
+    compare(Model.panelState({ agent: true, stuck: "", status: { mood: "content" } }).name, "awake")
+    compare(Model.panelState({ agent: true, status: { mood: "asleep", reason: "config" } }).name,
+            "config")
+  }
+
+  function test_the_reason_is_what_the_wake_script_said_or_the_last_line() {
+    compare(Model.stuckSaid("", "ImportError: no socksio"), "ImportError: no socksio")
+    compare(Model.stuckSaid("Its brain could not be installed.", "a line"),
+            "Its brain could not be installed.", "the wake script knows more than the last line")
+    verify(Model.stuckSaid("", "").length > 0, "a sentence also without a line")
+    verify(Model.stuckSaid("", "  \n ").trim().length > 0, "nor from a blank one")
+    verify(Model.stuckSaid("", new Array(500).join("x")).length <= 200, "cut")
+  }
+
   // ---------- What is going on, and the one thing to do next (cos20 #451) ----------
 
   function test_every_state_has_a_sentence_or_the_servers_and_a_next_step() {

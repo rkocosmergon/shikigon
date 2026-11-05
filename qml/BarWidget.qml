@@ -57,6 +57,7 @@ BarWidget {
     setup: Model.setupStage(service ? service.setup : null,
                             service ? service.settingUp : false, awake),
     said: Model.setupSaid(service ? service.setup : null),
+    stuck: service ? service.stuck : "",
     status: status
   })
 

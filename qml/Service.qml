@@ -52,12 +52,27 @@ Item {
   property bool brainChecked: false
   property bool greeted: false
   readonly property bool wantRunning: awake && brainChecked && !settingUp
+  // Stops in a row of a brain that should run (Model.stopsAfter), and since when it ran.
+  property int stops: 0
+  property real startedAt: 0
+  property bool exitSeen: false
+  // Why it keeps stopping, for the panel. One stop says nothing: that is how a new system Python
+  // gets repaired, and the brain is back within a minute.
+  readonly property string stuck: awake && stops >= 2 && !runner.running && !waker.running
+    ? Model.stuckSaid(Model.setupSaid(setup), lastError) : ""
 
   function brainCommand(args) { return [python, brain].concat(args) }
 
   function sync() {
     if (wantRunning && !runner.running) runner.running = true
     else if (!wantRunning && runner.running) { stoppedHere = true; runner.running = false }
+  }
+
+  function brainStopped(code) {
+    stops = Model.stopsAfter(stops, Date.now() - startedAt, code)
+    if (code === 0) return
+    restartLater.interval = Model.restartWait(stops)
+    restartLater.restart()
   }
 
   function tickNow() {
@@ -98,11 +113,19 @@ Item {
     return "ok"
   }
 
+  // "try again" with a Shikigon: its wait is over. The timer looks after the brain, as ever.
+  function tryAgain() {
+    if (!restartLater.running) return "awake"
+    restartLater.interval = 1
+    restartLater.restart()
+    return "ok"
+  }
+
   // Creates a new agent on the Cosmergon server: only on an explicit request.
   // `fresh` replaces the one that lives here (after its key ended).
   function wake(fresh) {
     if (waker.running) return "busy"
-    if (awake && !fresh) return "awake"
+    if (awake && !fresh) return tryAgain()
     waker.fresh = !!fresh
     waker.look = false
     waker.running = true
@@ -234,6 +257,20 @@ Item {
   Process {
     id: runner
     command: root.brainCommand(["run"])
+    // A program that cannot be started says this and no `exited` (no environment left after a
+    // failed install): nothing brought it back, and the panel said nothing (cos20 #492, B1).
+    onRunningChanged: {
+      if (running) {
+        root.startedAt = Date.now()
+        root.lastError = ""
+        root.exitSeen = false
+      } else if (root.exitSeen) {
+        root.exitSeen = false
+      } else {
+        root.startedAt = Date.now()
+        root.brainStopped(-1)
+      }
+    }
     stderr: SplitParser {
       onRead: data => root.lastError = String(data).slice(0, 200)
     }
@@ -242,8 +279,9 @@ Item {
       // and stopped it again (cos20 #628, F6). A SIGTERM from outside still brings it back.
       var mine = root.stoppedHere
       root.stoppedHere = false
+      root.exitSeen = true
       if (root.restartWanted) { root.restartWanted = false; root.sync() }
-      else if (code !== 0 && !mine) restartLater.restart()
+      else if (!mine) root.brainStopped(code)
     }
   }
 
@@ -395,8 +433,8 @@ Item {
     onExited: { root.refreshAdvisors(); root.restartBrain() }
   }
 
-  // A crashed brain comes back, but not in a tight loop, and through the wake script: it looks
-  // whether the brain can still load its packages and rebuilds it if not. That is what an
+  // A crashed brain comes back, later each time (brainStopped), and through the wake script: it
+  // looks whether the brain can still load its packages and rebuilds it if not. That is what an
   // update of the system's Python does to it, without a restart of the shell (14.10.2026).
   Timer {
     id: restartLater

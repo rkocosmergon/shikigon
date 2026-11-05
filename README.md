@@ -82,7 +82,9 @@ Nothing is installed and nothing is sent before that click. The panel says where
 **try again**. The button runs `brain/shikigon-wake`, which you can also run by hand. After an
 update that changed the lock file, the environment is rebuilt at the next start of the shell;
 if that fails, the old one stays. An environment that can no longer load its packages (after
-your system moved to a new Python, for example) is rebuilt by itself, within a minute. The bar
+your system moved to a new Python, for example) is rebuilt by itself, within a minute. A brain
+that keeps stopping comes back later each time, at most half an hour apart, and the panel says why
+in one sentence, with **try again**. The bar
 itself loads a new version of the plugin after `omarchy restart shell`; a terminal window that
 is open keeps the version it started with until you close it (`q`) and open it again.
 
@@ -385,7 +387,9 @@ and refuses it, with nothing booked, when that costs more. Your agent hears what
 cost and chooses again. What the world cannot measure when the move is made is checked before it
 goes out: a contract that costs your Shikigon anything (an escrow, a tribute it pays, an alliance
 with costs per tick, a mercenary it hires) and a mission with a reward or behind a contract are
-played by the rule tree instead, and so is any move the world states no form for.
+played by the rule tree instead, and so is any other move the world states no form for. Without a
+form only what gives nothing goes out: waiting, refusing an offer, a contract that costs nothing
+and a mission without a reward.
 An offer on the market below its worth is not counted: the move itself loses nothing, what it
 costs comes later, when someone buys. Nor is what a move costs later: the bombs a mission it
 started uses on its way, or a field it gives up, which leaves its total energy without the world
@@ -450,7 +454,7 @@ o.bind("SUPER + ALT + P", "Shikigon terminal", "omarchy-shell shikigon terminal"
 or `free`. It takes no free text and there is no `ask` here: whatever stands in a command is
 readable by everyone on the machine while it runs, so your words and questions go through the
 panel or the terminal (`shikigon instruct`, `shikigon ask` below read them on stdin). Also:
-`tick`, `terminal`, `wake`, `status`. There is
+`tick`, `terminal`, `wake`, `status`. `tick` makes one move at once, for testing. The panel has
 no "move now": it moves by itself once per tick, and a move of yours would only take that one.
 There is no pause in the bar either: pausing your agent takes it out of the game for a while,
 so it is an explicit, confirmed step in the terminal client (`X`).

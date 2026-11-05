@@ -559,8 +559,8 @@ def form_problem(action: str, params: dict[str, Any], state: Any,
 # What a move may cost the learning budget is measured by the world: it goes out with the rest as
 # ``max_cost``, and the world refuses it with nothing booked when it costs more (cos20 #527). What
 # the brain cannot have measured it does not let through while a budget is set: a contract or a
-# mission it cannot say gives nothing (``gives_nothing``), and any move the world states no form
-# for, also one the world adds later. Until 0.1.15 the brain kept a list of the moves that give
+# mission it cannot say gives nothing (``gives_nothing``), and any other move the world states no
+# form for, also one the world adds later. Until 0.1.15 the brain kept a list of the moves that give
 # nothing, read by hand from the world's prose, and put a number on the two transfers (cos20 #492,
 # sixth, seventh and eleventh review).
 # Gives nothing to another agent is not loses nothing: a field given up (``abandon_field``) leaves
@@ -607,6 +607,8 @@ def gives_nothing(action: str, params: dict[str, Any], state: Any) -> bool:
     (``HeadDecider._take``)."""
     if action in contracts.CONTRACT_MOVES:
         return not contracts.costs_me(action, params, state)
+    if action == "reject_contract":  # the escrow goes back to who offered it, nothing booked here
+        return True
     if action == "start_mission":  # a reward or a contract behind it may pay another agent
         fields = _inner(params)
         reward = files.finite(fields.get("reward_energy") or 0)

@@ -305,7 +305,7 @@ def _program(*args: str) -> subprocess.CompletedProcess[str]:
 def test_9_a_config_it_cannot_open_is_one_sentence() -> None:
     brain.config_path().mkdir(parents=True)
     done = _program("status")
-    assert done.returncode == 1 and "Traceback" not in done.stderr, done.stderr
+    assert done.returncode == brain.CONFIG_EXIT and "Traceback" not in done.stderr, done.stderr
     assert "config" in json.loads(done.stdout.strip().splitlines()[-1])["why"]
 
 
@@ -313,7 +313,7 @@ def test_9_control_a_broken_config_is_one_sentence() -> None:
     brain.config_path().parent.mkdir(parents=True)
     brain.config_path().write_text("[broken")
     done = _program("status")
-    assert done.returncode == 1 and "config" in done.stdout
+    assert done.returncode == brain.CONFIG_EXIT and "config" in done.stdout
 
 
 # --- #16: no new agent without a click ----------------------------------------------------------

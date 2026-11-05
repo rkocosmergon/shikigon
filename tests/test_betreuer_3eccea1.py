@@ -278,7 +278,7 @@ def test_b5_a_value_of_another_kind_is_a_sentence_that_names_it(text: str, name:
     _config(text)
     done = _program("status")
     assert name in done.stdout and "Traceback" not in done.stderr, (done.stdout, done.stderr[-300:])
-    assert done.returncode == 1
+    assert done.returncode == brain.CONFIG_EXIT
 
 
 def test_b5_control_values_of_their_kind_are_followed() -> None:

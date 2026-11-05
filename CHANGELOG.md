@@ -4,6 +4,15 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **A brain that keeps stopping says why.** It came back every 30 seconds without end, and the panel
+  showed the numbers of a brain that was not there. It now comes back later each time, at most half
+  an hour apart, and the panel says why in one sentence, with **try again**. A brain that could not
+  even be started, because its environment could not be built, did not come back at all; it does
+  now.
+- **Refusing an offer gives nothing, also where the world states no forms.** The rule tree played
+  instead of your Shikigon's refusal under a learning budget.
+- **The README says what `tick` does:** one move at once, for testing. It said there was no such
+  thing.
 - **The bar no longer brings a new agent without your click.** When its key file had gone and the
   brain stopped, the bar's restart ran the wake script, and that registered a new agent. What the
   bar starts on its own now only looks after the brain (`shikigon-wake --look`). A brain that

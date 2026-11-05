@@ -360,6 +360,7 @@ var WAKE_LINES = [
 //   facts.agent   a Shikigon lives here (its key file exists)
 //   facts.setup   "" | "brain" | "waking" | "failed", while a click on wake is at work
 //   facts.said    what the brain said when waking failed (the server's sentence, if it had one)
+//   facts.stuck   why its brain keeps stopping, "" while it does not (Service.qml, stuck)
 //   facts.status  status.json as the brain wrote it
 // Returns `name`, the `sentence`, `lines` that explain it, the `actions` (the first one is
 // the next step) and `full`: whether the numbers and the compass are shown.
@@ -375,6 +376,8 @@ function panelState(facts) {
     return is("failed", facts.said || "It did not wake.", [], ["try again"])
   if (!facts.agent)
     return is("unborn", "asleep · no Shikigon lives here yet", WAKE_LINES, ["wake"])
+  // Before what it left behind: status.json is the last thing a brain wrote that has stopped.
+  if (facts.stuck) return is("stuck", facts.stuck, [STUCK_LINE], ["try again"])
   if (asleep === "key_ended")  // a new one that did not wake says why, right here
     return is("key_ended", "It was away too long. The world took it over.",
               facts.said ? [facts.said] : [], ["wake a new one"])
@@ -393,6 +396,34 @@ function panelState(facts) {
     return is("world_silent", "The world did not answer. It tries again by itself.", [],
               actions, true)
   return is("awake", serverSentence(status.next_step), [], actions, true)
+}
+
+// What a brain that stopped costs when it comes back at once: a look, and if it cannot load its
+// packages a new environment of up to 40 MB, every round. So the wait doubles with each stop in a
+// row, from half a minute (the way a new system Python gets repaired, README) to half an hour:
+// at most 48 rounds a day, and a click on "try again" does not wait. Only a brain that lived as
+// long as the longest wait starts anew: the hourly SIGTERM stays at half a minute, and a brain
+// that dies after a minute each time is still in a row (cos20 #492, betreuer pass 1bf33b4, B1).
+var RESTART_FIRST = 30000
+var RESTART_MOST = 1800000
+// A config it cannot follow has its sentence and is followed after half a minute (cos20 #621, K17):
+// no stop in a row. The brain ends with this code then (shikigon_brain.py, CONFIG_EXIT).
+var CONFIG_EXIT = 78
+var STUCK_LINE = "It comes back by itself, later each time."
+
+function restartWait(stops) {
+  return Math.min(RESTART_FIRST * Math.pow(2, Math.max(stops, 1) - 1), RESTART_MOST)
+}
+
+function stopsAfter(stops, ran, code) {
+  if (code === 0 || code === CONFIG_EXIT) return 0
+  return ran >= RESTART_MOST ? 1 : stops + 1
+}
+
+// `facts.stuck`: what the wake script said if it failed (it knows more), else the last line the
+// brain wrote: a traceback ends with the exception. Plain text in the panel, cut.
+function stuckSaid(said, last) {
+  return (String(said || last || "").trim() || "Its brain keeps stopping.").slice(0, 200)
 }
 
 // `facts.setup` from what the wake script wrote to setup.json. A stage is believed only while
@@ -562,6 +593,10 @@ if (typeof module !== "undefined") {
     panelState: panelState,
     setupStage: setupStage,
     setupSaid: setupSaid,
+    CONFIG_EXIT: CONFIG_EXIT,
+    restartWait: restartWait,
+    stopsAfter: stopsAfter,
+    stuckSaid: stuckSaid,
     adviceLine: adviceLine,
     chatLines: chatLines,
     isCurrentPreset: isCurrentPreset,

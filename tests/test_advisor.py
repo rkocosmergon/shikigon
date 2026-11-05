@@ -418,7 +418,7 @@ def test_an_unknown_decider_sleeps_and_names_the_known_ones(
     path = brain.config_path()
     path.parent.mkdir(parents=True)
     path.write_text('[world]\nbase_url = "http://world.test"\n[brain]\ndecider = "oracle"\n')
-    assert brain.main(["tick"]) == 1
+    assert brain.main(["tick"]) == brain.CONFIG_EXIT
     shown = json.loads((brain.state_dir() / "status.json").read_text())
     assert shown["mood"] == "asleep"
     assert "oracle" in shown["last"]["why"]

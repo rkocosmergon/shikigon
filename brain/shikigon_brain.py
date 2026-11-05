@@ -706,6 +706,9 @@ async def tournament_journal(agent: Any, state: Any) -> int:
 # Why it sleeps, as one word the bar can act on (a key that ended wants a different next
 # step than a world that did not answer). The sentence for you stays in ``last.why``.
 KEY_ENDED, WORLD_SILENT, CONFIG = "key_ended", "world_silent", "config"
+# A config it cannot follow ends with this (sysexits: EX_CONFIG), a crash ends with 1: the bar
+# starts it again after half a minute and has no reason to wait longer (ShikigonModel.js).
+CONFIG_EXIT = 78
 KEY_LOST = "key_lost"  # its key file cannot be read (``key_lost``): a new one is the way on
 
 
@@ -1793,16 +1796,17 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     except UnknownDecider as exc:
         # A config it cannot follow is not a crash: it sleeps and says which names it knows.
         print(json.dumps(fall_asleep(CONFIG, str(exc))))
-        return 1
+        return CONFIG_EXIT
     if args.command == "run":
         ASLEEP_FOR["reason"] = ""
         connections.run_loop(with_agent(cfg, lambda a: run(cfg, a, decider), once=False))
-        # A config it cannot follow ends with 1, as an unknown decider above does: the bar wakes it
-        # again after a while (Service.qml, restartLater), and a config set right or a port that
-        # is yours again is followed; nothing goes out before ``with_agent`` checked both. Until
+        # A config it cannot follow ends with its code, as an unknown decider above does: the bar
+        # wakes it again after a while (Service.qml, restartLater), and a config set right or a
+        # port that is yours again is followed; nothing goes out before ``with_agent`` checked
+        # both. Until
         # 0.1.14 it ended with 0 and slept until the shell started again (cos20 #621, K17). A key
         # that ended or is lost wants a new one, not a restart: 0.
-        return 1 if ASLEEP_FOR["reason"] == CONFIG else 0
+        return CONFIG_EXIT if ASLEEP_FOR["reason"] == CONFIG else 0
     async def work(agent: Any) -> dict[str, Any]:
         if args.command == "tick":  # the pauses of the running brain hold here too
             return await guarded_tick(agent, decider, None, Refusals(refusals_path()))
@@ -1940,9 +1944,9 @@ def main(argv: list[str] | None = None) -> int:
         why = config_refusal(cfg)
     except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as exc:
         why = f"the config could not be read: {type(exc).__name__}, fix {config_path()}"
-    if why:  # exit 1, as for a decider it does not know: the bar tries again (#628 F9, #621)
+    if why:  # as for a decider it does not know: the bar tries again (#628 F9, #621)
         print(json.dumps(fall_asleep(CONFIG, why)))
-        return 1
+        return CONFIG_EXIT
     return COMMANDS[args.command](args, cfg)
 
 if __name__ == "__main__":
