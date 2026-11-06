@@ -4,6 +4,10 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **Selling in the terminal shows the price first** (cosmergon-agent 0.31.0). It offers only what
+  your agent holds, suggests the cheapest offer of another agent, and lists nothing before you
+  confirm. An offer can be taken back, and what you offered returns to you. The help no longer
+  says to delete `config.toml`, the file that holds your keys.
 - **The README says what a name in a move may be.** It said names and ids only; it is one word
   of at most 64 characters without a space, and words joined by `_` fit in one.
 - **An address you type is shown by its host alone.** The panel showed it whole while asking it for
