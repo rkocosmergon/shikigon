@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,7 @@ import files
 import head
 import shikigon_brain as brain
 import speech
+from test_advisor import _state
 from test_betreuer_c47b7f1 import BUDGET, TOTAL, _gift_forms, _status_left
 from test_effect import _with_total
 from test_head import Replies, StubTree, _move
@@ -135,28 +137,45 @@ def test_b1_a_day_of_another_form_in_the_memo_counts_today(clock: list[str]) -> 
     assert _budget() == {"day": BEFORE, "start": TOTAL, "spent": 300.0}
 
 
+PROPOSAL = ["propose_contract", {"to_player_id": "p2", "contract_type": "alliance_public"}]
+
+
 def test_b2_after_a_restart_the_number_comes_with_the_first_move_it_chooses(
     clock: list[str],
 ) -> None:
-    """After a restart the announced proposal goes out from the memo: the head of this run has
-    not chosen yet, so ``status.json`` names no rest; the move still counts. The next move the
-    head chooses brings the number back (README, B2)."""
-    first, state, _ = _chosen_gift(700)
-    chose = json.loads(json.dumps(first.last))  # what the memo file keeps of it
+    """After a restart the announced proposal goes out from the memo file, through the real
+    ``then`` branch of ``TalkingDecider.decide``: the head of this run has not chosen yet, so
+    ``status.json`` names no rest; the move still counts on the day it was chosen, also past
+    midnight (B1 on the real ``then`` branch). The next move the head chooses brings the number
+    back (README, B2)."""
+    head.budget_left(brain.state_dir(), BUDGET, TOTAL)  # the day measured before the restart
+    chose = {"head": True, "model": "m", "ms": 0, "rules": "wait", "day": BEFORE,
+             "choice": "propose_contract", "why": "allies", "own": True}
+    files.write_json(speech.memo_path(brain.state_dir()), {
+        "moves": 3, "talked": 2, "posted": 0, "answered": [],
+        "then": PROPOSAL, "then_at": time.time(), "then_last": chose})
+    state = _state(ranking={"wertung": "total_energy", "gesamtenergie": TOTAL},
+                   world_briefing={"contract_targets": [{"player_id": "p2", "username": "Neon"}]})
     restarted = speech.TalkingDecider(
         head.HeadDecider(StubTree(), BUDGET, brain.state_dir(), send=Replies("no move"),
                          forms=_gift_forms),
         BUDGET, brain.state_dir(), "k")
-    restarted.last = chose  # the ``then`` branch of ``TalkingDecider.decide``
-    asyncio.run(brain.write_down(None, restarted, state, _gift(700)))
+
+    clock[0] = AFTER  # and midnight passed, too
+    played = asyncio.run(restarted.decide(state))
+    assert list(played) == PROPOSAL, "the announced proposal, no model asked"
+    booked = {"action": "propose_contract", "ok": True,
+              "effect": {"free": -700.0, "held": 0.0, "items": 0.0}}
+    asyncio.run(brain.write_down(None, restarted, state, booked))
 
     assert _status_left() is None
-    assert _budget()["spent"] == 700.0, "the move counts all the same"
+    assert _budget() == {"day": BEFORE, "start": TOTAL, "spent": 700.0}, (
+        "the move counts all the same, on the day it was chosen")
 
     asyncio.run(restarted.inner.decide(state))
     asyncio.run(brain.write_down(None, restarted.inner, state, {"action": "create_field",
                                                                  "ok": True}))
-    assert _status_left() == 49_300
+    assert _status_left() == 50_000, "the new day, whole"
 
 
 def _flat(text: str) -> str:
