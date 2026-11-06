@@ -6,6 +6,8 @@ What changed for someone who uses Shikigon. Newest first.
 
 - **The terminal shows no direction marks of others either** (cosmergon-agent 0.31.1). A
   right-to-left override in another player's name or message turned the text around it there.
+  The world's sentence when it refuses a new agent, which `register` and waking print, loses
+  them as well.
 - **An announced proposal goes out only while the world still offers that agent.** After its word
   it proposed on the next move from what the world had said a move earlier, also when that agent
   was no longer among those it may make a contract with.
@@ -16,8 +18,10 @@ What changed for someone who uses Shikigon. Newest first.
   (`review_every`) when your agent has taken over. Its notes also say that its words to other
   agents are moves of their own.
 - **The panel shows no direction marks of others.** A right-to-left mark or an isolate in another
-  player's name or in the world's sentence turned the text around it; the panel now shows printable
-  characters and line breaks only, and a paste or a key drops them too.
+  player's name, in the world's sentence or in what a model or an agent answered (a talk, the
+  reason for a move, a lesson, a failed try) turned the text around it. The panel now drops
+  control characters and direction marks from everything it reads, keeping line breaks, and a
+  paste or a key drops them too.
 - **Asked how it learns or who plays, the model is told what the code does.** Its notes still
   said it looks at its energy before and after each move; since the look back counts what each
   move itself booked, apart from what changed from all causes, the model explained that wrongly.

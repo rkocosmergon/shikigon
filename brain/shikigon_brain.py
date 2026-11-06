@@ -512,14 +512,25 @@ NAME_CHARS, WORD_CHARS, SENTENCE_CHARS, SENTENCES = 64, 32, 200, 8
 STATUS_BYTES = 64 * 1024
 
 
+def printable_only(text: str, keep: str = "") -> str:
+    """``text`` with only the characters Python counts as printable, and those in ``keep``.
+
+    The one rule of the brain for text a person reads: the bar's snapshot (``short``) and every
+    line on stderr (``CutLines``). It takes out C0, DEL, C1 and the direction marks and isolates
+    of the server's and the SDK's definition, and more (any format character, U+200D among
+    them); a test holds it to that definition (cos20 #492, Betreuer-Durchgang ab1a021)."""
+    return "".join(c for c in text if c in keep or c.isprintable())
+
+
 def short(text: Any, chars: int) -> str:
     """``text`` as a string of at most ``chars`` characters, printable ones and line breaks only.
 
-    What the bar shows of the world, its own model and other players goes through here. A
-    direction mark (U+202E) or an isolate in another player's name turned the text around it
-    in the panel; outgoing words were cleaned that way since e273292, incoming ones only of
-    C0 and C1 (cos20 #492, Betreuer-Durchgang b1637b0, A2)."""
-    return "".join(c for c in str(text or "")[:chars] if c == "\n" or c.isprintable())
+    For what the brain itself puts into the bar's files: names, the world's sentences, journal
+    lines. The bar takes the same characters out of everything it reads (``readJson`` in
+    ``ShikigonModel.js``), also of what does not come through here: the model's answers, its
+    lessons, an agent's last line on stderr (cos20 #492, Betreuer-Durchgang ab1a021, B2–B5;
+    until then this docstring said all of it came through here)."""
+    return printable_only(str(text or "")[:chars], keep="\n")
 
 
 def bounded(block: Any) -> Any:
@@ -1869,6 +1880,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace, dict[str, Any]], int]] = {
 
 
 # What a terminal reads as a command: C0 (ESC among them), DEL and the 8-bit C1 (CSI, OSC).
+# For the name of an agent in ``sign_in``; stderr goes by ``printable_only`` (``CutLines``).
 CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 
@@ -1877,8 +1889,10 @@ class CutLines:
     ``SplitParser`` keeps a whole line before it cuts it, so a line from a traceback or a
     server's message is cut here, before it can reach the shared shell.
 
-    Without control characters (K37): a world's sentence on a refused registration goes on
-    stderr, and the wake script and ``register`` by hand show it in a terminal."""
+    Printable characters only (``printable_only``, K37, K47): a world's sentence on a refused
+    registration goes on stderr, and the wake script and ``register`` by hand show it in a
+    terminal and in the panel. Until the Betreuer-Durchgang ab1a021 (B1) only C0, DEL and C1
+    went, and a direction mark in that sentence turned the text around it."""
 
     def __init__(self, stream: Any, limit: int = 200) -> None:
         self.stream, self.limit, self.used = stream, limit, 0
@@ -1888,7 +1902,7 @@ class CutLines:
             if index:
                 self.stream.write("\n")
                 self.used = 0
-            kept = CONTROL.sub("", part)[: max(0, self.limit - self.used)]
+            kept = printable_only(part)[: max(0, self.limit - self.used)]
             self.stream.write(kept)
             self.used += len(kept)
         return len(text)

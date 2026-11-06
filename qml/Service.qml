@@ -159,7 +159,7 @@ Item {
     printErrors: false
     onFileChanged: reload()
     onLoaded: {
-      try { root.setup = JSON.parse(text()) } catch (e) { root.setup = ({}) }
+      try { root.setup = Model.readJson(text()) } catch (e) { root.setup = ({}) }
     }
     onLoadFailed: root.setup = ({})
   }
@@ -209,7 +209,7 @@ Item {
     path: root.stateDir + "/tips.json"
     printErrors: false
     onLoaded: {
-      try { root.tips = JSON.parse(text()) } catch (e) { root.tips = { seen: [], at: 0 } }
+      try { root.tips = Model.readJson(text()) } catch (e) { root.tips = { seen: [], at: 0 } }
       root.tipsRead = true
     }
     onLoadFailed: root.tipsRead = true
@@ -230,7 +230,7 @@ Item {
     printErrors: false
     onFileChanged: reload()
     onLoaded: {
-      try { root.maybeTip(JSON.parse(text())) } catch (e) {}
+      try { root.maybeTip(Model.readJson(text())) } catch (e) {}
     }
   }
 
@@ -272,7 +272,7 @@ Item {
       }
     }
     stderr: SplitParser {
-      onRead: data => root.lastError = String(data).slice(0, 200)
+      onRead: data => root.lastError = Model.readLine(data).slice(0, 200)
     }
     onExited: code => {
       // Stopped here (the wake script runs): not a crash, or the timer woke it again every 30 s
@@ -338,7 +338,7 @@ Item {
   }
 
   function parsed(text, fallback) {
-    try { return JSON.parse(text) } catch (e) { return fallback }
+    try { return Model.readJson(text) } catch (e) { return fallback }
   }
 
   Process {

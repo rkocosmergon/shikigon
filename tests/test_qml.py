@@ -151,6 +151,31 @@ def panel_files_read_while_closed(source: str) -> list[str]:
     return bad
 
 
+# K47 (cos20 #492, Betreuer-Durchgang ab1a021, B1–B5): every text from outside enters the bar
+# through one door. A file (`FileView.text()`) and the answer of a process (`StdioCollector.text`)
+# go through `Model.readJson` (`root.parsed` calls it), the brain's stderr line
+# (`SplitParser.onRead`) through `Model.readLine`, a paste through `Model.pastedLine`. Until then
+# the bar parsed eight inputs raw, and only typing and pasting dropped control characters.
+_DOORS = ("Model.readJson(", "root.parsed(", "Model.pastedLine(")
+_COLLECTED = re.compile(r"(?<![\w.])text(?![\w(])")
+
+
+def unfiltered_reads(source: str) -> list[str]:
+    """K47: an input of the bar that does not go through its door."""
+    bad = [line.strip() for line in source.splitlines() if "JSON.parse(" in line]
+    for m in re.finditer(r"(?<![\w.])text\(\)", source):
+        if not source[: m.start()].endswith("Model.readJson("):
+            bad.append(source[max(0, m.start() - 40): m.end()].strip())
+    for line in source.splitlines():
+        if re.search(r"\bonRead\s*:", line) and "Model.readLine(" not in line:
+            bad.append(line.strip())
+    for block in _blocks(source, "StdioCollector"):
+        for m in _COLLECTED.finditer(block):
+            if not any(block[: m.start()].endswith(door) for door in _DOORS):
+                bad.append(block[max(0, m.start() - 40): m.end()].strip())
+    return bad
+
+
 def ipc_free_text(source: str) -> list[str]:
     """H1: the IPC target takes no free text (cos20 #492, like #11550).
 
@@ -218,6 +243,11 @@ def test_panel_files_are_read_only_while_the_panel_is_open() -> None:
         )
 
 
+def test_every_text_from_outside_goes_through_the_bars_door() -> None:
+    for name, source in _sources():
+        assert not unfiltered_reads(source), f"{name}: {unfiltered_reads(source)}"
+
+
 def test_the_guards_see_what_they_guard() -> None:
     """Counter-tests: each guard reports a violation it is fed, and finds the real elements."""
     assert editable_lines("TextField {\n  id: a\n}")
@@ -264,3 +294,20 @@ def test_the_guards_see_what_they_guard() -> None:
     assert len(_blocks(bar, "Timer")) >= 5
     shown = [b for b in _blocks(bar, "FileView") if any(f in b for f in PANEL_FILES)]
     assert len(shown) == 3
+    # K47: the door guard sees a raw parse, a raw stderr line and a raw collected answer ...
+    assert unfiltered_reads("onLoaded: root.status = JSON.parse(text())")
+    assert unfiltered_reads("onLoaded: root.status = Other.read(text())")
+    assert unfiltered_reads("stderr: SplitParser {\n  onRead: data => root.e = String(data)\n}")
+    assert unfiltered_reads("stdout: StdioCollector {\n  onStreamFinished: root.t = text\n}")
+    assert unfiltered_reads("StdioCollector {\n  onStreamFinished: root.t = String(text)\n}")
+    # ... lets the doors pass, and finds the real inputs: 6 files, 3 answers, the stderr line
+    assert not unfiltered_reads("onLoaded: root.status = Model.readJson(text())")
+    collected = "StdioCollector {\n  onStreamFinished: root.t = root.parsed(text, {})\n}"
+    assert not unfiltered_reads(collected)
+    assert not unfiltered_reads("onRead: data => root.e = Model.readLine(data).slice(0, 200)")
+    both = service + bar
+    # setup, tips, status twice, talk, lessons, journal
+    assert both.count("Model.readJson(text())") == 7
+    assert both.count("root.parsed(text") == 3  # advisor list, models, try
+    assert both.count("Model.readLine(data)") == 1
+    assert len(_blocks(both, "StdioCollector")) == 4  # the three above and the paste

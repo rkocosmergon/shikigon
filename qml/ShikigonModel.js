@@ -176,6 +176,40 @@ function pastedLine(text) {
   return String(text || "").split(/\r?\n/)[0].replace(A_CONTROL, "")
 }
 
+// The one way text from outside enters the bar (cos20 #492, Betreuer-Durchgang ab1a021, B1-B5):
+// every file the bar reads and every answer of a process it starts goes through `readJson`, the
+// brain's stderr line through `readLine`. Each string loses the control characters above, line
+// breaks kept: the brain's files carry the world's sentences, the model's answers, its lessons
+// and an agent's last stderr line, and until then only typing and pasting dropped them.
+// After the parse, not before: the brain writes JSON in ASCII (U+202E stands there as a
+// six-letter escape), and Qt 6.4 does not call a reviver of JSON.parse (measured: 0 calls).
+// Iterative, so a deeply nested block of the server is no recursion; a string without a control
+// character is left as it is.
+var A_CONTROL_IN_LINES = new RegExp("(?!\\n)[" + CONTROLS + "]", "g")
+var HAS_CONTROL_IN_LINES = new RegExp("(?!\\n)[" + CONTROLS + "]")
+
+function readJson(text) {
+  var root = JSON.parse(text)
+  if (typeof root === "string") return root.replace(A_CONTROL_IN_LINES, "")
+  var stack = root !== null && typeof root === "object" ? [root] : []
+  while (stack.length > 0) {
+    var node = stack.pop()
+    for (var key in node) {
+      var value = node[key]
+      if (typeof value === "string") {
+        if (HAS_CONTROL_IN_LINES.test(value)) node[key] = value.replace(A_CONTROL_IN_LINES, "")
+      } else if (value !== null && typeof value === "object") {
+        stack.push(value)
+      }
+    }
+  }
+  return root
+}
+
+function readLine(text) {
+  return String(text === undefined || text === null ? "" : text).replace(A_CONTROL, "")
+}
+
 // `s` in place of the selection (or at the cursor) of a line {text, cursor, anchor}; the
 // anchor is the selection's other end, equal to the cursor when nothing is selected.
 function lineInsert(line, s) {
@@ -631,6 +665,8 @@ if (typeof module !== "undefined") {
     hostText: hostText,
     addressHost: addressHost,
     pastedLine: pastedLine,
+    readJson: readJson,
+    readLine: readLine,
     lineInsert: lineInsert,
     lineKey: lineKey,
     eyeMood: eyeMood,

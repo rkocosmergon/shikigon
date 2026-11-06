@@ -674,6 +674,36 @@ TestCase {
     compare(Model.pastedLine(undefined), "")
   }
 
+  // cos20 #492, Betreuer-Durchgang ab1a021 (B1-B5): every file and answer the bar reads loses its
+  // control characters. The data stand as the brain writes them: json.dump in ASCII, so a mark
+  // is an escape in the text, and the parse makes it a character.
+  function test_every_input_of_the_bar_loses_its_control_characters() {
+    var status = Model.readJson('{"last": {"ok": false, "advice": {"why": "a\\u202eb", '
+                                + '"fallback": "pi: x\\u2066y\\u2069"}}, "name": "N\\u200dJ"}')
+    compare(status.last.advice.why, "ab", "the model's reason (B3)")
+    compare(status.last.advice.fallback, "pi: xy", "an agent's stderr line (B3)")
+    compare(status.name, "N\u200dJ", "the joiner of an emoji stays, as on the server and in the SDK")
+    compare(status.last.ok, false, "numbers and booleans as they were")
+    var talk = Model.readJson('[{"q": "wie?", "a": "eins\\nzwei\\u061c\\r\\u009b31m", "ok": true}, '
+                              + '{"q": "x", "why": "no answer (pi: \\u202eevil)", "ok": false}]')
+    compare(talk[0].a, "eins\nzwei31m", "line breaks stay, the rest goes (B2)")
+    compare(talk[1].why, "no answer (pi: evil)", "an agent's reason (B2, B5)")
+    compare(Model.readJson('{"stage": "failed", "said": "Max 5 \\u202eagents"}').said, "Max 5 agents",
+            "the world's sentence (B1)")
+    compare(Model.readJson('[{"more": "a\\u202bb", "less": [["tief\\u202d"]]}]')[0].less[0][0], "tief",
+            "nested lists and objects (B4)")
+    compare(Model.readJson('"s\\u202et"'), "st", "a file that is one string")
+    compare(Model.readJson("17"), 17)
+    compare(Model.readJson("null"), null)
+    compare(Model.readJson('{"t": "gr\\u00f6\\u00dfer"}').t, "größer", "letters stay")
+    var thrown = false
+    try { Model.readJson("{broken") } catch (e) { thrown = true }
+    verify(thrown, "a broken file still throws: each caller keeps its fallback")
+    compare(Model.readLine("refused\u202e by the world\u001b[0m\u009b"), "refused by the world[0m",
+            "the brain's stderr line")
+    compare(Model.readLine(undefined), "")
+  }
+
   // cos20 #492: the IPC target takes compass words only — free text would stand in argv.
   function test_compass_word() {
     compare(Model.compassWord("grow"), "grow")

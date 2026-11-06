@@ -297,7 +297,7 @@ BarWidget {
     printErrors: false
     onFileChanged: reload()
     onLoaded: {
-      try { root.chat = JSON.parse(text()) } catch (e) { root.chat = [] }
+      try { root.chat = Model.readJson(text()) } catch (e) { root.chat = [] }
     }
     onLoadFailed: root.chat = []  // forgotten or a new agent: the old talk does not stay (K-AC)
   }
@@ -309,7 +309,7 @@ BarWidget {
     printErrors: false
     onFileChanged: reload()
     onLoaded: {
-      try { root.status = JSON.parse(text()) } catch (e) { root.status = { mood: "asleep" } }
+      try { root.status = Model.readJson(text()) } catch (e) { root.status = { mood: "asleep" } }
     }
     onLoadFailed: root.status = { mood: "asleep" }
   }
@@ -322,7 +322,7 @@ BarWidget {
     printErrors: false
     onFileChanged: reload()
     onLoaded: {
-      try { root.lessons = JSON.parse(text()) } catch (e) { root.lessons = [] }
+      try { root.lessons = Model.readJson(text()) } catch (e) { root.lessons = [] }
     }
     onLoadFailed: root.lessons = []
   }
@@ -334,7 +334,7 @@ BarWidget {
     printErrors: false
     onFileChanged: reload()
     onLoaded: {
-      try { root.journal = JSON.parse(text()).reverse() } catch (e) { root.journal = [] }
+      try { root.journal = Model.readJson(text()).reverse() } catch (e) { root.journal = [] }
     }
     onLoadFailed: root.journal = []
   }
