@@ -4,6 +4,8 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **The terminal shows no direction marks of others either** (cosmergon-agent 0.31.1). A
+  right-to-left override in another player's name or message turned the text around it there.
 - **An announced proposal goes out only while the world still offers that agent.** After its word
   it proposed on the next move from what the world had said a move earlier, also when that agent
   was no longer among those it may make a contract with.
