@@ -13,6 +13,7 @@ Red on ebf251a, the positive controls green.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -115,6 +116,14 @@ def test_the_notes_say_the_players_agent_can_choose_every_move() -> None:
     assert "takes over" in first or "take over" in first, first
     assert "chooses every move" in first or "choose every move" in model, (first, model)
     assert "only a move the world offers" in model, model
+
+
+def test_no_line_leaves_the_choice_to_the_rules_alone() -> None:
+    """The rule at every place of the notes, not only in the two lines that say it now."""
+    gives = re.compile(r"rule tree|rules? (still )?(decide|choose)", re.IGNORECASE)
+    for line in NOTES.read_text(encoding="utf-8").splitlines():
+        if gives.search(line):
+            assert "take over" in line or "takes over" in line, line
 
 
 # --- the ways in ----------------------------------------------------------------------------------
