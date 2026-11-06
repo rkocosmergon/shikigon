@@ -227,7 +227,7 @@ async def test_the_daily_limit_stops_the_calls_and_counts_questions_too() -> Non
 
 def test_the_count_starts_again_on_a_new_day(monkeypatch: pytest.MonkeyPatch) -> None:
     home = brain.state_dir()
-    advisor.count_call(home)
+    advisor.take_call(home, 0)
     assert advisor.calls_today(home) == 1
     monkeypatch.setattr(advisor, "_today", lambda: "2099-01-01")
     assert advisor.calls_today(home) == 0

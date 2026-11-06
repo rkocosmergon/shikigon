@@ -4,6 +4,20 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **A key pasted for one address no longer goes to the next one.** A paste is read by its own
+  process, for up to 2 seconds. When it came after you had left the key's step and typed another
+  address, it landed in the key of that address and went there with your next Enter. Now every
+  change of step lets a paste under way go, and a second Enter while a key is still being kept
+  leaves it in its field.
+- **`max_per_day` holds when calls come at the same moment.** Questions from the terminal and a
+  `tick` by hand next to the running brain each looked at the day's count first and counted
+  later: at the same moment they all went out, past the limit, and fewer were counted. Now a call
+  is checked and counted in one step, under a lock on the state folder. The same lock keeps the
+  learning budget's bookings, the paused moves, the tournament ends written down and the lessons
+  from being lost, and an announced proposal from going out twice.
+- **`M` in the terminal asks the advisor whatever your folders are called.** For a folder name
+  with a tab or a line break, or with a letter past ASCII under the `C` locale, the command was
+  written in a form the terminal client does not read, and it found no advisor.
 - **A line break of the world or of a model no longer makes the panel run off the screen.** A
   reason for a move, an answer of the model, a note on what it does now or a tournament compass
   with many line breaks stood up to 4001 lines tall. Every text of the panel now has a line

@@ -533,7 +533,8 @@ def kept(home: Path) -> list[dict[str, Any]]:
 
 def keep(home: Path, lesson: dict[str, Any]) -> None:
     home.mkdir(parents=True, exist_ok=True)
-    files.write_json(home / LESSONS_FILE, (kept(home) + [lesson])[-KEPT:])
+    with files.held(home):  # a lesson kept by another process at the same moment stays
+        files.write_json(home / LESSONS_FILE, (kept(home) + [lesson])[-KEPT:])
 
 
 def latest_text(home: Path) -> str:
@@ -584,10 +585,9 @@ async def learn(
     entry: dict[str, Any] = {"at": int(time.time()), "tick": moves[-1].get("tick", 0),
                              "learned": "", "ok": False, "from_moves": len(moves),
                              "model": advisor.who(conf)}
-    if advisor.limit_reached(conf, home):
+    if not advisor.take_call(home, advisor.day_limit(conf)):
         entry["why"] = "daily limit reached"
         return entry
-    advisor.count_call(home)
     # the numbers as a model may read them (``advisor.move_for_model``): a mission type the world
     # named went into them raw until 0.1.13, also into ``rated.txt`` (sixth review, finding 4)
     numbers = with_bookings(summary([m for m in map(advisor.move_for_model, moves)
@@ -601,10 +601,9 @@ async def learn(
         def one_more() -> bool:
             """Each round of reading is a call of its own, against the same limit (cos20 #492,
             eighth review, finding 5)."""
-            if advisor.limit_reached(conf, home):
+            if not advisor.take_call(home, advisor.day_limit(conf)):
                 stopped.append(True)
                 return False
-            advisor.count_call(home)
             return True
 
         send, note = reader(folder, more=one_more), reading.note(folder)

@@ -238,7 +238,7 @@ TODAY = datetime.datetime.now(datetime.UTC).date().isoformat()
 def test_the_daily_count_survives_a_file_of_another_form(tmp_path: Path, text: str) -> None:
     (tmp_path / "advisor_count.json").write_text(text, encoding="utf-8")
     assert advisor.calls_today(tmp_path) == 0
-    advisor.count_call(tmp_path)
+    advisor.take_call(tmp_path, 0)
     assert advisor.calls_today(tmp_path) == 1
     assert advisor.count_move(tmp_path) == 1
 

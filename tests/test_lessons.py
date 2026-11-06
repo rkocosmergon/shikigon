@@ -243,7 +243,7 @@ def test_three_labelled_lines_are_a_lesson_and_need_no_quotes() -> None:
 
 async def test_the_daily_limit_holds_for_lessons_too() -> None:
     home = _write(_moves(100))
-    advisor.count_call(home)
+    advisor.take_call(home, 0)
     stub = Model(GOOD)
     entry = await lessons.learn(home, {**CONF, "max_per_day": 1}, "", stub)
     assert entry is not None and entry["why"] == "daily limit reached" and stub.asked == []

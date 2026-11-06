@@ -720,12 +720,13 @@ async def tournament_journal(agent: Any, state: Any) -> int:
         if isinstance(m, dict) and m.get("body") == "tournament"
         and m.get("status") in ("completed", "failed", "cancelled")
     ]
-    seen = load_seen()
-    new = [m for m in ended if mission_key(m) not in (seen or [])]
-    if seen is not None and new:
-        journal(*(mission_entry(m, getattr(state, "tick", 0)) for m in new))
-    ids = (seen or []) + [mission_key(m) for m in new]
-    files.write_json(seen_path(), {"ids": ids[-SEEN_KEEP:]})
+    with files.held(seen_path().parent):  # a ``tick`` by hand writes no end down twice
+        seen = load_seen()
+        new = [m for m in ended if mission_key(m) not in (seen or [])]
+        if seen is not None and new:
+            journal(*(mission_entry(m, getattr(state, "tick", 0)) for m in new))
+        ids = (seen or []) + [mission_key(m) for m in new]
+        files.write_json(seen_path(), {"ids": ids[-SEEN_KEEP:]})
     return 0 if seen is None else len(new)
 
 
@@ -899,7 +900,18 @@ class Refusals:
         return frozenset(a for a, until in self._paused_until.items() if until > self.moves)
 
     def note(self, last: dict[str, Any]) -> bool:
-        """Count one move; ``True`` when this refusal pauses it."""
+        """Count one move; ``True`` when this refusal pauses it. Read, counted and written under
+        the folder's lock: a ``tick`` by hand next to the running brain lost a count when both
+        wrote at the same moment (Fehlersuche Stück 24, variant of Fund #2)."""
+        hold = files.held(self.path.parent) if self.path is not None else contextlib.nullcontext()
+        try:
+            with hold:
+                return self._note(last)
+        except OSError as exc:  # the folder cannot be locked: counted in memory, for this tick
+            print(f"the count could not be written ({type(exc).__name__})", file=sys.stderr)
+            return self._count(last)
+
+    def _note(self, last: dict[str, Any]) -> bool:
         self._load()
         pauses = self._count(last)
         try:

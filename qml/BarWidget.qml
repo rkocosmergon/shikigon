@@ -126,8 +126,14 @@ BarWidget {
   // In a list the arrows move `pick` and Enter takes it; in a line the keys write.
   property string step: "talk"
   // A key typed and not sent stays with the address it was typed for: left in the field, the
-  // next address that asks for a key would get it on Enter (cos20 #631, K-BO).
-  onStepChanged: if (step !== "key") keyField.text = ""
+  // next address that asks for a key would get it on Enter (cos20 #631, K-BO). A paste belongs
+  // to the step it was asked in: it may come up to 2 s later, and one asked for in the key of
+  // one address landed in the key of the next (Fehlersuche Stück 24, Fund #1). So every change
+  // of step lets a paste under way go (`pasteTarget`), closing the panel too (`close`).
+  onStepChanged: {
+    pasteTarget = null
+    if (step !== "key") keyField.text = ""
+  }
   property int pick: 0
   property var pickedRow: null      // the row being set up: { id, name, sign_in? }
   property string failure: ""
@@ -217,8 +223,7 @@ BarWidget {
     service.listModels(where)
   }
   function submitKey() {
-    if (keyField.text === "") return
-    service.keepKey(keyField.text)
+    if (keyField.text === "" || service.keepKey(keyField.text) !== "ok") return
     keyField.text = ""
   }
   // Enter sends the question and keeps the line.

@@ -281,13 +281,17 @@ class TalkingDecider:
     async def decide(
         self, state: Any, blocked: frozenset[str] = frozenset()
     ) -> tuple[str, dict[str, Any]]:
-        memo = load(self.home)
-        then, chose = announced(memo, blocked, state), memo["then_last"]
-        memo["then"], memo["then_last"] = None, None  # played now or never
-        memo["moves"] += 1
+        # Read, taken and written in one step: a ``tick`` by hand next to the running brain plays
+        # an announced proposal only once (Fehlersuche Stück 24, variant of Fund #2).
+        with files.held(self.home):
+            memo = load(self.home)
+            then, chose = announced(memo, blocked, state), memo["then_last"]
+            memo["then"], memo["then_last"] = None, None  # played now or never
+            memo["moves"] += 1
+            if then is not None:
+                files.write_json(memo_path(self.home), memo)
         self._then, self._word = then is not None, False
         if then is not None:  # the word went out: now the proposal it announced, no model call
-            files.write_json(memo_path(self.home), memo)
             # What the decider that chose it did, so the journal, the look back and the learning
             # budget see whose move it is. Until 0.1.14 it went out with none, a choice of the
             # head counted as the rules' and its booking as nobody's (b1637b0, B3).
@@ -301,7 +305,10 @@ class TalkingDecider:
         if occ is None or carrier(occ) in blocked or advisor.limit_reached(self.conf, self.home):
             files.write_json(memo_path(self.home), memo)
             return choice
-        said = await self._write(state, occ)
+        asked, said = await self._write(state, occ)
+        if not asked:  # the day's last call went to another process meanwhile: no word
+            files.write_json(memo_path(self.home), memo)
+            return choice
         if said is not None and occ.kind == "announce":
             memo["then"], memo["then_at"] = [choice[0], choice[1]], time.time()
             memo["then_last"] = self.last if isinstance(self.last, dict) else None
@@ -329,9 +336,10 @@ class TalkingDecider:
         afresh on the next move. Until 0.1.14 the head played it at once and the memo played it
         again, two offers for the one announced (cos20 #619)."""
         if self._word:
-            memo = load(self.home)
-            memo["then"], memo["then_last"] = None, None
-            files.write_json(memo_path(self.home), memo)
+            with files.held(self.home):  # read, cleared and written in one step (Stück 24)
+                memo = load(self.home)
+                memo["then"], memo["then_last"] = None, None
+                files.write_json(memo_path(self.home), memo)
             return None
         inner = getattr(self.inner, "again", None)
         if inner is None or self._then:
@@ -340,13 +348,18 @@ class TalkingDecider:
         self.last = getattr(self.inner, "last", None)
         return choice
 
-    async def _write(self, state: Any, occ: Occasion) -> str | None:
-        advisor.count_call(self.home)
+    async def _write(self, state: Any, occ: Occasion) -> tuple[bool, str | None]:
+        """Whether the model was asked, and its word (``None`` when there is none to send).
+
+        The call is checked and counted in one step (``advisor.take_call``): a call of another
+        process at the same moment cannot pass the day's limit (Fehlersuche Stück 24, Fund #2)."""
+        if not advisor.take_call(self.home, advisor.day_limit(self.conf)):
+            return False, None
         try:
             text = await self.send(write_messages(state, occ), WRITE_TOKENS)
         except advisor.call_errors():  # the advisor failed: the rules play this move
-            return None
-        return usable(text, occ.quote, self.key)
+            return True, None
+        return True, usable(text, occ.quote, self.key)
 
     def _remember(self, memo: dict[str, Any], occ: Occasion, said: str | None) -> None:
         """Asked is asked: a SKIP also waits its turn, and a message is answered only once."""

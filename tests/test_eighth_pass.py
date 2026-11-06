@@ -200,8 +200,8 @@ async def test_the_days_limit_ends_its_reading() -> None:
 
 def test_every_call_of_a_model_is_counted() -> None:
     """The class at its narrow place: each function of the brain that awaits a sender counts
-    that call (``count_call``) or asks ``more()`` before it. ``probe`` is the one question on
-    the player's click (README)."""
+    that call (``take_call``, checked and counted in one step) or asks ``more()`` before it.
+    ``probe`` is the one question on the player's click (README)."""
     uncounted = []
     for path in sorted((ROOT / "brain").glob("*.py")):
         for function in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -213,6 +213,6 @@ def test_every_call_of_a_model_is_counted() -> None:
                      and isinstance(n.value, ast.Call)
                      and (getattr(n.value.func, "id", "") == "send"
                           or getattr(n.value.func, "attr", "") == "send")]
-            if sends and function.name != "probe" and not names & {"count_call", "more"}:
+            if sends and function.name != "probe" and not names & {"take_call", "more"}:
                 uncounted.append(f"{path.name}:{function.lineno} {function.name}")
     assert uncounted == []

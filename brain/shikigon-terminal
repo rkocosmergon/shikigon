@@ -44,7 +44,22 @@ fi
 # command, gives it the question on stdin (cosmergon-agent >= 0.27.10; never as an argument,
 # which every local user could read) and shows what it prints. The command gets no key; the
 # brain reads its own key file.
-COSMERGON_ADVISOR_CMD="$(printf '%q %s %q ask' "$venv/bin/python" -I "$brain")"
+# Each word as the dashboard reads it back (Python's shlex.split), quoted as shlex.quote does: as
+# it is when it holds only safe characters, else in single quotes, a ' as '\''. printf %q wrote
+# $'...' for a control character in a folder name, and for any letter past ASCII under the C
+# locale; shlex does not know that form, and [M] found no advisor (Fehlersuche Stück 24, Fund #3).
+shlex_words() {
+    local word line=""
+    for word in "$@"; do
+        if [[ -n $word && $word != *[!A-Za-z0-9_@%+=:,./-]* ]]; then
+            line+="${line:+ }$word"
+        else
+            line+="${line:+ }'${word//\'/\'\\\'\'}'"
+        fi
+    done
+    printf '%s' "$line"
+}
+COSMERGON_ADVISOR_CMD="$(shlex_words "$venv/bin/python" -I "$brain" ask)"
 export COSMERGON_ADVISOR_CMD
 # The talk so far: the brain writes every question and answer to this file (chat_path() in
 # shikigon_brain.py). The dashboard reads it and opens [M] with the last ten exchanges; PgUp

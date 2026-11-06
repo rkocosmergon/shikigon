@@ -312,7 +312,14 @@ Item {
     prober.running = true
     return "ok"
   }
-  function keepKey(key) { keyKeeper.secret = key; keyKeeper.running = true }
+  // One key at a time: a second Enter while the first is written replaced it unwritten, and
+  // the field was empty already (Fehlersuche Stück 24, K22). "busy" keeps it in the field.
+  function keepKey(key) {
+    if (keyKeeper.running) return "busy"
+    keyKeeper.secret = key
+    keyKeeper.running = true
+    return "ok"
+  }
   // 0 = off, "head" = its agent takes over; the brain reads it at its start, so it is
   // started again.
   function setAdvise(every) {

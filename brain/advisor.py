@@ -584,20 +584,37 @@ def calls_today(home: Path) -> int:
     return _number(counts, "calls") if counts.get("day") == _today() else 0
 
 
-def count_call(home: Path) -> None:
-    _keep(home, {**_counts(home), "day": _today(), "calls": calls_today(home) + 1})
+def take_call(home: Path, limit: int) -> bool:
+    """Count one call against ``limit`` a day (0 = none); ``False``, and nothing counted, when
+    the day has used it up. Checked and counted in one step, under the folder's lock: until
+    Fehlersuche Stück 24 a check came first and the count later, and calls made at the same
+    moment (questions from the terminal, a ``tick`` next to the running brain) all went out
+    past the limit and were counted as fewer (Fund #2)."""
+    with files.held(home):
+        calls = calls_today(home)
+        if limit > 0 and calls >= limit:
+            return False
+        _keep(home, {**_counts(home), "day": _today(), "calls": calls + 1})
+        return True
 
 
 def count_move(home: Path) -> int:
     """Count a move the model could be asked on; returns how many there have been."""
-    counts = _counts(home)
-    counts["moves"] = _number(counts, "moves") + 1
-    _keep(home, counts)
+    with files.held(home):
+        counts = _counts(home)
+        counts["moves"] = _number(counts, "moves") + 1
+        _keep(home, counts)
     return int(counts["moves"])
 
 
+def day_limit(conf: dict[str, Any]) -> int:
+    """``max_per_day``: calls a day, advice and questions together; 0 = no limit."""
+    return int(conf.get("max_per_day", 0) or 0)
+
+
 def limit_reached(conf: dict[str, Any], home: Path) -> bool:
-    limit = int(conf.get("max_per_day", 0) or 0)
+    """A look ahead, before anything is prepared; the call itself is counted by ``take_call``."""
+    limit = day_limit(conf)
     return limit > 0 and calls_today(home) >= limit
 
 
@@ -655,7 +672,9 @@ class AdvisedDecider:
         import lessons
 
         learned = lessons.latest_text(self.home)
-        count_call(self.home)
+        if not take_call(self.home, day_limit(self.conf)):
+            note["fallback"] = "daily limit reached"
+            return options[0]
         try:
             text = await self.send(move_messages(state, options, learned), MOVE_TOKENS)
         except call_errors() as exc:  # the endpoint failed: the rules play on
@@ -692,11 +711,10 @@ async def answer(
         turn["why"] = "nobody is picked to answer yet"
         return turn
     turn["model"] = who(conf)
-    if limit_reached(conf, home):
+    if not take_call(home, day_limit(conf)):
         turn["why"] = "daily limit reached"
         return turn
     started = time.monotonic()
-    count_call(home)
     send = send or sender(conf, home, patience=ANSWER_PATIENCE)
     try:
         text = await send(answer_messages(question, context, earlier), ANSWER_TOKENS)

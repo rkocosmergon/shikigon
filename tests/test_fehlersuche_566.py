@@ -268,7 +268,7 @@ def test_f4_a_question_in_head_mode_follows_the_head_limit(home: Path) -> None:
     connections.choose(home, {"via": "http", **ADDRESS, "advise": "head"})
     cfg = shikigon_brain.load_config()  # shipped: max_per_day 500, head_max_per_day 0
     for _ in range(500):
-        advisor.count_call(home)
+        advisor.take_call(home, 0)
     now = shikigon_brain.advisor_now(cfg)
     assert now["advise"] == "head" and now["limit"] == 0
     turn = asyncio.run(shikigon_brain.ask(no_state(), cfg, "How is it going?", rules="",
@@ -280,7 +280,7 @@ def test_f4_a_dry_run_in_head_mode_follows_the_head_limit(home: Path) -> None:
     connections.choose(home, {"via": "http", **ADDRESS, "advise": "head"})
     cfg = shikigon_brain.load_config()
     for _ in range(500):
-        advisor.count_call(home)
+        advisor.take_call(home, 0)
     decider = shikigon_brain.make_decider(cfg, advised=True)
     decider.send = lambda messages, max_tokens: asyncio.sleep(0, result='{"choice": 1}')
 
@@ -301,7 +301,7 @@ def test_f4_the_ordinary_limit_still_holds_when_its_agent_only_advises(home: Pat
     connections.choose(home, {"via": "http", **ADDRESS})
     cfg = ask_config()
     for _ in range(int(cfg["brain"].get("max_per_day", 500))):
-        advisor.count_call(home)
+        advisor.take_call(home, 0)
     turn = asyncio.run(shikigon_brain.ask(no_state(), cfg, "How is it going?", rules="",
                                           send=answering("Answer.")))
     assert not turn["ok"], turn

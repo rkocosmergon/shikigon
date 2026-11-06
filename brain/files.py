@@ -20,6 +20,8 @@ import os
 import shutil
 import stat
 import tempfile
+import threading
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +89,44 @@ def _renew(path: Path) -> None:
             with contextlib.suppress(OSError):
                 os.unlink(tmp)
             raise
+
+
+# This process's hold on a state folder: its descriptor and how deep it is held (``held``).
+_HELD: dict[str, list[int]] = {}
+_HELD_HERE = threading.RLock()
+
+
+@contextlib.contextmanager
+def held(folder: Path) -> Iterator[None]:
+    """The folder to this process alone, for one read, change and write of a file in it.
+
+    Two processes keep the same files: the running brain, and next to it a ``tick`` by hand,
+    a question from the terminal, a look back. ``write_json`` is atomic, but reading, changing
+    and writing is not: two at the same moment read the same state, and the second write undid
+    the first. Calls a day went past ``max_per_day``, a booking of the learning budget was lost
+    (Fehlersuche Stück 24, Fund #2). An exclusive ``flock`` on the folder itself, no file of its
+    own; held again in this process it passes through. Never across an ``await``: the other
+    process waits for it (a guard in the tests)."""
+    key = os.path.abspath(folder)
+    with _HELD_HERE:
+        entry = _HELD.get(key)
+        if entry is None:
+            folder.mkdir(parents=True, exist_ok=True)
+            fd = os.open(key, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            except BaseException:
+                os.close(fd)
+                raise
+            entry = _HELD[key] = [fd, 0]
+        entry[1] += 1
+        try:
+            yield
+        finally:
+            entry[1] -= 1
+            if entry[1] == 0:
+                del _HELD[key]
+                os.close(entry[0])  # closing it lets the lock go
 
 
 def write_json(path: Path, data: Any) -> None:

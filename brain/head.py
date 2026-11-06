@@ -708,12 +708,13 @@ def budget_left(home: Path, conf: dict[str, Any], total: float | None,
     if pct <= 0:
         return None
     day = day or _today()
-    data = _budget_data(home, day)
-    if not data:
-        if total is None:
-            return 0.0
-        data = {"day": day, "start": float(total), "spent": 0.0}
-        files.write_json(home / BUDGET_FILE, data)
+    with files.held(home):  # a day begun by another process meanwhile keeps its bookings
+        data = _budget_data(home, day)
+        if not data:
+            if total is None:
+                return 0.0
+            data = {"day": day, "start": float(total), "spent": 0.0}
+            files.write_json(home / BUDGET_FILE, data)
     return max(0.0, float(data["start"]) * pct / 100 - float(data["spent"]))
 
 
@@ -726,11 +727,16 @@ def budget_started(home: Path, day: str | None = None) -> bool:
 def budget_spend(home: Path, loss: float, day: str | None = None) -> None:
     """Count what one of its own moves lost (a positive number) on the day it was chosen
     (``day``, today unless named). Where that day's budget is no longer in the file (another
-    process began the next day first), nothing is counted: the next day stays whole."""
-    data = _budget_data(home, day)
-    if loss > 0 and data:
-        data["spent"] += loss
-        files.write_json(home / BUDGET_FILE, data)
+    process began the next day first), nothing is counted: the next day stays whole. Under the
+    folder's lock: a booking of a ``tick`` by hand next to the running brain was lost when both
+    wrote at the same moment (Fehlersuche Stück 24, variant of Fund #2)."""
+    if loss <= 0:
+        return
+    with files.held(home):
+        data = _budget_data(home, day)
+        if data:
+            data["spent"] += loss
+            files.write_json(home / BUDGET_FILE, data)
 
 
 class HeadDecider:
@@ -765,17 +771,15 @@ class HeadDecider:
         self._again = 0
         self.budget_left: float | None = None  # what its own moves may still lose today (#533)
 
-    def _limit_reached(self) -> bool:
-        limit = int(self.conf.get("head_max_per_day", 0) or 0)
-        return limit > 0 and advisor.calls_today(self.home) >= limit
+    def _limit(self) -> int:
+        return int(self.conf.get("head_max_per_day", 0) or 0)
 
     async def _ask(self) -> tuple[Move | None, str]:
         """One answer of the head to the talk so far; ``(None, why)`` when there is none."""
         if not advisor.configured(self.conf):
             return None, "nobody is picked to answer yet"
-        if self._limit_reached():
+        if not advisor.take_call(self.home, self._limit()):
             return None, "daily limit reached"
-        advisor.count_call(self.home)
         started = time.monotonic()
         try:
             text = await self.send(self._talk, HEAD_TOKENS)
