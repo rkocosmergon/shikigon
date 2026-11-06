@@ -8,6 +8,9 @@ What changed for someone who uses Shikigon. Newest first.
   reason for a move, an answer of the model, a note on what it does now or a tournament compass
   with many line breaks stood up to 4001 lines tall. Every text of the panel now has a line
   limit, and a header or a button shows its text in one line.
+- **The terminal no longer offers a mega bomb for "nan" E, and no panel stays empty after a
+  bracket** (cosmergon-agent 0.31.2). A market price that is no number above 0 is skipped, and a
+  field id or a world's text with a `[` in it is shown as text.
 
 - **The terminal shows no direction marks of others either** (cosmergon-agent 0.31.1). A
   right-to-left override in another player's name or message turned the text around it there.
