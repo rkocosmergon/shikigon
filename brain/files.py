@@ -212,8 +212,10 @@ def count(value: Any, default: int = 0) -> int:
 
 
 def json_in(text: str) -> Any:
-    """The first whole JSON object in a model's answer, read as ``loads`` reads: what comes after
-    it counts for nothing.
+    """The JSON object that begins at the first ``{`` of a model's answer, read as ``loads`` reads:
+    what comes after it counts for nothing. A ``{`` before it in the text (``use {field_id}``)
+    makes the answer unusable, and the rules play: the brain does not search on for an object that
+    may be an example rather than the move (cos20 #492, Betreuer-Durchgang c47b7f1, B2).
 
     Raises ``ValueError`` if there is none or it is broken. Until 0.1.14 it took everything from
     the first ``{`` to the last ``}``: a brace closed too early, or a reason hanging behind the

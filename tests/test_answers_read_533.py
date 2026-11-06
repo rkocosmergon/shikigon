@@ -1,7 +1,7 @@
 """What the head's answers say is read (cos20 #533): a broken form is no experience.
 
 Device, 04.11.2026, 179 of the head's moves: 52 fell back to the rules, 32 of them although the
-answer named a whole move. The first object in an answer is the move, whatever follows it. An
+answer named a whole move. The object at the first ``{`` is the move, whatever follows it. An
 empty field says nothing, so it is treated as not there. The shapes below are the device's own
 answers. A sentence in a move stays refused. Red on 7055ab8.
 """

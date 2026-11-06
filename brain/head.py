@@ -628,10 +628,11 @@ def gives_nothing(action: str, params: dict[str, Any], state: Any) -> bool:
 def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
     """``((action, params, why), "")`` for a usable answer, else ``(None, why not)``.
 
-    The first whole object in the answer is the move (``files.json_in``), its empty fields are
-    not there (``without_empty``), and a reason written into the params is its reason: a broken
-    form is no experience, it only costs the move (cos20 #533). What the move says is judged as
-    before, ``own_words`` after this.
+    The JSON object that begins at the first ``{`` of the answer is the move (``files.json_in``),
+    its empty fields are not there (``without_empty``), and a reason written into the params, or
+    into their inner ``params`` (a mission's), is its reason: a broken form is no experience, it
+    only costs the move (cos20 #533; the inner one since c47b7f1, #492). What the move says is
+    judged as before, ``own_words`` after this.
     The JSON is read finite (``files.json_in``): ``NaN``, ``Infinity`` or ``1e999`` in a parameter
     is no usable answer. Until 0.1.13 such an answer reached ``agent.act``, where httpx refuses
     a number that is not finite, and that ended the brain (sixth review, finding 2)."""
@@ -654,6 +655,9 @@ def parse_move(text: str, allowed: set[str]) -> tuple[Move | None, str]:
         return None, "params must be a JSON object"
     params = without_empty(params)
     said_inside = params.pop("why", "")
+    inner = params.get("params")  # inner params, as a mission is shown to it (``shaped``)
+    said_deeper = inner.pop("why", "") if isinstance(inner, dict) else ""
+    said_inside = said_inside or said_deeper
     if RESERVED_PARAMS & params.keys():
         return None, "params may not name action or self"
     if len(json.dumps(params)) > PARAMS_BYTES:
@@ -688,9 +692,9 @@ def _budget_data(home: Path) -> dict[str, Any]:
 def budget_left(home: Path, conf: dict[str, Any], total: float | None) -> float | None:
     """What its own moves may still lose today (cos20 #533); ``None`` = no budget set.
 
-    ``learning_budget_pct`` of the total energy at the start of the UTC day. It still learns from
-    its own mistakes, but no day costs more than you set aside for that: the rules play when the
-    rest would not cover a move.
+    ``learning_budget_pct`` of the total energy at its first move of the UTC day. It still learns
+    from its own mistakes, but no day costs more than you set aside for that: the rules play when
+    the rest would not cover a move.
 
     With a budget set and no total energy from the world (a world that ranks by something else,
     cos20 #504) the rest is 0: nothing a move gives away can be set against it, so such a move

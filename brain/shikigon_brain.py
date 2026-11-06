@@ -1028,11 +1028,12 @@ async def write_down(agent: Any, decider: Any, state: Any, last: dict[str, Any])
 
     last["words"] = move_words(last)  # what the panel and its advisor show (words.py)
     advice = getattr(decider, "last", None)  # what an advisor did on this move, if one was asked
+    spent = 0.0
     if advice:
         last["advice"] = advice
         if advice.get("speech") and last.get("ok"):  # it wrote: say what (speech.py, #526)
             last["words"] = speech.words(advice["speech"])
-        spend_budget(advice, last)
+        spent = spend_budget(advice, last)
     # its energy and fields when it chose: what it learns from (lessons.py). ``total`` is the
     # goal's measure (energy plus offers, fields, items; cos20 #504): an energy offer moves
     # energy out of the balance but not out of the total.
@@ -1045,9 +1046,9 @@ async def write_down(agent: Any, decider: Any, state: Any, last: dict[str, Any])
     journal(entry)
     await tournament_journal(agent, state)
     status = snapshot(state, last)
-    left = getattr(decider, "budget_left", None)
-    if left is not None:  # a number only, for the bar (threat model §1b)
-        status["learning_budget_left"] = round(float(left))
+    left = getattr(decider, "budget_left", None)  # measured when the head chose
+    if left is not None:  # a number only, for the bar (threat model §1b); after this move
+        status["learning_budget_left"] = round(max(0.0, float(left) - spent))
     write_status(status)
 
 
@@ -1078,8 +1079,9 @@ def holdings(state: Any) -> dict[str, Any]:
     return held
 
 
-def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
-    """Count what a move the head chose itself lost against its learning budget (cos20 #533).
+def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> float:
+    """Count what a move the head chose itself lost against its learning budget (cos20 #533);
+    returns what it counted, 0 for a move that does not count.
 
     What the world booked for it (``energy_effect``). A move that went out with ``max_cost``
     (``limit``, cos20 #527 C-a) counts the limit where its answer names no effect: the most the
@@ -1099,15 +1101,16 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> None:
     import lessons
 
     if not (advice.get("head") and (last.get("ok") or last.get("unknown"))):
-        return
+        return 0.0
     if advice.get("fallback") or last.get("action") != advice.get("choice"):
-        return  # what went out is not the move the head chose
+        return 0.0  # what went out is not the move the head chose
     effect = lessons.own_effect(last) if advice.get("own") else None
     if effect is None:
         loss = files.finite(advice.get("limit")) or 0.0
     else:
         loss = max(-effect, 0.0)
     head.budget_spend(state_dir(), loss)
+    return loss
 
 
 async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[str, Any]:

@@ -8,6 +8,12 @@ What changed for someone who uses Shikigon. Newest first.
   reason for a move, an answer of the model, a note on what it does now or a tournament compass
   with many line breaks stood up to 4001 lines tall. Every text of the panel now has a line
   limit, and a header or a button shows its text in one line.
+- **What is left of the learning budget in `status.json` counts the move just made.** It showed
+  the rest from before that move, so after the move that used up the day's budget it still named
+  a rest. What a move may lose and when the rules take over is as before.
+- **A reason your agent writes into a mission's own parameters is its reason.** A mission is
+  shown to it with `params` inside `params`, and a `why` written there stayed in the move as a
+  sentence: the move was refused and the rules played. Any other sentence in a move stays refused.
 - **The terminal no longer offers a mega bomb for "nan" E, and no panel stays empty after a
   bracket** (cosmergon-agent 0.31.2). A market price that is no number above 0 is skipped, and a
   field id or a world's text with a `[` in it is shown as text.
@@ -146,8 +152,8 @@ What changed for someone who uses Shikigon. Newest first.
 - **A wait of your agent stays a wait.** Its line said `none: do nothing this tick`, and the model
   took those words for parameters: 9 of 133 answers it could not play on the device, some of them
   broken JSON. The line now says `{}`, and whatever else a wait writes there goes nowhere.
-- **What your agent answered is read, even when the form around it is broken.** The first whole
-  JSON object in its answer is the move, and what follows counts for nothing. A field it left
+- **What your agent answered is read, even when the form around it is broken.** The JSON object
+  that begins at the first `{` of its answer is the move, and what follows counts for nothing. A field it left
   empty counts as not given, and the world names what it needs. A reason written into the
   parameters is its reason. A sentence inside a move stays refused. On the device 32 of 52
   fall-backs to the rules were answers that named a whole move. More of your agent's moves now
