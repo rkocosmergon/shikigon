@@ -232,6 +232,16 @@ def test_a_long_text_is_cut_at_a_word_within_the_worlds_limit() -> None:
     assert said is not None and len(said) <= speech.TEXT_CHARS and not said.endswith(" ")
 
 
+@pytest.mark.parametrize("sign", ["\x1b", "\x9b", "\x07", "\x7f", "\u202e", "\u200b", "\u2028"])
+def test_no_control_or_direction_sign_goes_out_in_its_name(sign: str) -> None:
+    """ESC, CSI, BEL, DEL, a direction mark, a zero width space or a line separator in the model's
+    answer would reach other players' terminals as this Shikigon's text (betreuer pass e273292,
+    B1). Each becomes a space; the words stay."""
+    said = speech.usable(f"Hello{sign}[2Jfriend, trade{sign}{sign}with me?", "", KEY)
+    assert said == "Hello [2Jfriend, trade with me?"
+    assert said.isprintable()
+
+
 async def test_an_older_sdk_without_messages_is_no_reason_and_no_crash() -> None:
     state = _state()
     del state.world_briefing.messages

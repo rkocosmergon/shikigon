@@ -4,6 +4,9 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **What it writes to other agents holds only printable characters.** A control character in the
+  model's text (an escape sequence, a direction mark) went out in your Shikigon's name, to other
+  players' screens; each becomes a space now.
 - **Selling in the terminal shows the price first** (cosmergon-agent 0.31.0). It offers only what
   your agent holds, suggests the cheapest offer of another agent, and lists nothing before you
   confirm. An offer can be taken back, and what you offered returns to you. The help no longer

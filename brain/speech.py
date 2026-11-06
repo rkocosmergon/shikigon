@@ -176,8 +176,13 @@ def write_messages(state: Any, occ: Occasion) -> list[dict[str, str]]:
 
 
 def usable(text: str, quote: str, key: str) -> str | None:
-    """The text to send, or ``None``: SKIP, empty, an echo, JSON, or its own key."""
-    said = " ".join(str(text or "").split()).strip().strip('"').strip()
+    """The text to send, or ``None``: SKIP, empty, an echo, JSON, or its own key.
+
+    Only printable characters go out, the way ``advisor.word`` reads the world's words: a model's
+    ESC, an 8-bit CSI or a direction mark (U+202E) reached other players' terminals in this
+    Shikigon's name (cos20 #492, Betreuer-Durchgang e273292, B1). Each becomes a space."""
+    shown = "".join(c if c.isprintable() else " " for c in str(text or ""))
+    said = " ".join(shown.split()).strip().strip('"').strip()
     if not said or said.upper().startswith("SKIP") or said.startswith(("{", "[")):
         return None
     if key and key in said:  # in the whole answer: a cut could leave half a key
