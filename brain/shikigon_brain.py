@@ -526,10 +526,16 @@ def short(text: Any, chars: int) -> str:
     """``text`` as a string of at most ``chars`` characters, printable ones and line breaks only.
 
     For what the brain itself puts into the bar's files: names, the world's sentences, journal
-    lines. The bar takes the same characters out of everything it reads (``readJson`` in
-    ``ShikigonModel.js``), also of what does not come through here: the model's answers, its
-    lessons, an agent's last line on stderr (cos20 #492, Betreuer-Durchgang ab1a021, B2–B5;
-    until then this docstring said all of it came through here)."""
+    lines. Of everything it reads, also of what does not come through here (the model's
+    answers, its lessons, an agent's last line on stderr), the bar takes out the control
+    characters and direction marks of the SDK (``readJson`` in ``ShikigonModel.js``,
+    ``test_betreuer_ab1a021::test_the_bar_removes_what_the_sdk_removes``). This rule takes out
+    at least those (``…::test_the_brain_removes_at_least_what_the_sdk_removes``) and more: the
+    line separators U+2028/U+2029, U+200B, U+200D, U+00A0. A text that does not come through
+    here may still hold a U+2028, a line break to Qt; every text of the bar has a line limit
+    (``tests/test_qml.py::test_no_text_of_the_bar_grows_without_a_line_limit``). Until cos20
+    #492, Fehlersuche Stück 23 (K18, K31), this docstring said the bar takes out "the same
+    characters"."""
     return printable_only(str(text or "")[:chars], keep="\n")
 
 

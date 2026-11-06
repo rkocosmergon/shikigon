@@ -4,6 +4,11 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **A line break of the world or of a model no longer makes the panel run off the screen.** A
+  reason for a move, an answer of the model, a note on what it does now or a tournament compass
+  with many line breaks stood up to 4001 lines tall. Every text of the panel now has a line
+  limit, and a header or a button shows its text in one line.
+
 - **The terminal shows no direction marks of others either** (cosmergon-agent 0.31.1). A
   right-to-left override in another player's name or message turned the text around it there.
   The world's sentence when it refuses a new agent, which `register` and waking print, loses

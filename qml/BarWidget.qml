@@ -541,6 +541,7 @@ BarWidget {
             Text {
               textFormat: Text.PlainText
               width: parent.width
+              maximumLineCount: 1
               elide: Text.ElideRight
               color: root.ink
               font.family: root.font
@@ -559,6 +560,7 @@ BarWidget {
           Text {
             id: heroEnergy
             textFormat: Text.PlainText
+            maximumLineCount: 1
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             color: root.ink
@@ -847,6 +849,7 @@ BarWidget {
               Line {
                 required property var modelData
                 wrapMode: Text.NoWrap
+                maximumLineCount: 1  // one line each, a line break of the world included
                 elide: Text.ElideRight
                 color: modelData.ok === false ? Commons.Color.urgent : root.ink
                 text: modelData.text + (modelData.count > 1 ? "  ×" + modelData.count : "")
@@ -1019,6 +1022,7 @@ BarWidget {
   // Small, dimmed, upper-case label — the shell's caption style.
   component Caption: Text {
     textFormat: Text.PlainText
+    maximumLineCount: 1
     color: root.dim
     font.family: root.font
     font.pixelSize: Style.font.caption
@@ -1027,10 +1031,16 @@ BarWidget {
     font.capitalization: Font.AllUppercase
   }
 
+  // Five lines at most, the head's measure (betreuer pass 026bb73, B4; 200 characters took five
+  // lines on the device): a text of the world can hold line breaks (`\n`, U+2028), and without
+  // a bound one reason or one compass stood 151 lines tall, at 8 KiB 4001 (cos20 #492,
+  // Fehlersuche Stück 23). A use with a number of its own keeps it (guard in tests/test_qml.py).
   component Line: Text {
     textFormat: Text.PlainText
     width: parent ? parent.width : implicitWidth
     wrapMode: Text.Wrap
+    maximumLineCount: 5
+    elide: Text.ElideRight
     color: root.ink
     font.family: root.font
     font.pixelSize: Style.font.body
@@ -1043,6 +1053,9 @@ BarWidget {
     Caption { text: parent.label }
     Text {
       textFormat: Text.PlainText
+      width: parent.width
+      maximumLineCount: 1
+      elide: Text.ElideRight
       color: root.ink
       font.family: root.font
       font.pixelSize: Style.font.subtitle
@@ -1086,6 +1099,7 @@ BarWidget {
       width: Style.space(84)  // fixed, so the three bars have one length and compare
       horizontalAlignment: Text.AlignRight
       textFormat: Text.PlainText
+      maximumLineCount: 1
       color: root.ink
       font.family: root.font
       font.pixelSize: Style.font.body

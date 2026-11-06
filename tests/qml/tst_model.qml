@@ -727,6 +727,17 @@ TestCase {
     compare(Model.hostText(null), "")
   }
 
+  // cos20 #492, Fehlersuche Stück 23 (H13): a label of the shell is one line. A tournament
+  // number or a name of the world with line breaks does not make the header or a button tall.
+  function test_a_text_for_the_shells_components_is_one_line() {
+    var ls = String.fromCharCode(0x2028), ps = String.fromCharCode(0x2029)
+    compare(Model.hostText("TOURNAMENT #7\n\n\nENDS"), "TOURNAMENT #7   ENDS")
+    compare(Model.hostText("a" + ls + "b" + ps + "c\r\nd"), "a b c  d")
+    compare(Model.hostText("qwen3.5:9b · from 100 moves"), "qwen3.5:9b · from 100 moves",
+            "a line without a break stays as it is")
+    compare(Model.hostText("<b>\nx"), "‹b> x", "the tag rule still holds")
+  }
+
   // cos20 #492, betreuer pass 026bb73, B3: a typed address is shown by its host alone, as
   // `connections.short_host` shows it (test_betreuer_026bb73.py holds these cases against it).
   function test_address_host_never_shows_a_name_or_password() {

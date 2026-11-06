@@ -127,9 +127,14 @@ function tournamentOffer(status) {
 // (cos20 #492, eleventh review). Those components set no text format in Omarchy 4.0.0 and 4.0.1
 // (PlainText only from 4.0.2 on), and Qt reads a text with a tag in its first line as styled
 // text: a model named `<img src="https://…">` made the shell load that image. Without `<` there
-// is no tag; `‹` reads the same.
+// is no tag; `‹` reads the same. And a label is one line: a line break of the world in it
+// (`\n`, `\r`, U+2028, U+2029; a tournament number, a name) becomes a space (cos20 #492,
+// Fehlersuche Stück 23).
+var BREAKS = new RegExp("[\\n\\r" + String.fromCharCode(0x2028, 0x2029) + "]", "g")
+
 function hostText(text) {
   return String(text === undefined || text === null ? "" : text).replace(/</g, "‹")
+    .replace(BREAKS, " ")
 }
 
 // The host of an address someone typed, never the name or password it may carry

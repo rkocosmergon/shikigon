@@ -196,6 +196,36 @@ def ipc_free_text(source: str) -> list[str]:
     return bad
 
 
+# H13 (cos20 #492, Fehlersuche Stück 23, K18/K31/K45/K46): a text of the world can hold line
+# breaks, and Qt breaks a PlainText at `\n` and U+2028 alike. Without a line limit one reason
+# stood 151 lines tall, a compass of 8 KiB 4001 (64,016 px). The most a use may set is the
+# newest exchange of the talk (11 lines, device 14.10.).
+LINES_AT_MOST = 11
+_LINE_LIMIT = re.compile(r"maximumLineCount:\s*([^;\n]+)")
+
+
+def unbounded_texts(source: str) -> list[str]:
+    """H13: a text of the bar without a line limit, or with one above ``LINES_AT_MOST``.
+
+    Every ``Text`` (and every component on it) sets ``maximumLineCount``; a use of such a
+    component may set its own, as a number or an expression of numbers, none above the limit.
+    The shell's own components get their text only through ``Model.hostText``, which makes it
+    one line (``tst_model.qml``)."""
+    bad = [b.splitlines()[0] for b in _blocks(source, "Text") if not _LINE_LIMIT.search(b)]
+    for name in re.findall(r"component\s+(\w+)\s*:\s*Text\s*\{", source):
+        for use in _blocks(source, name):
+            for limit in _LINE_LIMIT.findall(use):
+                numbers = [int(n) for n in re.findall(r"\d+", limit)]
+                if not numbers or max(numbers) > LINES_AT_MOST:
+                    bad.append(f"{name}: maximumLineCount: {limit.strip()}")
+    return bad
+
+
+def test_no_text_of_the_bar_grows_without_a_line_limit() -> None:
+    for name, source in _sources():
+        assert not unbounded_texts(source), f"{name}: {unbounded_texts(source)}"
+
+
 def test_the_ipc_target_takes_no_free_text() -> None:
     for name, source in _sources():
         assert not ipc_free_text(source), f"{name}: {ipc_free_text(source)}"
@@ -291,6 +321,15 @@ def test_the_guards_see_what_they_guard() -> None:
     assert len(_blocks(bar, "QuietLine")) == 3  # address, key, question
     assert "wl-paste" in bar
     assert len(_blocks(bar, "Text")) >= 6  # four Text blocks and the Caption and Line components
+    # H13: the line guard sees a Text without a limit, a use above it or without a number ...
+    line = "component Line: Text {\n  textFormat: Text.PlainText\n  maximumLineCount: 5\n}\n"
+    assert unbounded_texts("Text {\n  textFormat: Text.PlainText\n}")
+    assert unbounded_texts("component Line: Text {\n  textFormat: Text.PlainText\n}")
+    assert unbounded_texts(line + "Line { maximumLineCount: 40; text: x }")
+    assert unbounded_texts(line + "Line { maximumLineCount: root.many; text: x }")
+    # ... lets a limit and a use of its own pass, and finds the real ones: Line used 21 times
+    assert not unbounded_texts(line + "Line { maximumLineCount: i > 2 ? 11 : 3; text: x }")
+    assert len(_blocks(bar, "Line")) >= 21
     assert len(_blocks(bar, "Timer")) >= 5
     shown = [b for b in _blocks(bar, "FileView") if any(f in b for f in PANEL_FILES)]
     assert len(shown) == 3
