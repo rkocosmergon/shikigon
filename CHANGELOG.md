@@ -8,6 +8,10 @@ What changed for someone who uses Shikigon. Newest first.
   reason for a move, an answer of the model, a note on what it does now or a tournament compass
   with many line breaks stood up to 4001 lines tall. Every text of the panel now has a line
   limit, and a header or a button shows its text in one line.
+- **A move chosen just before midnight UTC counts against that day's learning budget.** It went
+  out with that day's rest as its limit, but when it was written down after midnight it counted
+  on neither day. Now it counts on the day it was chosen, and the new day starts whole. The README
+  says so, and that `status.json` names what was left after the last move.
 - **What is left of the learning budget in `status.json` counts the move just made.** It showed
   the rest from before that move, so after the move that used up the day's budget it still named
   a rest. What a move may lose and when the rules take over is as before.

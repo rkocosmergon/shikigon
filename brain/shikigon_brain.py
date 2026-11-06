@@ -1096,7 +1096,11 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> float:
 
     A move whose answer was lost (``unknown``, ``play``) counts as made: for a limit, not known is
     given. Until 0.1.14 it counted as refused, and the next move had the whole rest again, as
-    often as the answers got lost (cos20 #614)."""
+    often as the answers got lost (cos20 #614).
+
+    It counts on the UTC day the head chose it (``advice["day"]``). Until c611ee5 a move chosen
+    before midnight and written down after it was counted on neither day (cos20 #492,
+    Betreuer-Durchgang c611ee5, B1)."""
     import head
     import lessons
 
@@ -1109,7 +1113,11 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> float:
         loss = files.finite(advice.get("limit")) or 0.0
     else:
         loss = max(-effect, 0.0)
-    head.budget_spend(state_dir(), loss)
+    # On the day the head chose it, also where it went out after midnight or one move later, as
+    # the proposal it announced (``speech``, its ``last`` from the memo file; cos20 #492,
+    # Betreuer-Durchgang c611ee5, B1).
+    day = advice.get("day")
+    head.budget_spend(state_dir(), loss, day if isinstance(day, str) else None)
     return loss
 
 

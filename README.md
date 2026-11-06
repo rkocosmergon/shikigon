@@ -381,11 +381,13 @@ own effect. The change of total energy stands apart, as the sum of all causes.
 
 **What it may lose is up to you.** `learning_budget_pct` (default 5) is the share of its total
 energy at its first move of the UTC day that its own moves may lose in a day, counted as the world
-books each move when it is made. Each move your agent writes itself goes out with what is left
-today as its limit (`max_cost`): the world measures what the move books against its total energy
-and refuses it, with nothing booked, when that costs more. Your agent hears what it would have
-cost and chooses again. What the world cannot measure when the move is made is checked before it
-goes out: a contract that costs your Shikigon anything (an escrow, a tribute it pays, an alliance
+books each move when it is made. A move counts on the UTC day it was chosen, with that day's rest
+as its limit, also when it goes out after midnight. Each move your agent writes itself goes out
+with what is left today as its limit (`max_cost`): the world measures what the move books against
+its total energy and refuses it, with nothing booked, when that costs more. Your agent hears what
+it would have cost and chooses again. What the world cannot measure when the move is made is
+checked before it goes out: a contract that costs your Shikigon anything (an escrow, a tribute
+it pays, an alliance
 with costs per tick, a mercenary it hires) and a mission with a reward or behind a contract are
 played by the rule tree instead, and so is any other move the world states no form for. Without a
 form only what gives nothing goes out: waiting, refusing an offer, a contract that costs nothing
@@ -398,7 +400,8 @@ gets lost, the whole limit counts. A move of the rule tree is not counted, also 
 picks it from the tree's lines. A world that does not state its total energy (one that ranks by
 something else) leaves a limit of 0: a move that books a loss is refused, and moves that cost
 nothing still go out. Once the budget is used up the rule tree plays until the day ends. `0`
-means no limit. What is left today stands in `status.json` (`learning_budget_left`).
+means no limit. What was left after its last move stands in `status.json`
+(`learning_budget_left`); after a restart it comes with the first move your agent chooses.
 
 It learns faster, too: every five moves (`review_every`) it looks back on its last hundred
 moves and updates its three lessons instead of starting over. **Your agent gets no tool for

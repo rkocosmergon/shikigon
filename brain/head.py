@@ -673,28 +673,30 @@ def _today() -> str:
     return time.strftime("%Y-%m-%d", time.gmtime())
 
 
-def _budget_data(home: Path) -> dict[str, Any]:
-    """Today's budget as ``{day, start, spent}``, each by its type; ``{}`` when today's is not
-    measured yet. A file of today without a readable ``start`` counts as not measured: until
-    0.1.14 it stopped every move of the head until the day ended, and a ``spent`` of another
-    form stopped it after the move had gone out (cos20 #492, Betreuer-Durchgang b40f78b,
-    finding 3)."""
+def _budget_data(home: Path, day: str | None = None) -> dict[str, Any]:
+    """The budget of ``day`` (today unless named) as ``{day, start, spent}``, each by its type;
+    ``{}`` when that day's is not measured. A file of the day without a readable ``start`` counts
+    as not measured: until 0.1.14 it stopped every move of the head until the day ended, and a
+    ``spent`` of another form stopped it after the move had gone out (cos20 #492,
+    Betreuer-Durchgang b40f78b, finding 3)."""
     data = files.read_object(home / BUDGET_FILE)
     start = files.finite(data.get("start"))
-    if data.get("day") != _today() or start is None:
+    if data.get("day") != (day or _today()) or start is None:
         return {}
     return {"day": data["day"], "start": start,
             "spent": max(0.0, files.finite(data.get("spent")) or 0.0)}
 
 
-
-
-def budget_left(home: Path, conf: dict[str, Any], total: float | None) -> float | None:
-    """What its own moves may still lose today (cos20 #533); ``None`` = no budget set.
+def budget_left(home: Path, conf: dict[str, Any], total: float | None,
+                day: str | None = None) -> float | None:
+    """What its own moves may still lose on ``day`` (today unless named; cos20 #533); ``None`` =
+    no budget set.
 
     ``learning_budget_pct`` of the total energy at its first move of the UTC day. It still learns
     from its own mistakes, but no day costs more than you set aside for that: the rules play when
-    the rest would not cover a move.
+    the rest would not cover a move. A move counts on the day it was chosen (``decide`` names it
+    once), also when it goes out after midnight: until c611ee5 such a move went out with the rest
+    of the day before and was counted on neither day (cos20 #492, Betreuer-Durchgang c611ee5, B1).
 
     With a budget set and no total energy from the world (a world that ranks by something else,
     cos20 #504) the rest is 0: nothing a move gives away can be set against it, so such a move
@@ -705,23 +707,27 @@ def budget_left(home: Path, conf: dict[str, Any], total: float | None) -> float 
     pct = float(conf.get("learning_budget_pct", 0) or 0)
     if pct <= 0:
         return None
-    data = _budget_data(home)
+    day = day or _today()
+    data = _budget_data(home, day)
     if not data:
         if total is None:
             return 0.0
-        data = {"day": _today(), "start": float(total), "spent": 0.0}
+        data = {"day": day, "start": float(total), "spent": 0.0}
         files.write_json(home / BUDGET_FILE, data)
     return max(0.0, float(data["start"]) * pct / 100 - float(data["spent"]))
 
 
-def budget_started(home: Path) -> bool:
-    """True once today's budget was measured against a total energy of the world."""
-    return bool(_budget_data(home))
+def budget_started(home: Path, day: str | None = None) -> bool:
+    """True once the budget of ``day`` (today unless named) was measured against a total energy
+    of the world."""
+    return bool(_budget_data(home, day))
 
 
-def budget_spend(home: Path, loss: float) -> None:
-    """Count what one of its own moves lost today (a positive number)."""
-    data = _budget_data(home)
+def budget_spend(home: Path, loss: float, day: str | None = None) -> None:
+    """Count what one of its own moves lost (a positive number) on the day it was chosen
+    (``day``, today unless named). Where that day's budget is no longer in the file (another
+    process began the next day first), nothing is counted: the next day stays whole."""
+    data = _budget_data(home, day)
     if loss > 0 and data:
         data["spent"] += loss
         files.write_json(home / BUDGET_FILE, data)
@@ -874,11 +880,14 @@ class HeadDecider:
         self._again = 0
         # ``rules``: what the rule tree would have played here, so the journal can set the head's
         # choices against the tree's on the same situation (the goal: better than the tree).
+        # ``day``: the UTC day this move counts on, named once, so a move that goes out after
+        # midnight counts where its limit was measured (``spend_budget``, Betreuer c611ee5 B1).
+        day = _today()
         self.last = {"head": True, "model": advisor.who(self.conf), "ms": 0,
-                     "rules": self._rules[0]}
+                     "rules": self._rules[0], "day": day}
         total = getattr(getattr(state, "ranking", None), "gesamtenergie", None)
-        self.budget_left = budget_left(self.home, self.conf, total)
-        if self.budget_left == 0 and budget_started(self.home):
+        self.budget_left = budget_left(self.home, self.conf, total, day)
+        if self.budget_left == 0 and budget_started(self.home, day):
             # used up: the rules play until the day ends, no call is made
             return self._rules_play("learning budget used up today")
         try:
