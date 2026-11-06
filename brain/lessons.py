@@ -1,8 +1,10 @@
 """What a Shikigon learns from its own moves, on your machine (cos20 #451, step 2).
 
-Every ``LEARN_EVERY`` moves the brain looks back on them in its journal: per move, the
-energy it had then and ten moves later. The numbers go to the advisor you picked, which
-writes three short texts: what it learned, what to avoid, what to do more of. The newest
+Every ``LEARN_EVERY`` moves the brain looks back on them in its journal: per kind of move,
+how often it played and what the move itself booked; apart from that, how energy, items and
+living cells changed from all causes together (cos20 #533; until then each move carried the
+change of the window after it). The numbers go to the advisor you picked, which writes three
+short texts: what it learned, what to avoid, what to do more of. The newest
 goes along on every later advice and every answer; the journal shows that it learned.
 
 Nothing of this reaches the Cosmergon server: the journal is the history, the advisor is
