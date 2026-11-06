@@ -618,6 +618,10 @@ TestCase {
     compare(Model.typedText("\u001b"), "", "Esc")
     compare(Model.typedText("\u007f"), "", "Delete")
     compare(Model.typedText(undefined), "")
+    // b1637b0 A1/A2: the direction marks and isolates are control characters here too
+    compare(Model.typedText("\u202e"), "", "right-to-left override")
+    compare(Model.typedText("\u2067"), "", "right-to-left isolate")
+    compare(Model.typedText("\u200d"), "\u200d", "a joiner inside an emoji stays")
   }
 
   function test_a_read_only_line_types_with_its_own_keys() {
@@ -665,6 +669,7 @@ TestCase {
     compare(Model.pastedLine("http://localhost:11434/v1\r\nsecond"), "http://localhost:11434/v1")
     compare(Model.pastedLine("a\tb\u0007c"), "abc")
     compare(Model.pastedLine("größer"), "größer")
+    compare(Model.pastedLine("ab\u202ecd\u2066e\u2069\u061c\u200f"), "abcde", "direction marks out (b1637b0)")
     compare(Model.pastedLine(""), "")
     compare(Model.pastedLine(undefined), "")
   }

@@ -4,6 +4,18 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **An announced proposal goes out only while the world still offers that agent.** After its word
+  it proposed on the next move from what the world had said a move earlier, also when that agent
+  was no longer among those it may make a contract with.
+- **A proposal your agent chose stays its own after the word.** Played on the move after the
+  word, it stood in the look back as a move of the rules, and what the world booked for it did not
+  count against the learning budget.
+- **Asked how often it looks back, the model hears both rhythms:** every 100 moves, and every five
+  (`review_every`) when your agent has taken over. Its notes also say that its words to other
+  agents are moves of their own.
+- **The panel shows no direction marks of others.** A right-to-left mark or an isolate in another
+  player's name or in the world's sentence turned the text around it; the panel now shows printable
+  characters and line breaks only, and a paste or a key drops them too.
 - **Asked how it learns or who plays, the model is told what the code does.** Its notes still
   said it looks at its energy before and after each move; since the look back counts what each
   move itself booked, apart from what changed from all causes, the model explained that wrongly.

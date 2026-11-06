@@ -159,14 +159,21 @@ function compassWord(text) {
 // The input lines are read-only (cos20 #492, marketplace review #11665) and type what a key
 // press brings: only printable characters, never a control character (Enter, Tab, Esc have
 // their own handlers, and a stray one must not end up in an address or a key).
+// Control characters: C0, DEL and C1, and the direction marks and isolates that turn the text
+// around them (U+061C, U+200E, U+200F, U+202A-202E, U+2066-2069). The same range as the server
+// (`core/steuerzeichen.py`) and the SDK (`printable`), cos20 #492 K37 and b1637b0 A1.
+var CONTROLS = "\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069"
+var WITHOUT_CONTROLS = new RegExp("^[^" + CONTROLS + "]+$")
+var A_CONTROL = new RegExp("[" + CONTROLS + "]", "g")
+
 function typedText(text) {
   var s = String(text || "")
-  return /^[^\u0000-\u001f\u007f-\u009f]+$/.test(s) ? s : ""
+  return WITHOUT_CONTROLS.test(s) ? s : ""
 }
 
 // A paste, read by its own process (at most 4 KiB): its first line, control characters out.
 function pastedLine(text) {
-  return String(text || "").split(/\r?\n/)[0].replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+  return String(text || "").split(/\r?\n/)[0].replace(A_CONTROL, "")
 }
 
 // `s` in place of the selection (or at the cursor) of a line {text, cursor, anchor}; the

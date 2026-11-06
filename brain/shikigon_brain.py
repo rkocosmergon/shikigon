@@ -513,8 +513,13 @@ STATUS_BYTES = 64 * 1024
 
 
 def short(text: Any, chars: int) -> str:
-    """``text`` as a string of at most ``chars`` characters."""
-    return str(text or "")[:chars]
+    """``text`` as a string of at most ``chars`` characters, printable ones and line breaks only.
+
+    What the bar shows of the world, its own model and other players goes through here. A
+    direction mark (U+202E) or an isolate in another player's name turned the text around it
+    in the panel; outgoing words were cleaned that way since e273292, incoming ones only of
+    C0 and C1 (cos20 #492, Betreuer-Durchgang b1637b0, A2)."""
+    return "".join(c for c in str(text or "")[:chars] if c == "\n" or c.isprintable())
 
 
 def bounded(block: Any) -> Any:

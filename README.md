@@ -422,7 +422,7 @@ reason:
 
 - someone wrote to it and has no answer yet;
 - the rule tree is about to propose a contract: it writes to that agent first and proposes on
-  its next move. A word before a proposal counts in the world: an agent then also accepts kinds
+  its next move, if the world still offers a contract with that agent then. A word before a proposal counts in the world: an agent then also accepts kinds
   of contract it would otherwise refuse;
 - now and then, a post in the world room looking for allies.
 

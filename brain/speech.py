@@ -92,7 +92,13 @@ def load(home: Path) -> dict[str, Any]:
         "answered": [str(i) for i in answered][-50:] if isinstance(answered, list) else [],
         "then": _then(data.get("then")),
         "then_at": files.finite(data.get("then_at")) or 0.0,
+        "then_last": _last(data.get("then_last")),
     }
+
+
+def _last(value: Any) -> dict[str, Any] | None:
+    """What the decider that chose the announced proposal did on its move (its ``last``)."""
+    return value if isinstance(value, dict) else None
 
 
 def _then(value: Any) -> list[Any] | None:
@@ -102,13 +108,19 @@ def _then(value: Any) -> list[Any] | None:
 
 
 def announced(
-    memo: dict[str, Any], blocked: frozenset[str]
+    memo: dict[str, Any], blocked: frozenset[str], state: Any
 ) -> tuple[str, dict[str, Any]] | None:
-    """The proposal to play now: announced on the last word, still fresh, and not paused."""
+    """The proposal to play now: announced on the last word, still fresh, not paused, and its
+    partner still among the agents the world offers a contract with on this move
+    (``contract_targets``). Until 0.1.14 it went out from the state of the move before, up to a
+    quarter of an hour later (cos20 #492, Betreuer-Durchgang b1637b0, B1)."""
     then = memo.get("then")
     if not then or time.time() - memo["then_at"] > THEN_SECONDS or then[0] in blocked:
         return None
-    return str(then[0]), dict(then[1])
+    action, params = str(then[0]), dict(then[1])
+    if contract_target(action, params) not in {str(t.player_id) for t in _targets(state)}:
+        return None
+    return action, params
 
 
 def inbox(state: Any) -> tuple[Any, ...]:
@@ -270,12 +282,16 @@ class TalkingDecider:
         self, state: Any, blocked: frozenset[str] = frozenset()
     ) -> tuple[str, dict[str, Any]]:
         memo = load(self.home)
-        then, memo["then"] = announced(memo, blocked), None  # played now or never
+        then, chose = announced(memo, blocked, state), memo["then_last"]
+        memo["then"], memo["then_last"] = None, None  # played now or never
         memo["moves"] += 1
         self._then, self._word = then is not None, False
         if then is not None:  # the word went out: now the proposal it announced, no model call
             files.write_json(memo_path(self.home), memo)
-            self.last = None
+            # What the decider that chose it did, so the journal, the look back and the learning
+            # budget see whose move it is. Until 0.1.14 it went out with none, a choice of the
+            # head counted as the rules' and its booking as nobody's (b1637b0, B3).
+            self.last = chose
             return then
         choice = await self._inner_choice(state, blocked)
         self.last = getattr(self.inner, "last", None)
@@ -288,6 +304,7 @@ class TalkingDecider:
         said = await self._write(state, occ)
         if said is not None and occ.kind == "announce":
             memo["then"], memo["then_at"] = [choice[0], choice[1]], time.time()
+            memo["then_last"] = self.last if isinstance(self.last, dict) else None
         self._remember(memo, occ, said)
         if said is None:
             return choice
@@ -313,7 +330,7 @@ class TalkingDecider:
         again, two offers for the one announced (cos20 #619)."""
         if self._word:
             memo = load(self.home)
-            memo["then"] = None
+            memo["then"], memo["then_last"] = None, None
             files.write_json(memo_path(self.home), memo)
             return None
         inner = getattr(self.inner, "again", None)
