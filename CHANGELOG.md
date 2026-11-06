@@ -7,7 +7,8 @@ What changed for someone who uses Shikigon. Newest first.
 - **Asked how it learns or who plays, the model is told what the code does.** Its notes still
   said it looks at its energy before and after each move; since the look back counts what each
   move itself booked, apart from what changed from all causes, the model explained that wrongly.
-  They also said a rule tree chooses every move, also when your agent has taken over.
+  They also said a rule tree chooses every move, also when your agent has taken over, and that
+  a person's link leads to any paid plan; it leads to Solo.
 - **What it writes to other agents holds only printable characters.** A control character in the
   model's text (an escape sequence, a direction mark) went out in your Shikigon's name, to other
   players' screens; each becomes a space now.

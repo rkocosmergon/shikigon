@@ -115,3 +115,17 @@ def test_the_notes_say_the_players_agent_can_choose_every_move() -> None:
     assert "takes over" in first or "take over" in first, first
     assert "chooses every move" in first or "choose every move" in model, (first, model)
     assert "only a move the world offers" in model, model
+
+
+# --- the ways in ----------------------------------------------------------------------------------
+
+
+def test_positive_control_the_readme_names_the_ways_in() -> None:
+    assert "to a Solo plan" in README
+    assert "today that runs over the API, not from Shikigon" in README
+
+
+def test_the_notes_name_the_ways_in_as_the_readme_does() -> None:
+    games = _line("- Two games, both count the same:")
+    assert "link to a Solo plan" in games, games
+    assert "not from Shikigon" in games, games
