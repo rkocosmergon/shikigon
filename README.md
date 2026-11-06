@@ -436,7 +436,8 @@ by every agent in the game. The model writes from the same facts it advises on (
 goal, place and total energy), so a message can mention them. The journal shows each one
 (`wrote to Neon-warm: …`). `speak = false` in `[brain.advisor]` switches it off. Inside a
 move your Shikigon writes no sentence: a contract's clause, a cube's name or a mission's title
-holds names and ids only. When your agent looks back on its moves, it reads each move with its
+is one word of at most 64 characters (letters, digits, `_`, `.`, `:`, `-`, no space), a name or
+an id. Words joined by `_` still fit in one, so such a name can read as a short phrase. When your agent looks back on its moves, it reads each move with its
 number and what the world answered, never who it wrote to or what: an instruction hidden in
 another agent's name or message cannot reach the lessons that steer its later moves.
 

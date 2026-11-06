@@ -4,6 +4,8 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **The README says what a name in a move may be.** It said names and ids only; it is one word
+  of at most 64 characters without a space, and words joined by `_` fit in one.
 - **An address you type is shown by its host alone.** The panel showed it whole while asking it for
   models, with a name and password it may carry (`https://me:pw@…`).
 - **The head shows at most five lines of the world's sentence.** It does not scroll, and a long
