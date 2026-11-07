@@ -25,6 +25,17 @@ function outside(argv) {
   return ["/bin/sh", "-c", PATH_RULE + 'exec "$@"', "sh"].concat(argv)
 }
 
+// A path Omarchy's terminal starter can take whole. omarchy-launch-or-focus-tui writes its
+// arguments into one string, and omarchy-launch-or-focus runs that with `eval`: a space splits the
+// path, and a sign the shell reads ($, `, ;, a quote ...) is read. Absolute, and every character
+// one the shell leaves as it is (the safe set of Python's shlex.quote) or not ASCII, so a home
+// like /home/jörg still opens it (cos20 #492, Stück 24, variant of finding #3).
+var LAUNCHABLE = /^\/(?:[A-Za-z0-9_@%+=:,.\/-]|[^\x00-\x7f])*$/
+
+function launchablePath(path) {
+  return LAUNCHABLE.test(String(path || ""))
+}
+
 // A short shell body of the bar's own, under PATH_RULE; `args` are its $1, $2, ...
 function shell(body, args) {
   return ["/bin/sh", "-c", PATH_RULE + body, "sh"].concat(args || [])
@@ -684,6 +695,8 @@ if (typeof module !== "undefined") {
     marauderLines: marauderLines,
     stateHome: stateHome,
     PATH_RULE: PATH_RULE,
+    LAUNCHABLE: LAUNCHABLE,
+    launchablePath: launchablePath,
     outside: outside,
     shell: shell
   }

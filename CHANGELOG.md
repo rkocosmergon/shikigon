@@ -18,6 +18,11 @@ What changed for someone who uses Shikigon. Newest first.
 - **`M` in the terminal asks the advisor whatever your folders are called.** For a folder name
   with a tab or a line break, or with a letter past ASCII under the `C` locale, the command was
   written in a form the terminal client does not read, and it found no advisor.
+- **open terminal says so instead of starting when the folder would not survive Omarchy's
+  starter.** Omarchy starts a terminal app through its shell, so a space or a sign the shell
+  reads in the folder Shikigon lies in kept the terminal shut, or was read as a command. Now the
+  bar starts it only for a folder without them and otherwise shows a note saying how to start it
+  by hand.
 - **A line break of the world or of a model no longer makes the panel run off the screen.** A
   reason for a move, an answer of the model, a note on what it does now or a tournament compass
   with many line breaks stood up to 4001 lines tall. Every text of the panel now has a line

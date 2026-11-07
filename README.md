@@ -234,6 +234,9 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
 - **open terminal** starts the terminal client for this agent with the same advisor: `M` there
   asks it, `T` joins a tournament. The terminal client talks to cosmergon.com only, so it opens
   only for a Shikigon of that world; one of another world keeps its key out of it.
+  Omarchy starts it through its shell: if the folder Shikigon lies in has a space or a sign the
+  shell reads (`$`, a quote, `;` and the like), the bar starts nothing and a note says to open a
+  terminal and start `brain/shikigon-terminal` from Shikigon's folder.
 - **The first hours:** a few short desktop notifications walk a new player through it: that it
   is awake and what its first move could be, a free tournament slot when one is open, the
   compass, **ask**, and its first field won. Each comes once, at least ten minutes apart; only
