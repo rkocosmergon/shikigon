@@ -217,8 +217,14 @@ def test_b2_the_guard_sees_what_it_guards() -> None:
 
 
 def test_b1_the_bar_takes_its_compass_from_the_rule() -> None:
+    """Through ``shownCompass``, which without a click under way is ``currentCompass``."""
     bar = _code((QML / "BarWidget.qml").read_text(encoding="utf-8"))
-    assert re.search(r"property string compass: Model\.currentCompass\(status, journal\)", bar)
+    js = (QML / "ShikigonModel.js").read_text(encoding="utf-8")
+    assert re.search(r"property string compass: Model\.(shownCompass\(pendingCompass, |"
+                     r"currentCompass\()status, journal\)", bar)
+    shown = re.search(r"function shownCompass\(pending, status, journal\) \{(.*?)\n\}", js,
+                      re.DOTALL)
+    assert not shown or "currentCompass(status, journal)" in shown[1]
 
 
 def test_b1_the_rule_here_is_the_rule_there() -> None:
@@ -226,3 +232,76 @@ def test_b1_the_rule_here_is_the_rule_there() -> None:
     js = (QML / "ShikigonModel.js").read_text(encoding="utf-8")
     words = set(re.search(r"var COMPASS_WORDS = \[(.*?)\]", js)[1].replace('"', "").split(", "))
     assert PRESETS == (words - {"free"}) | {"autonomous"}
+
+
+# ---------- The click shows at once, the active one shows under the cursor, the cursor lets go ---
+# (cos20 #492, plan 6704605202: the founder on the device 08:32-08:38Z at c44f6c6)
+
+
+def _bar() -> str:
+    return _code((QML / "BarWidget.qml").read_text(encoding="utf-8"))
+
+
+def _fn(code: str, head: str) -> str:
+    """The body of a function or handler that starts with ``head``, to its closing brace."""
+    start = code.index(head)
+    depth, i = 0, code.index("{", start)
+    for j in range(i, len(code)):
+        depth += {"{": 1, "}": -1}.get(code[j], 0)
+        if depth == 0:
+            return code[i:j + 1]
+    raise AssertionError(head)
+
+
+def pending_problems(bar: str, service: str) -> list[str]:
+    found = []
+    if not re.search(r"property string compass: Model\.shownCompass\(pendingCompass, status, "
+                     r"journal\)", bar):
+        found.append("the panel's compass does not show the click")
+    activate = _fn(bar, "function activate(index)")
+    if not re.search(r'service\.instruct\(presets\[index\]\) === "ok"\) \{\s*pendingCompass = '
+                     r"presets\[index\]", activate):
+        found.append("a click does not mark its compass, or marks one the service refused")
+    clears = [m.start() for m in re.finditer(r'pendingCompass = ""', bar)]
+    allowed = [_fn(bar, "function close()"), _fn(bar, "function letGoOfPending()")]
+    if len(clears) != 2 or any(not any(bar[c:c + 20] in a for a in allowed) for c in clears):
+        found.append("pending is let go of outside close() and letGoOfPending()")
+    if "if (!compassDone) return" not in _fn(bar, "function letGoOfPending()"):
+        found.append("pending is let go of before its word is done")
+    journal = bar[bar.index("id: journalFile"):]
+    if "letGoOfPending()" not in _fn(journal, "onLoaded: {") or "letGoOfPending()" not in _fn(
+            journal, "onLoadFailed: {"):
+        found.append("pending is not let go of once the journal is read")
+    instructed = _fn(bar, "function onInstructed()")
+    if "root.compassDone = true" not in instructed or "journalFile.reload()" not in instructed:
+        found.append("a word done does not read the journal again")
+    exited = _fn(service, "onExited: {\n      if (next")
+    if not re.search(r'if \(next === ""\) \{ root\.instructed\(\); return \}', exited):
+        found.append("the service does not say when the last word is done")
+    return found
+
+
+def test_the_click_shows_at_once_and_holds_until_its_line_is_read() -> None:
+    service = _code((QML / "Service.qml").read_text(encoding="utf-8"))
+    assert pending_problems(_bar(), service) == []
+
+
+def test_the_pending_guard_sees_what_it_guards() -> None:
+    service = _code((QML / "Service.qml").read_text(encoding="utf-8"))
+    bar = _bar()
+    early = bar.replace("      root.compassDone = true\n",
+                        '      root.compassDone = true\n      root.pendingCompass = ""\n')
+    assert "pending is let go of outside close() and letGoOfPending()" in pending_problems(
+        early, service)
+    assert pending_problems(bar.replace("Model.shownCompass(pendingCompass, status, journal)",
+                                        "Model.currentCompass(status, journal)"), service)
+    assert pending_problems(bar, service.replace("{ root.instructed(); return }", "return"))
+
+
+def test_the_compass_that_holds_is_marked_in_its_label() -> None:
+    assert re.search(r"label: Model\.presetLabel\(String\(modelData\), root\.compass\)", _bar())
+
+
+def test_the_cursor_lets_go_when_the_mouse_leaves() -> None:
+    hovered = _fn(_bar(), "onHovered: function(isHovered)")
+    assert re.search(r"else if \(root\.cursor === slot\) root\.cursor = -1", hovered), hovered

@@ -43,8 +43,11 @@ BarWidget {
 
   readonly property string mood: status && status.mood ? status.mood : "asleep"
   readonly property bool awake: service ? service.awake : false
-  // The compass from status.json, or a newer one set from the panel (Model.currentCompass).
-  readonly property string compass: Model.currentCompass(status, journal)
+  // The compass just clicked until its word is done, then the one from status.json or a newer
+  // one set from the panel (Model.shownCompass, Model.currentCompass).
+  property string pendingCompass: ""
+  property bool compassDone: false  // the word is done: let go of pending once the journal is read
+  readonly property string compass: Model.shownCompass(pendingCompass, status, journal)
   // The tournament it plays in (cos20 #475): the server's block, passed on by the brain.
   // While it runs it is the game; the panel shows it first and the world steps back.
   readonly property var tournament: status && Model.tournamentRunning(status.tournament)
@@ -81,7 +84,10 @@ BarWidget {
     // starts `mise` and asks two ports on this machine (cos20 #492, fifth review).
     if (service) service.recheck()
   }
-  function close() { popupOpen = false; cursor = -1; talking = false; step = "talk" }
+  function close() {
+    popupOpen = false; cursor = -1; talking = false; step = "talk"
+    pendingCompass = ""; compassDone = false
+  }
   function toggle() { if (popupOpen) close(); else open() }
 
   // ---------- Panel: what the keys and the mouse can reach ----------
@@ -114,7 +120,13 @@ BarWidget {
   function activate(index) {
     if (talking) { activateInTalk(); return }
     if (!service || index < 0) return
-    if (index < presetCount) { service.instruct(presets[index]); return }
+    if (index < presetCount) {
+      if (service.instruct(presets[index]) === "ok") {
+        pendingCompass = presets[index]
+        compassDone = false  // a journal read for the word before it does not let go of this one
+      }
+      return
+    }
     var action = actions[index - presetCount]
     if (action === "open terminal") { service.openTerminal(); close() }
     else if (action === "ask") startTalking()
@@ -255,6 +267,12 @@ BarWidget {
     function onAdvisorsChanged() {
       if (root.talking && root.step === "talk" && !root.advisorPicked) root.toStep("who")
     }
+    // A compass word is done: its journal line is written (taken, or "not taken").
+    function onInstructed() {
+      root.compassDone = true
+      if (journalFile.path === "") root.letGoOfPending()  // closed: nothing to read
+      else journalFile.reload()
+    }
   }
 
 
@@ -341,8 +359,15 @@ BarWidget {
     onFileChanged: reload()
     onLoaded: {
       try { root.journal = Model.readJson(text()).reverse() } catch (e) { root.journal = [] }
+      root.letGoOfPending()
     }
-    onLoadFailed: root.journal = []
+    onLoadFailed: { root.journal = []; root.letGoOfPending() }
+  }
+  // Only after the journal is read: before, the old compass stood there for a moment.
+  function letGoOfPending() {
+    if (!compassDone) return
+    compassDone = false
+    pendingCompass = ""
   }
 
   // ---------- Eyes ----------
@@ -916,7 +941,7 @@ BarWidget {
                 required property int index
                 width: presetGrid.cell
                 slot: index
-                label: String(modelData)
+                label: Model.presetLabel(String(modelData), root.compass)
                 active: root.isCurrentPreset(String(modelData))
               }
             }
@@ -1134,7 +1159,12 @@ BarWidget {
     bordered: true
     hasCursor: root.cursor === slot
     onClicked: root.activate(slot)
-    onHovered: function(isHovered) { if (isHovered) root.cursor = slot }
+    // The cursor follows the mouse in and out: until 07.11.2026 it stayed on the last button the
+    // mouse passed, and looked like a choice there (cos20 #492). The keys place it anew.
+    onHovered: function(isHovered) {
+      if (isHovered) root.cursor = slot
+      else if (root.cursor === slot) root.cursor = -1
+    }
   }
 
   // A row of a list in the talk view: the same button, on the talk's own cursor (`pick`).

@@ -29,6 +29,10 @@ Item {
 
   property var shell: null
 
+  // A word for the compass is done and none waits after it: the bar reads the journal again and
+  // lets go of the compass it showed since the click (BarWidget, pendingCompass).
+  signal instructed()
+
   readonly property string home: Quickshell.env("HOME")
   readonly property string stateHome: Model.stateHome(Quickshell.env("XDG_STATE_HOME"), home)
   readonly property string stateDir: stateHome + "/shikigon"
@@ -428,7 +432,7 @@ Item {
       said = ""
     }
     onExited: {
-      if (next === "") return
+      if (next === "") { root.instructed(); return }
       said = next
       next = ""
       running = true

@@ -789,6 +789,24 @@ TestCase {
     compare(Model.currentCompass(status, [took(105, "autonomous", true)]), "autonomous")
   }
 
+  // The founder 07.11.2026: "wenn ich auf einen compass-button klicke, muss der aktiviert sein".
+  function test_shown_compass_the_click_shows_at_once() {
+    var status = { compass: "attack", seen_at: 100 }
+    compare(Model.shownCompass("defend", status, []), "defend")
+    compare(Model.shownCompass("free", status, []), "free")
+    compare(Model.shownCompass("", status, [took(105, "trade", true)]), "trade",
+            "without a click under way: the compass that holds")
+    compare(Model.shownCompass("", status, []), "attack")
+  }
+
+  function test_preset_label_marks_the_one_that_holds() {
+    compare(Model.presetLabel("attack", "attack"), "● attack")
+    compare(Model.presetLabel("free", "autonomous"), "● free", "the server calls free autonomous")
+    compare(Model.presetLabel("free", "free"), "● free", "a click on free, under way")
+    compare(Model.presetLabel("grow", "attack"), "grow")
+    compare(Model.presetLabel("grow", ""), "grow")
+  }
+
   function test_current_compass_without_seen_at_or_journal() {
     compare(Model.currentCompass({ compass: "grow" }, [took(5, "attack", true)]), "grow",
             "a status without seen_at says nothing about when it looked")

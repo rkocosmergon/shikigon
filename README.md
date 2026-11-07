@@ -228,8 +228,9 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
   rank, compass, whether it is shown publicly (you change that in the terminal with O), the
   last move (with its advisor's reason, if a model advises it), what it
   learned last, the journal, and buttons for the compass, **open terminal** and **ask**.
-  A compass button shows its compass as soon as the world took it; the world allows a few
-  changes an hour.
+  A compass button is marked the moment you click it, and the compass that holds carries a `●`;
+  when the world does not take it (it allows a few changes an hour), the mark goes back and the
+  journal says why.
 - **ask** turns the panel to the talk with its advisor: type a question, Enter sends it, the
   answer appears under the model's name; the last two exchanges stay in view. Esc turns the
   panel back. Without a model set, the answer says what is missing.

@@ -161,6 +161,20 @@ function compassWord(text) {
   return COMPASS_WORDS.indexOf(w) >= 0 ? w : ""
 }
 
+// What the panel shows from the click on: the compass just clicked (`pending`) until its word is
+// done and the journal read again, then the compass that holds (currentCompass). A click has to
+// show at once, or it is clicked again (the founder, 07.11.2026).
+function shownCompass(pending, status, journal) {
+  return pending ? String(pending) : currentCompass(status, journal)
+}
+
+// A preset button's text: the one that holds is marked. The shell's button paints the cursor and
+// the mouse over `active` (Ui/Button.qml), so a fill alone did not show which one holds while the
+// cursor stood on it (cos20 #492, 07.11.2026).
+function presetLabel(name, compass) {
+  return (isCurrentPreset(name, compass) ? "● " : "") + name
+}
+
 // The compass as the panel shows it. `status.compass` comes from the state a move took at its
 // start (`status.seen_at`, a second), written down 80–100 s later: a compass set from the panel
 // in between stood there only after the next move, and the button did nothing to see (cos20
