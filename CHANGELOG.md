@@ -240,6 +240,10 @@ What changed for someone who uses Shikigon. Newest first.
 - **Your agent remembers what the world refused.** Its last moves also name the last move the
   world refused before the one that went out, with the world's reason. A refused choice was gone
   at the next tick: 30 of 54 refusals on the device repeated one from an earlier move.
+- **The README says which journal it means.** Each move the head chose, with its reason and the
+  moves the world refused before it, is in the journal file (`journal.jsonl`); the panel's
+  journal shows each move in words only. The README said "the journal shows" for both. It
+  also says what the panel shows in a tournament in place of the numbers and the last move.
 
 ## 0.1.14 (2026-10-31)
 
@@ -798,7 +802,7 @@ Needs `cosmergon-agent` 0.27.12 and `cosmergon-decider-tree` 2.3.7 (pinned in
 - A scientist with a field collects on it instead of scouting a terminal without a target;
   every such report came back empty.
 - A move the world refuses three times in a row is paused for the next 30 moves, and the
-  journal says so (`sell on the market: refused 3 times, paused for 30 moves`). Before, a
+  journal file says so (`sell on the market: refused 3 times, paused for 30 moves`). Before, a
   Shikigon could ask for the same refused move every minute for hours, such as an offer over
   the listing limit. A move the world did not take because it came twice in one tick, or
   because the world did not answer, does not count. The advisor is never offered a paused

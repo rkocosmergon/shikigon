@@ -38,9 +38,11 @@ sys.path.insert(0, str(BRAIN))
 
 import connections
 import shikigon_brain as brain
+from test_advisor import _state
 from test_betreuer_1d81304 import _holder
 from test_brain import TABLE
 from test_compass_in_the_panel import CompassWorld, _code, _fn
+from test_head import MISSION, RefusingAgent, Replies, _head, _move
 
 
 @pytest.fixture(autouse=True)
@@ -221,3 +223,72 @@ def test_b3_the_paste_guard_sees_what_it_guards() -> None:
     old = ('      onStreamFinished: {\n        const s = Model.pastedLine(text)\n'
            '        if (root.pasteTarget && s !== "") root.pasteTarget.put(s)\n      }\n')
     assert paste_problems(old)
+
+
+# ---------- N2 (after the build 1a10d71, plan 6707459401) ----------------------------------------
+
+
+async def test_n2_the_journal_file_keeps_the_heads_move_its_reason_and_the_refused_ones() -> None:
+    """What the README promises of the journal file (``journal.jsonl``): each move the head chose,
+    with its reason and the moves the world refused before it."""
+    second = _move("start_mission", {"mission_type": "siege_field",
+                                     "params": {"target_field_id": "t1"}})
+    agent = RefusingAgent(_state(), refuse=("start_mission",))
+    agent.refuse_once = True
+    await brain.tick(agent, _head(Replies(MISSION, second)), refusals=brain.Refusals())
+    home = brain.state_dir()
+    lines = (home / "journal.jsonl").read_text(encoding="utf-8").splitlines()
+    move = json.loads(next(line for line in lines if '"action"' in line))
+    assert move["advice"]["head"] is True and move["advice"]["why"], move
+    assert move["advice"]["tries"][0]["action"] == "start_mission", move
+    shown = json.loads((home / brain.BAR_JOURNAL).read_text(encoding="utf-8"))
+    assert "advice" not in shown[-1] and "tries" not in shown[-1], (
+        "the panel's journal gets the move in words, so the README promises no more of it")
+
+
+def test_n2_the_readme_and_changelog_say_which_journal_they_mean() -> None:
+    readme = re.sub(r"\s+", " ", (ROOT / "README.md").read_text(encoding="utf-8"))
+    changelog = re.sub(r"\s+", " ", (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
+    assert "The journal shows each move the head chose" not in readme
+    assert "Every move goes into a journal, with" not in readme
+    assert ("Its journal file (`journal.jsonl`) records each move the head chose (`head`), with "
+            "its reason and the moves the world refused before it.") in readme
+    assert ("Every move goes into its journal file (`journal.jsonl`, below), with what the move "
+            "said") in readme
+    assert ("journal file says so (`sell on the market: refused 3 times, paused for 30 moves`)"
+            ) in changelog
+
+
+def test_n3_the_readme_says_what_a_tournament_puts_in_place_of_the_numbers() -> None:
+    readme = re.sub(r"\s+", " ", (ROOT / "README.md").read_text(encoding="utf-8"))
+    said = ("In a tournament, its score against the leader, the tournament's compass and its "
+            "Marauders stand in place of fields, rank, compass, public and the last move.")
+    assert said in readme
+
+
+def tournament_problems(bar: str) -> list[str]:
+    """Source guard (``tst_model`` does not reach the bar's layout): the numbers and the last move
+    give way to the tournament, as the README says."""
+    code = _code(bar)
+    found = []
+    stats = re.search(r"id: stats\s*visible: ([^\n]*\n[^\n]*)", code)
+    if not stats or "!root.inTournament" not in stats.group(1):
+        found.append("the numbers stay in a tournament")
+    now = re.search(r"visible: (root\.view\.full && !root\.inTournament && !root\.talking)\s*"
+                    r"&& \(nowLines\.count", code)
+    if not now:
+        found.append("the last move stays in a tournament")
+    if not re.search(r"visible: root\.view\.full && root\.inTournament && !root\.talking", code):
+        found.append("no tournament block")
+    return found
+
+
+def test_n3_the_panel_gives_the_numbers_way_in_a_tournament() -> None:
+    assert tournament_problems((QML / "BarWidget.qml").read_text(encoding="utf-8")) == []
+
+
+def test_n3_the_tournament_guard_sees_what_it_guards() -> None:
+    old = ("Row {\n  id: stats\n  visible: root.view.full && root.status.fields !== undefined\n"
+           "    && !root.talking\n}\nColumn {\n  visible: root.view.full && !root.talking\n"
+           "    && (nowLines.count > 0)\n}\n")
+    assert len(tournament_problems(old)) == 3

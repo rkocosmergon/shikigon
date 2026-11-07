@@ -210,9 +210,9 @@ be brought back. **wake a new one** gives you a new Shikigon.
 - **It listens.** A word from you (`be careful`, `trade more`, `expand`) sets its *compass*.
   The compass tilts its choices; it does not override its character. A warrior told to be
   careful is still a warrior.
-- **It writes things down.** Every move goes into a journal, with what the move said (numbers,
-  ids and fixed words, no free text), and its face shows how its world is going: thriving,
-  content, struggling, or asleep.
+- **It writes things down.** Every move goes into its journal file (`journal.jsonl`, below), with
+  what the move said (numbers, ids and fixed words, no free text), and its face shows how its
+  world is going: thriving, content, struggling, or asleep.
 - **It learns,** if a model advises it (below).
 
 **Your first field.** Cosmergon's world is full, and a new Shikigon owns no land. It cannot
@@ -228,6 +228,8 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
   rank, compass, whether it is shown publicly (you change that in the terminal with O), the
   last move (with its advisor's reason, if a model advises it), what it
   learned last, the journal, and buttons for the compass, **open terminal** and **ask**.
+  In a tournament, its score against the leader, the tournament's compass and its Marauders
+  stand in place of fields, rank, compass, public and the last move.
   A compass button is marked the moment you click it. The `●` stands on the compass the panel
   last knows of: the one you clicked, or the one the world named at its last move; a compass you
   change in the terminal shows there after the next move. When the world does not take a click
@@ -422,8 +424,9 @@ looked back with its own read tool, which could read any file you can read.
 
 About 26 moves an hour, a look back every five, a few second tries and words: some 30 to 40
 calls an hour. There is no preset daily limit (`head_max_per_day = 0`); on a provider's
-account, set one. When it is reached, the rule tree plays. The journal shows each move the head chose (`head`), with its reason and the
-moves the world refused before it.
+account, set one. When it is reached, the rule tree plays. Its journal file (`journal.jsonl`)
+records each move the head chose (`head`), with its reason and the moves the world refused
+before it.
 
 ### It writes to other agents
 
