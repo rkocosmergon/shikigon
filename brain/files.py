@@ -80,7 +80,7 @@ def keep_private(folder: Path) -> None:
 def _renew(path: Path) -> None:
     """``path`` copied into a new file of mode 0600 that takes its name."""
     with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), "rb") as old:
-        fcntl.flock(old, fcntl.LOCK_EX)  # released when the old file closes
+        _lock_within(old.fileno(), HELD_WAIT_S)  # released when the old file closes
         fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
         try:
             with os.fdopen(fd, "wb") as new:
@@ -124,15 +124,37 @@ def one_move(folder: Path) -> Iterator[bool]:
     folder ``held`` locks (cos20 #492, Betreuer-Durchgang 1d81304, B1–B3)."""
     folder.mkdir(parents=True, exist_ok=True)
     fd = os.open(folder / MOVE_LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    mine = False
     try:
-        try:
+        with contextlib.suppress(BlockingIOError):  # another process is in a move
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             mine = True
-        except BlockingIOError:
-            mine = False
+        if mine:
+            _MOVING.add(os.path.abspath(folder))
         yield mine
     finally:
+        if mine:
+            _MOVING.discard(os.path.abspath(folder))
         os.close(fd)  # closing it lets the lock go
+
+
+# The state folders this process is in a move of (``one_move``, ``in_move_or_held``).
+_MOVING: set[str] = set()
+
+
+@contextlib.contextmanager
+def in_move_or_held(folder: Path) -> Iterator[None]:
+    """For a file that only a move reads, changes and writes (the learning budget, the words'
+    memo, the tournament ends seen, the refusals): inside this process's move, ``one_move``
+    already keeps every other writer out, and nothing waits; outside one, ``held``. Until
+    af58853 the booking of a move that had gone out waited for ``held`` and, past its deadline,
+    was lost: the next move had the whole rest again (cos20 #492, Betreuer-Durchgang af58853,
+    B1, K45)."""
+    if os.path.abspath(folder) in _MOVING:
+        yield
+    else:
+        with held(folder):
+            yield
 
 
 # This process's hold on a state folder: its descriptor and how deep it is held (``held``).
@@ -319,13 +341,17 @@ def json_in(text: str) -> Any:
 
 def append(path: Path, entry: dict[str, Any], keep_bytes: int | None = None) -> None:
     """Add one line. With ``keep_bytes``, a file past twice that keeps only its last whole
-    lines within ``keep_bytes``; without it, the file keeps everything."""
+    lines within ``keep_bytes``; without it, the file keeps everything. Waits for another writer
+    ``HELD_WAIT_S`` at most, then ``TimeoutError`` (an ``OSError``)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     line = (json.dumps(entry) + "\n").encode("utf-8")
     while True:
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
         with os.fdopen(fd, "ab") as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX)  # released when the file closes
+            # released when the file closes; at most ``HELD_WAIT_S``: until af58853 a writer
+            # stopped here held the running brain in its move (cos20 #492, Betreuer-Durchgang
+            # af58853, B2, K24)
+            _lock_within(handle.fileno(), HELD_WAIT_S)
             if not _still_there(path, handle.fileno()):
                 continue  # ``keep_private`` replaced it while we waited: into the new one
             handle.write(line)

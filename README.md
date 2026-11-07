@@ -234,9 +234,9 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
 - **open terminal** starts the terminal client for this agent with the same advisor: `M` there
   asks it, `T` joins a tournament. The terminal client talks to cosmergon.com only, so it opens
   only for a Shikigon of that world; one of another world keeps its key out of it.
-  Omarchy starts it through its shell: if the folder Shikigon lies in has a space or a sign the
-  shell reads (`$`, a quote, `;` and the like), the bar starts nothing and a note says to open a
-  terminal and start `brain/shikigon-terminal` from Shikigon's folder.
+  It opens whatever the folder Shikigon lies in is called, and each click opens a window of its
+  own: the bar never brings another window to the front, not even one whose title names
+  Shikigon's terminal.
 - **The first hours:** a few short desktop notifications walk a new player through it: that it
   is awake and what its first move could be, a free tournament slot when one is open, the
   compass, **ask**, and its first field won. Each comes once, at least ten minutes apart; only
@@ -485,7 +485,9 @@ shikigon forget --yes        # delete it, on the server and here
 ```
 
 One move at a time: while the running brain is in a move, `shikigon tick` plays none and
-answers `skipped`, and the other way round.
+answers `skipped`, and the other way round. While a `tick` by hand is in its move, the panel says
+so (`another move is under way since …`); a `tick` you stopped in its terminal holds the running
+brain until you end it.
 
 The terminal client for the same agent is `brain/shikigon-terminal` (that is what
 **open terminal** starts). Started any other way, `cosmergon-dashboard` would create a second

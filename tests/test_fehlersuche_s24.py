@@ -185,7 +185,8 @@ def _function_of(tree: ast.AST, node: ast.AST) -> str:
 
 def _held_blocks(tree: ast.AST) -> list[ast.With]:
     return [w for w in ast.walk(tree) if isinstance(w, ast.With) and any(
-        isinstance(i.context_expr, ast.Call) and getattr(i.context_expr.func, "attr", "") == "held"
+        isinstance(i.context_expr, ast.Call)
+        and getattr(i.context_expr.func, "attr", "") in ("held", "in_move_or_held")
         for i in w.items)]
 
 
@@ -324,95 +325,6 @@ def test_f3_the_dashboard_finds_the_terminals_advisor(
 
 
 # --- variant of fund #3: the path Omarchy starts through eval ------------------------------------
-# Read at the device on 07.11.2026: omarchy-launch-or-focus-tui writes `"omarchy-launch-tui $@"`
-# into one string, and omarchy-launch-or-focus runs it as `eval exec setsid $LAUNCH_COMMAND`.
-
-OMARCHY_CHAIN = textwrap.dedent("""\
-    set -- --app-id=org.omarchy.cosmergon "$1"
-    LAUNCH_COMMAND="omarchy-launch-tui $@"
-    eval exec setsid $LAUNCH_COMMAND
-""")
-STARTED = ["omarchy-launch-tui", "--app-id=org.omarchy.cosmergon"]
-
-
-def _launchable() -> re.Pattern[str]:
-    """``LAUNCHABLE`` of ``ShikigonModel.js``, as Python reads it (``$`` only at the very end)."""
-    literal = re.search(r"^var LAUNCHABLE = /(.*)/$", (QML / "ShikigonModel.js").read_text(
-        encoding="utf-8"), re.MULTILINE)
-    assert literal, "LAUNCHABLE is gone from ShikigonModel.js"
-    source = literal.group(1)
-    assert source.endswith("$")
-    return re.compile(source[:-1] + r"\Z")
-
-
-def _through_omarchy(path: str, tmp_path: Path) -> list[str] | None:
-    """What Omarchy's chain starts for ``path``: a stand-in ``setsid`` writes its argv."""
-    stub = tmp_path / "bin"
-    stub.mkdir(exist_ok=True)
-    out = tmp_path / "argv"
-    out.unlink(missing_ok=True)
-    (stub / "setsid").write_text(f"#!/bin/sh\nprintf '%s\\0' \"$@\" > '{out}'\n")
-    (stub / "setsid").chmod(0o755)
-    subprocess.run(["/bin/bash", "-c", OMARCHY_CHAIN, "chain", path], cwd=tmp_path, timeout=10,
-                   env={"PATH": f"{stub}:/usr/bin:/bin", "x": "SET", "LC_ALL": "C.UTF-8"},
-                   capture_output=True, check=False)
-    return out.read_bytes().decode().split("\0")[:-1] if out.exists() else None
-
-
-PATHS = ["/h/plain/x", "/h/jörg/x", "/h/a-b_c.d@e%f+g=h:i,j/x", "/h/a b/x", "/h/a\tb/x",
-         "/h/a\nb/x", "/h/a'b/x", '/h/a"b/x', "/h/$x/x", "/h/`true`/x", "/h/a;b/x", "/h/a*b/x",
-         "/h/{a,b}/x", "/h/a\\b/x", "/h/a|b/x", "/h/a&b/x", "/h/~x/x", "/h/a(b/x", "/h/a#b/x",
-         "/h/a[b/x"]
-
-
-def test_v3_a_path_the_bar_hands_to_omarchy_arrives_whole(tmp_path: Path) -> None:
-    """Every path ``launchablePath`` lets through reaches the terminal as exactly itself; the
-    others the bar refuses (it says so and starts nothing)."""
-    let_through = [path for path in PATHS if _launchable().match(path)]
-    assert let_through == ["/h/plain/x", "/h/jörg/x", "/h/a-b_c.d@e%f+g=h:i,j/x"]
-    for path in let_through:
-        assert _through_omarchy(path, tmp_path) == [*STARTED, path], path
-
-
-def test_v3_the_chain_breaks_paths_that_are_refused(tmp_path: Path) -> None:
-    """Counter-test: the stand-in chain really breaks these paths, so the test above measures."""
-    broken = ["/h/a b/x", "/h/a\tb/x", "/h/a'b/x", "/h/$x/x", "/h/`true`/x", "/h/a;b/x",
-              "/h/{a,b}/x", "/h/a\\b/x"]
-    for path in broken:
-        assert not _launchable().match(path), path
-        assert _through_omarchy(path, tmp_path) != [*STARTED, path], path
-    assert _through_omarchy("/h/plain/x", tmp_path) == [*STARTED, "/h/plain/x"]
-
-
-def launch_problems(service: str) -> list[str]:
-    """``omarchy-launch-or-focus`` only in ``openTerminal``, after ``launchablePath`` returned."""
-    found = []
-    body = re.search(r"function openTerminal\(\) \{\n(.*?)\n  \}\n", service, re.DOTALL)
-    if not body:
-        return ["no openTerminal"]
-    check = re.search(r"if \(!Model\.launchablePath\(terminalScript\)\) \{(.*?)\n    \}", body[1],
-                      re.DOTALL)
-    start = body[1].find("omarchy-launch-or-focus")
-    if not check or "return" not in check[1] or start < check.end():
-        found.append("openTerminal starts before launchablePath said yes")
-    outside = service[:body.start()] + service[body.end():]
-    if "omarchy-launch-or-focus" in outside:
-        found.append("omarchy-launch-or-focus outside openTerminal")
-    return found
-
-
-def test_v3_the_bar_starts_omarchys_terminal_only_for_a_whole_path() -> None:
-    texts = "".join(p.read_text(encoding="utf-8") for p in sorted(QML.glob("*.qml"))
-                    if p.name != "Service.qml")
-    assert "omarchy-launch-or-focus" not in texts
-    assert launch_problems((QML / "Service.qml").read_text(encoding="utf-8")) == []
-
-
-def test_v3_the_launch_guard_sees_what_it_guards() -> None:
-    """Counter-test: without the check, or with the start before it, the guard reports."""
-    service = (QML / "Service.qml").read_text(encoding="utf-8")
-    without = re.sub(r"if \(!Model\.launchablePath\(terminalScript\)\) \{.*?\n    \}\n", "",
-                     service, flags=re.DOTALL)
-    assert without != service
-    assert launch_problems(without)
-    assert launch_problems(service + '\nexecDetached(["omarchy-launch-or-focus", "x"])\n')
+# Since af58853 open terminal goes through omarchy-launch-tui, which runs no `eval` of the path:
+# every path reaches the terminal whole, and the bar refuses none. The guards moved to
+# test_betreuer_af58853 (B4: test_b4_every_path_reaches_the_terminal_whole and its counter-test).

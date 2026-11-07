@@ -720,7 +720,8 @@ async def tournament_journal(agent: Any, state: Any) -> int:
         if isinstance(m, dict) and m.get("body") == "tournament"
         and m.get("status") in ("completed", "failed", "cancelled")
     ]
-    with files.held(seen_path().parent):  # a ``tick`` by hand writes no end down twice
+    # a ``tick`` by hand writes no end down twice; in a move nothing waits (af58853, B1)
+    with files.in_move_or_held(seen_path().parent):
         seen = load_seen()
         new = [m for m in ended if mission_key(m) not in (seen or [])]
         if seen is not None and new:
@@ -903,7 +904,8 @@ class Refusals:
         """Count one move; ``True`` when this refusal pauses it. Read, counted and written under
         the folder's lock: a ``tick`` by hand next to the running brain lost a count when both
         wrote at the same moment (Fehlersuche Stück 24, variant of Fund #2)."""
-        hold = files.held(self.path.parent) if self.path is not None else contextlib.nullcontext()
+        hold = (files.in_move_or_held(self.path.parent) if self.path is not None
+                else contextlib.nullcontext())
         try:
             with hold:
                 return self._note(last)
@@ -994,6 +996,26 @@ async def try_again(
 
 
 ANOTHER_MOVE = "another move is under way"  # ``tick``: the other process plays this one
+
+
+def note_another_move() -> None:
+    """The bar's last sentence says that another move holds this one up: a ``tick`` by hand that
+    does not end (stopped in its terminal) holds every move of the running brain, and until
+    af58853 the panel showed the last move as if nothing waited (cos20 #492, Betreuer-Durchgang
+    af58853, B3). The next move written down replaces it."""
+    path = state_dir() / "status.json"
+    try:
+        status = files.read_object(path)
+        last = status.get("last")
+        if not isinstance(last, dict):
+            last = {}
+        since = time.strftime("%H:%M", time.gmtime())
+        said = (f"{ANOTHER_MOVE} since {since} UTC (a tick by hand): "
+                "this one plays none until it ends")
+        status["last"] = {**last, "why": said}
+        write_status(status)
+    except OSError as exc:  # it says so on stderr instead (cos20 #630)
+        print(f"its status could not be written ({type(exc).__name__})", file=sys.stderr)
 
 
 async def tick(
@@ -1698,6 +1720,7 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
     learning: Any = None
     refusals = Refusals(refusals_path())
     chosen = advisor_settings(cfg)
+    waiting = False  # for another move: said once, not every few seconds
     while True:
         if why := world_refusal(cfg):  # the world's port can change hands while it runs (H9)
             fall_asleep(CONFIG, why)
@@ -1705,8 +1728,12 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
         decider, chosen = decider_for_now(cfg, decider, chosen)
         last = await guarded_tick(agent, decider, done_in, refusals)
         if last.get("skipped"):  # the world's tick is late, or a move by hand is under way
+            if last["skipped"] == ANOTHER_MOVE and not waiting:
+                note_another_move()
+            waiting = last["skipped"] == ANOTHER_MOVE
             await asyncio.sleep(LATE_TICK_S)
             continue
+        waiting = False
         state = getattr(agent, "state", None)
         done_in = getattr(state, "tick", None)
         learning = learning_next(cfg, state, learning, agent)

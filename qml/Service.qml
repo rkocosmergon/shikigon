@@ -96,18 +96,13 @@ Item {
   }
 
   // The game itself lives in the terminal client (cosmergon-dashboard); the bar only shows.
-  // Omarchy's starter runs the path through `eval`: a folder with a space or a sign the shell
-  // reads would not open it, or be read. Then a note instead of a start (Model.launchablePath).
+  // Started by omarchy-launch-tui, which hands the path on as one argument (uwsm quotes it): no
+  // `eval` of it, whatever the folder is called, and no window chosen by its title. Until
+  // af58853 Omarchy's launch-or-focus starter brought any window titled like
+  // org.omarchy.cosmergon to the front instead, a web page's too (cos20 #492,
+  // Betreuer-Durchgang af58853, B4).
   function openTerminal() {
-    if (!Model.launchablePath(terminalScript)) {
-      Quickshell.execDetached(Model.shell('notify-send -a Shikigon -- "$1" "$2"', [
-        "Shikigon cannot open its terminal here",
-        "The folder it lies in has a space or a sign the shell reads, and Omarchy starts the "
-          + "terminal through the shell. Open a terminal and start brain/shikigon-terminal "
-          + "from Shikigon's folder."]))
-      return "path"
-    }
-    Quickshell.execDetached(Model.outside(["omarchy-launch-or-focus-tui",
+    Quickshell.execDetached(Model.outside(["omarchy-launch-tui",
                                            "--app-id=org.omarchy.cosmergon", terminalScript]))
     return "ok"
   }

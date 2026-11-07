@@ -708,7 +708,8 @@ def budget_left(home: Path, conf: dict[str, Any], total: float | None,
     if pct <= 0:
         return None
     day = day or _today()
-    with files.held(home):  # a day begun by another process meanwhile keeps its bookings
+    # a day begun by another process meanwhile keeps its bookings; in a move nothing waits
+    with files.in_move_or_held(home):
         data = _budget_data(home, day)
         if not data:
             if total is None:
@@ -728,11 +729,13 @@ def budget_spend(home: Path, loss: float, day: str | None = None) -> None:
     """Count what one of its own moves lost (a positive number) on the day it was chosen
     (``day``, today unless named). Where that day's budget is no longer in the file (another
     process began the next day first), nothing is counted: the next day stays whole. Under the
-    folder's lock: a booking of a ``tick`` by hand next to the running brain was lost when both
-    wrote at the same moment (Fehlersuche Stück 24, variant of Fund #2)."""
+    move's lock, outside a move the folder's: a booking of a ``tick`` by hand next to the running
+    brain was lost when both wrote at the same moment (Fehlersuche Stück 24, variant of Fund #2).
+    Inside a move it never waits: until af58853 it waited for the folder's lock and, past its
+    deadline, the move that had gone out was counted nowhere (Betreuer-Durchgang af58853, B1)."""
     if loss <= 0:
         return
-    with files.held(home):
+    with files.in_move_or_held(home):
         data = _budget_data(home, day)
         if data:
             data["spent"] += loss

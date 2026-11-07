@@ -12,22 +12,26 @@ What changed for someone who uses Shikigon. Newest first.
 - **`max_per_day` holds when calls come at the same moment.** Questions from the terminal and a
   `tick` by hand next to the running brain each looked at the day's count first and counted
   later: at the same moment they all went out, past the limit, and fewer were counted. Now a call
-  is checked and counted in one step, under a lock on the state folder. The same lock keeps the
-  learning budget's bookings, the paused moves, the tournament ends written down and the lessons
-  from being lost, and an announced proposal from going out twice.
+  is checked and counted in one step, under a lock on the state folder, and a lesson kept by a
+  look back as well.
 - **A `tick` by hand and the running brain no longer play at the same moment.** Both chose from
   the same rest of the learning budget, the same spacing of words and the same paused moves, and
   both moves went out: up to twice the day's budget, two words fewer than ten moves apart, a
   message answered twice. Now one move plays at a time; the other plays none and answers
-  `skipped`. A wait for the state folder's lock ends after 2 seconds instead of never.
+  `skipped`, and the panel says that another move is under way. What only a move writes (the
+  learning budget's bookings, the paused moves, the tournament ends, the spacing of words and an
+  announced proposal) waits for no other lock inside it, so a move that went out is always
+  counted. Every other wait for a lock, on the state folder or on a file being written, ends
+  after 2 seconds instead of never.
 - **`M` in the terminal asks the advisor whatever your folders are called.** For a folder name
   with a tab or a line break, or with a letter past ASCII under the `C` locale, the command was
   written in a form the terminal client does not read, and it found no advisor.
-- **open terminal says so instead of starting when the folder would not survive Omarchy's
-  starter.** Omarchy starts a terminal app through its shell, so a space or a sign the shell
-  reads in the folder Shikigon lies in kept the terminal shut, or was read as a command. Now the
-  bar starts it only for a folder without them and otherwise shows a note saying how to start it
-  by hand.
+- **open terminal opens whatever the folder is called, and brings no other window to the
+  front.** Omarchy's starter ran the path through its shell, so a space or a sign the shell reads
+  in the folder Shikigon lies in kept the terminal shut, or was read as a command; and it brought
+  any window to the front whose title named Shikigon's terminal, a web page's too. Now the bar
+  uses Omarchy's plain starter, which hands the path on whole. A second click opens a second
+  window.
 - **A line break of the world or of a model no longer makes the panel run off the screen.** A
   reason for a move, an answer of the model, a note on what it does now or a tournament compass
   with many line breaks stood up to 4001 lines tall. Every text of the panel now has a line

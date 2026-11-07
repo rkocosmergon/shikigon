@@ -283,7 +283,7 @@ class TalkingDecider:
     ) -> tuple[str, dict[str, Any]]:
         # Read, taken and written in one step: a ``tick`` by hand next to the running brain plays
         # an announced proposal only once (Fehlersuche Stück 24, variant of Fund #2).
-        with files.held(self.home):
+        with files.in_move_or_held(self.home):
             memo = load(self.home)
             then, chose = announced(memo, blocked, state), memo["then_last"]
             memo["then"], memo["then_last"] = None, None  # played now or never
@@ -336,7 +336,8 @@ class TalkingDecider:
         afresh on the next move. Until 0.1.14 the head played it at once and the memo played it
         again, two offers for the one announced (cos20 #619)."""
         if self._word:
-            with files.held(self.home):  # read, cleared and written in one step (Stück 24)
+            # read, cleared and written in one step (Stück 24); in a move nothing waits
+            with files.in_move_or_held(self.home):
                 memo = load(self.home)
                 memo["then"], memo["then_last"] = None, None
                 files.write_json(memo_path(self.home), memo)

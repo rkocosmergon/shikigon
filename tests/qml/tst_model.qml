@@ -16,19 +16,6 @@ TestCase {
     compare(Model.stateHome("~/state", "/home/p"), "/home/p/.local/state")
   }
 
-  // cos20 #492, Stück 24, variant of finding #3: Omarchy's starter runs the path through eval.
-  function test_a_path_opens_the_terminal_only_if_the_shell_leaves_it_whole() {
-    verify(Model.launchablePath("/home/p/.config/omarchy/plugins/cosmergon.shikigon/brain/x"))
-    verify(Model.launchablePath("/home/j\u00f6rg/x"), "a letter past ASCII is no sign of the shell")
-    verify(Model.launchablePath("/home/a-b_c.d@e%f+g=h:i,j/x"))
-    var bad = ["", "relative/x", "/home/a b/x", "/home/a\tb/x", "/home/a\nb/x", "/home/a'b/x",
-               '/home/a"b/x', "/home/$x/x", "/home/`x`/x", "/home/a;b/x", "/home/a*b/x",
-               "/home/{a,b}/x", "/home/a\\b/x", "/home/a|b/x", "/home/a&b/x", "/home/~x/x",
-               "/home/a(b/x", "/home/a<b/x", "/home/a#b/x", "/home/a!b/x", "/home/a[b/x"]
-    for (var i = 0; i < bad.length; i++) verify(!Model.launchablePath(bad[i]), JSON.stringify(bad[i]))
-    verify(!Model.launchablePath(undefined))
-  }
-
   function test_current_preset() {
     verify(Model.isCurrentPreset("attack", "attack"))
     verify(Model.isCurrentPreset("free", "autonomous"), "the server calls 'free' autonomous")
