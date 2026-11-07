@@ -484,6 +484,9 @@ shikigon advisor list        # who could answer; also: try agent:NAME [MODEL] | 
 shikigon forget --yes        # delete it, on the server and here
 ```
 
+One move at a time: while the running brain is in a move, `shikigon tick` plays none and
+answers `skipped`, and the other way round.
+
 The terminal client for the same agent is `brain/shikigon-terminal` (that is what
 **open terminal** starts). Started any other way, `cosmergon-dashboard` would create a second
 agent of its own.
@@ -510,6 +513,7 @@ Everything lives in plain files:
 | `~/.local/state/shikigon/speech.json` | when it last wrote to another agent, the messages it has answered, and a contract proposal it announced |
 | `~/.local/state/shikigon/unusable_answers.jsonl` | what your agent answered when its answer could not be played, for looking into why: why it was turned down, how long it was, its first and last 200 characters. Readable by you only, cut to its last 64 KiB once it passes 128 KiB. Nothing in Shikigon reads it, so no model, status or bar gets it |
 | `~/.local/state/shikigon/budget.json` | today's learning budget while your agent has taken over: its total energy at its first move of the UTC day and what its own moves lost since |
+| `~/.local/state/shikigon/move.lock` | empty; locked while a move plays, so the running brain and a `tick` by hand never play at once |
 | `~/.local/state/shikigon/review/` | what your agent may read while it looks back: its moves, their numbers, the world's rules |
 | `~/.local/state/shikigon/setup.json` | how far **wake** got, for the panel |
 | `~/.local/state/shikigon/setup.log` | what the last setup of its brain printed (pip), for when it failed |

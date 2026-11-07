@@ -362,7 +362,10 @@ class TalkingDecider:
         return True, usable(text, occ.quote, self.key)
 
     def _remember(self, memo: dict[str, Any], occ: Occasion, said: str | None) -> None:
-        """Asked is asked: a SKIP also waits its turn, and a message is answered only once."""
+        """Asked is asked: a SKIP also waits its turn, and a message is answered only once.
+
+        Written after the model was asked, within one move: ``tick`` holds ``files.one_move``, so
+        no other move read the memo in between (cos20 #492, Betreuer-Durchgang 1d81304, B2)."""
         memo["talked"] = memo["moves"]
         if occ.kind == "partner":
             memo["posted"] = memo["moves"]

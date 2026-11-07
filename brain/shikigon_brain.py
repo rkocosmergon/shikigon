@@ -993,6 +993,9 @@ async def try_again(
     return last
 
 
+ANOTHER_MOVE = "another move is under way"  # ``tick``: the other process plays this one
+
+
 async def tick(
     agent: Any, decider: Any, done_in: int | None = None, refusals: Refusals | None = None
 ) -> dict[str, Any]:
@@ -1002,7 +1005,22 @@ async def tick(
     tick, and when "next tick at" comes late the state still shows that tick: then nothing
     is chosen, no advisor is asked, nothing is written (``skipped``). ``refusals`` keeps the
     moves the world refused in a row; a paused move is not played (cos20 #491).
+
+    One move at a time (``files.one_move``): while another process is in a move (the running
+    brain, or a ``tick`` by hand), this one plays none and says so (``skipped``). Until 1d81304
+    both chose from the same learning budget's rest, the same words' spacing and the same paused
+    moves, and both went out (cos20 #492, Betreuer-Durchgang 1d81304, B1–B3).
     """
+    with files.one_move(state_dir()) as mine:
+        if not mine:
+            return {"action": "", "ok": True, "why": "", "skipped": ANOTHER_MOVE}
+        return await _tick(agent, decider, done_in, refusals)
+
+
+async def _tick(
+    agent: Any, decider: Any, done_in: int | None, refusals: Refusals | None
+) -> dict[str, Any]:
+    """The move itself, under ``tick``'s lock."""
     state = await agent.refresh_state()
     if state is None:
         return fall_asleep(WORLD_SILENT, "no state from the world")
@@ -1686,7 +1704,7 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
             return
         decider, chosen = decider_for_now(cfg, decider, chosen)
         last = await guarded_tick(agent, decider, done_in, refusals)
-        if last.get("skipped"):  # the world's tick is late: one choice per tick, so wait for it
+        if last.get("skipped"):  # the world's tick is late, or a move by hand is under way
             await asyncio.sleep(LATE_TICK_S)
             continue
         state = getattr(agent, "state", None)

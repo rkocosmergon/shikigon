@@ -15,6 +15,11 @@ What changed for someone who uses Shikigon. Newest first.
   is checked and counted in one step, under a lock on the state folder. The same lock keeps the
   learning budget's bookings, the paused moves, the tournament ends written down and the lessons
   from being lost, and an announced proposal from going out twice.
+- **A `tick` by hand and the running brain no longer play at the same moment.** Both chose from
+  the same rest of the learning budget, the same spacing of words and the same paused moves, and
+  both moves went out: up to twice the day's budget, two words fewer than ten moves apart, a
+  message answered twice. Now one move plays at a time; the other plays none and answers
+  `skipped`. A wait for the state folder's lock ends after 2 seconds instead of never.
 - **`M` in the terminal asks the advisor whatever your folders are called.** For a folder name
   with a tab or a line break, or with a letter past ASCII under the `C` locale, the command was
   written in a form the terminal client does not read, and it found no advisor.

@@ -21,6 +21,7 @@ import shutil
 import stat
 import tempfile
 import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -91,6 +92,49 @@ def _renew(path: Path) -> None:
             raise
 
 
+HELD_WAIT_S = 2.0  # how long ``held`` waits for the other process, at most
+_HELD_RETRY_S = 0.02
+MOVE_LOCK = "move.lock"
+
+
+def _lock_within(fd: int, wait_s: float) -> None:
+    """An exclusive ``flock`` on ``fd`` within ``wait_s``, else ``TimeoutError`` (an ``OSError``).
+    Until 1d81304 ``held`` waited without a deadline, in the thread of the brain's event loop: a
+    holder stopped inside its few lines stopped every move and question with it (cos20 #492,
+    Betreuer-Durchgang 1d81304, B4, K24)."""
+    deadline = time.monotonic() + wait_s
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("the state folder stays locked by another process") from None
+            time.sleep(_HELD_RETRY_S)
+
+
+@contextlib.contextmanager
+def one_move(folder: Path) -> Iterator[bool]:
+    """``True`` while this process plays a move, ``False`` when another process is in one.
+
+    One move at a time: the running brain and a ``tick`` by hand never play at once. What a move
+    reads when it chooses (the learning budget's rest, the words' spacing, the paused moves) is
+    what holds when it goes out and is written down; ``held`` covers one read, change and write
+    only. It never waits: a move that finds another under way is left out. Its own file, not the
+    folder ``held`` locks (cos20 #492, Betreuer-Durchgang 1d81304, B1–B3)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    fd = os.open(folder / MOVE_LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            mine = True
+        except BlockingIOError:
+            mine = False
+        yield mine
+    finally:
+        os.close(fd)  # closing it lets the lock go
+
+
 # This process's hold on a state folder: its descriptor and how deep it is held (``held``).
 _HELD: dict[str, list[int]] = {}
 _HELD_HERE = threading.RLock()
@@ -106,7 +150,7 @@ def held(folder: Path) -> Iterator[None]:
     the first. Calls a day went past ``max_per_day``, a booking of the learning budget was lost
     (Fehlersuche Stück 24, Fund #2). An exclusive ``flock`` on the folder itself, no file of its
     own; held again in this process it passes through. Never across an ``await``: the other
-    process waits for it (a guard in the tests)."""
+    process waits for it (a guard in the tests), and at most ``HELD_WAIT_S``."""
     key = os.path.abspath(folder)
     with _HELD_HERE:
         entry = _HELD.get(key)
@@ -114,7 +158,7 @@ def held(folder: Path) -> Iterator[None]:
             folder.mkdir(parents=True, exist_ok=True)
             fd = os.open(key, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
             try:
-                fcntl.flock(fd, fcntl.LOCK_EX)
+                _lock_within(fd, HELD_WAIT_S)
             except BaseException:
                 os.close(fd)
                 raise

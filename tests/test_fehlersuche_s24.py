@@ -166,8 +166,10 @@ WHOLE_OR_AFTER_A_WAIT = {
     ("shikigon_brain.py", "_save"): "Refusals: called only from _note, under the lock in note",
     ("connections.py", "choose"): "the player's choice of advisor, replaced whole",
     ("advisor.py", "_keep"): "the counts: called only from take_call/count_move, under the lock",
-    ("speech.py", "decide"): "after the model was asked (the then-branch is under the lock)",
-    ("speech.py", "_remember"): "after the model was asked: at worst a word's spacing is lost",
+    ("speech.py", "decide"): "after the model was asked, in a move: under files.one_move "
+                             "(test_betreuer_1d81304; the then-branch is under the lock)",
+    ("speech.py", "_remember"): "after the model was asked, in a move: under files.one_move "
+                                "(test_betreuer_1d81304, B2)",
 }
 
 
