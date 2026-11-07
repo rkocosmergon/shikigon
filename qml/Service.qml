@@ -89,7 +89,9 @@ Item {
     if (!awake) return "asleep"
     var said = oneLine(text)
     if (said === "") return "empty"
-    if (instructor.running) return "busy"
+    // A click while the last word is still on its way is kept, the latest one wins, and goes
+    // when that one is done: until 07.11.2026 it was dropped without a word (cos20 #492).
+    if (instructor.running) { instructor.next = said; return "ok" }
     instructor.said = said
     instructor.running = true
     return "ok"
@@ -418,11 +420,18 @@ Item {
   Process {
     id: instructor
     property string said: ""
+    property string next: ""
     command: root.brainCommand(["instruct"])
     stdinEnabled: true
     onStarted: {
       write(said + "\n")
       said = ""
+    }
+    onExited: {
+      if (next === "") return
+      said = next
+      next = ""
+      running = true
     }
   }
   // A key an address asked for goes over stdin, never as an argument, with the address it is

@@ -161,6 +161,29 @@ function compassWord(text) {
   return COMPASS_WORDS.indexOf(w) >= 0 ? w : ""
 }
 
+// The compass as the panel shows it. `status.compass` comes from the state a move took at its
+// start (`status.seen_at`, a second), written down 80–100 s later: a compass set from the panel
+// in between stood there only after the next move, and the button did nothing to see (cos20
+// #492, Gründer 07.11.2026). The newest word the world took (`journal`, newest first, as the bar
+// keeps it) counts when it is not older than that state; a change in the terminal after it
+// comes with the next move's state, which is newer. A status without `seen_at` (a brain from
+// before) says nothing about when it looked: then the status, as before.
+function currentCompass(status, journal) {
+  var shown = status && status.compass ? String(status.compass) : ""
+  if (!status || typeof status.seen_at !== "number") return shown
+  var seen = status.seen_at
+  var entries = Array.isArray(journal) ? journal : []
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i]
+    if (!e || e.instruction === undefined || e.ok !== true || typeof e.at !== "number") continue
+    var preset = String(e.preset || "")
+    if (preset !== "autonomous" && (preset === "free" || COMPASS_WORDS.indexOf(preset) < 0))
+      continue
+    return e.at >= seen ? preset : shown
+  }
+  return shown
+}
+
 // The input lines are read-only (cos20 #492, marketplace review #11665) and type what a key
 // press brings: only printable characters, never a control character (Enter, Tab, Esc have
 // their own handlers, and a stray one must not end up in an address or a key).

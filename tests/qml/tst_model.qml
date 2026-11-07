@@ -751,4 +751,49 @@ TestCase {
     compare(Model.addressHost(""), "")
     compare(Model.addressHost(undefined), "")
   }
+
+  // cos20 #492, the founder on the device 07.11.2026: a compass set from the panel showed only
+  // after the next move, which had looked before the click (Model.currentCompass).
+  function took(at, preset, ok) { return { at: at, instruction: preset, preset: preset, ok: ok } }
+
+  function test_current_compass_a_word_newer_than_the_state_shows() {
+    var status = { compass: "autonomous", seen_at: 100 }
+    compare(Model.currentCompass(status, [took(105, "attack", true)]), "attack")
+  }
+
+  function test_current_compass_in_the_same_second_the_word() {
+    compare(Model.currentCompass({ compass: "autonomous", seen_at: 100 },
+                                 [took(100, "attack", true)]), "attack")
+  }
+
+  function test_current_compass_a_state_newer_than_the_word_shows() {
+    // the terminal set trade after the click: the next move's state says so
+    compare(Model.currentCompass({ compass: "trade", seen_at: 110 },
+                                 [took(105, "attack", true)]), "trade")
+  }
+
+  function test_current_compass_a_refused_word_does_not_show() {
+    var journal = [took(107, "defend", false), { at: 106, words: "wait", ok: true },
+                   took(105, "attack", true)]
+    compare(Model.currentCompass({ compass: "autonomous", seen_at: 100 }, journal), "attack",
+            "the newest word the world took, past a refused one and a move")
+    compare(Model.currentCompass({ compass: "autonomous", seen_at: 100 },
+                                 [took(107, "defend", false)]), "autonomous")
+  }
+
+  function test_current_compass_only_compass_words() {
+    var status = { compass: "grow", seen_at: 100 }
+    compare(Model.currentCompass(status, [took(105, "free", true)]), "grow",
+            "the brain writes free as autonomous")
+    compare(Model.currentCompass(status, [took(105, "<b>x</b>", true)]), "grow")
+    compare(Model.currentCompass(status, [took(105, "autonomous", true)]), "autonomous")
+  }
+
+  function test_current_compass_without_seen_at_or_journal() {
+    compare(Model.currentCompass({ compass: "grow" }, [took(5, "attack", true)]), "grow",
+            "a status without seen_at says nothing about when it looked")
+    compare(Model.currentCompass({ compass: "grow", seen_at: 100 }, []), "grow")
+    compare(Model.currentCompass({ compass: "grow", seen_at: 100 }, undefined), "grow")
+    compare(Model.currentCompass(undefined, undefined), "")
+  }
 }

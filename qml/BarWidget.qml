@@ -43,7 +43,8 @@ BarWidget {
 
   readonly property string mood: status && status.mood ? status.mood : "asleep"
   readonly property bool awake: service ? service.awake : false
-  readonly property string compass: status && status.compass ? String(status.compass) : ""
+  // The compass from status.json, or a newer one set from the panel (Model.currentCompass).
+  readonly property string compass: Model.currentCompass(status, journal)
   // The tournament it plays in (cos20 #475): the server's block, passed on by the brain.
   // While it runs it is the game; the panel shows it first and the world steps back.
   readonly property var tournament: status && Model.tournamentRunning(status.tournament)

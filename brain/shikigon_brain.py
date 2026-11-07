@@ -1043,6 +1043,7 @@ async def _tick(
     agent: Any, decider: Any, done_in: int | None, refusals: Refusals | None
 ) -> dict[str, Any]:
     """The move itself, under ``tick``'s lock."""
+    seen_at = int(time.time())  # before it looks: a word set later is newer than this state
     state = await agent.refresh_state()
     if state is None:
         return fall_asleep(WORLD_SILENT, "no state from the world")
@@ -1062,7 +1063,7 @@ async def _tick(
         last = await play(agent, action, params)
     last = await try_again(agent, decider, state, last, refusals)  # counts it, once
     try:
-        await write_down(agent, decider, state, last)
+        await write_down(agent, decider, state, last, seen_at)
     except (AuthenticationError, SendRefusedError):
         raise
     except Exception as exc:  # noqa: BLE001 - what went out stays played (cos20 #630)
@@ -1072,9 +1073,16 @@ async def _tick(
     return last
 
 
-async def write_down(agent: Any, decider: Any, state: Any, last: dict[str, Any]) -> None:
+async def write_down(
+    agent: Any, decider: Any, state: Any, last: dict[str, Any], seen_at: int | None = None
+) -> None:
     """What follows a move: its words, its budget, the journal, the bar's view. By now the world
-    has the move: what fails here is no move that could not be played (``tick``, cos20 #630)."""
+    has the move: what fails here is no move that could not be played (``tick``, cos20 #630).
+
+    ``seen_at`` is the second before the move asked for ``state``. The bar shows a compass set
+    from the panel at or after it (a journal line) instead of the one in this state: a move
+    took its state before the click and wrote it down 80–100 s later, and until then the
+    panel showed the old compass (cos20 #492, Gründer 07.11.2026)."""
     import speech
     from words import move_words
 
@@ -1098,6 +1106,8 @@ async def write_down(agent: Any, decider: Any, state: Any, last: dict[str, Any])
     journal(entry)
     await tournament_journal(agent, state)
     status = snapshot(state, last)
+    if seen_at is not None:
+        status["seen_at"] = seen_at
     left = getattr(decider, "budget_left", None)  # measured when the head chose
     if left is not None:  # a number only, for the bar (threat model §1b); after this move
         status["learning_budget_left"] = round(max(0.0, float(left) - spent))
@@ -1189,6 +1199,12 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
                "try again later")
         journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False})
         return {"heard": text, "preset": preset, "ok": False, "why": why}
+    except Exception:
+        # Not reached, or no answer: the panel reads the journal, not this process's output, so
+        # the word says there that it was not taken; ``with_agent`` answers as before (cos20
+        # #492, Gründer 07.11.2026).
+        journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False})
+        raise
     ok = not (isinstance(answer, dict) and answer.get("error"))
     journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": ok})
     return {"heard": text, "preset": preset, "ok": ok}
