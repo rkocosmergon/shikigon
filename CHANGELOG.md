@@ -240,10 +240,10 @@ What changed for someone who uses Shikigon. Newest first.
 - **Your agent remembers what the world refused.** Its last moves also name the last move the
   world refused before the one that went out, with the world's reason. A refused choice was gone
   at the next tick: 30 of 54 refusals on the device repeated one from an earlier move.
-- **The README says which journal it means.** Each move the head chose, with its reason and the
-  moves the world refused before it, is in the journal file (`journal.jsonl`); the panel's
-  journal shows each move in words only. The README said "the journal shows" for both. It
-  also says what the panel shows in a tournament in place of the numbers and the last move.
+- **The README says which journal it means.** Where it said "the journal shows" each move the
+  head chose, with its reason and the moves the world refused before it, it now names the
+  journal file (`journal.jsonl`), where they are. It also says what the panel shows in a
+  tournament in place of the numbers and the last move.
 
 ## 0.1.14 (2026-10-31)
 
