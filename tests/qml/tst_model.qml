@@ -159,6 +159,31 @@ TestCase {
     compare(refused.ok, false)
   }
 
+  // No answer is not "not taken": the world may have taken it before its answer was lost
+  // (cos20 #492, Betreuer-Durchgang 4866b11, B2).
+  function test_journal_compass_no_answer() {
+    var unanswered = Model.journalLine({ instruction: "attack", preset: "attack", ok: false,
+                                         answered: false })
+    compare(unanswered.text,
+            "you: attack → no answer from the world; its next move shows the compass")
+    compare(unanswered.ok, false)
+    var refused = Model.journalLine({ instruction: "attack", preset: "attack", ok: false,
+                                      answered: true })
+    compare(refused.text, "you: attack → not taken, try again later")
+  }
+
+  // Another move holds this one up: a line of its own, also after a move that worked
+  // (cos20 #492, Betreuer-Durchgang 4866b11, N1).
+  function test_journal_another_move_under_way() {
+    var said = "another move is under way since 12:40 UTC (a tick by hand): "
+               + "this one plays none until it ends"
+    var line = Model.journalLine({ at: 1, waiting: true, why: said })
+    compare(line.text, said)
+    compare(line.ok, true)
+    compare(Model.journalLines([{ at: 1, waiting: true, why: said },
+                                { action: "evolve", words: "evolve", ok: true }])[0].text, said)
+  }
+
   // A lesson from its last moves (#451): what it learned, or why it could not.
   function test_journal_lesson() {
     compare(Model.journalLine({ learned: "Missions paid, idle market listing did not.", ok: true }).text,

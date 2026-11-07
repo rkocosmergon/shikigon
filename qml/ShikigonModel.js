@@ -60,8 +60,15 @@ function grouped(number) {
 // move. `ok` is false only for a failure.
 function journalLine(entry) {
   var failed = entry.ok === false
+  // Another move holds this one up (a tick by hand): a line of its own, whatever the last move
+  // did; the status said it only after a failed move (cos20 #492, Betreuer-Durchgang 4866b11, N1).
+  if (entry.waiting === true) return { text: String(entry.why || ""), ok: true }
   if (entry.instruction) { // a word the world did not take is said (shikigon.toml, cos20 #628 F5)
     var word = "you: " + entry.instruction + " → "
+    // No answer is not "not taken": the world may have taken it before its answer was lost
+    // (`answered`, a key, never the sentence; cos20 #492, Betreuer-Durchgang 4866b11, B2).
+    if (failed && entry.answered === false)
+      return { text: word + "no answer from the world; its next move shows the compass", ok: false }
     return failed ? { text: word + "not taken, try again later", ok: false }
                   : { text: word + entry.preset, ok: true }
   }

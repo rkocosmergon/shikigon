@@ -1172,9 +1172,12 @@ class TooMuchOutput(subprocess.SubprocessError):
 # connection only to port 443. An agent sends the talk wherever its own configuration names
 # for the model, which Shikigon cannot read reliably from outside (pi resolves the address from
 # its catalogue, its models.json and at sending from its credentials). The kernel holds the rule
-# for every agent and every program it starts: plain http to another machine, a model server in
-# the home network or a port on this machine that another user may hold is refused before a
-# byte. Name resolution (UDP) stays open. Without Landlock network rules (ABI < 4, Linux before
+# for every agent and every program it starts: a connection to any port but 443 (plain http on
+# its usual ports, a model server in the home network on its own port, a port on this machine
+# that another user may hold) is refused before a byte. The kernel sees the port, not the
+# encryption: an address the agent's own setup writes as http://…:443 still goes in plain text
+# (README, "A coding agent you already use"; cos20 #492, Betreuer-Durchgang 4866b11, B4). Name
+# resolution (UDP) stays open. Without Landlock network rules (ABI < 4, Linux before
 # 6.7) no agent is started. Syscalls 444-446 are the same on x86_64 and aarch64.
 HTTPS_PORT = 443
 GUARD = """

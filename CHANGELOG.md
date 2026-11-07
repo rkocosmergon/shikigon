@@ -8,15 +8,17 @@ What changed for someone who uses Shikigon. Newest first.
   said so, but the panel's compass and its marked button stayed on the old one for up to two
   moves: a move writes down the state it looked at when it began. Now the button you click is
   marked the moment you click it; when the world does not take it, the mark goes back and the
-  journal says why. The compass that holds carries a `●`, also while the cursor stands on its
-  button, and the cursor no longer stays on the last button the mouse passed, where it looked
-  like a second choice. A second click while the first is still on its way is no longer dropped
-  (the last one counts), and a word that could not reach the world says so in the journal.
+  journal says why. The compass the panel last knows of (your click, or the world's at its last
+  move; one changed in the terminal after the next move) carries a `●`, also while the cursor
+  stands on its button, and the cursor no longer stays on the last button the mouse passed,
+  where it looked like a second choice. A second click while the first is still on its way is
+  no longer dropped (the last one counts), and a word that could not reach the world says so in
+  the journal; one that got no answer says that, since the world may have taken it.
 - **A key pasted for one address no longer goes to the next one.** A paste is read by its own
   process, for up to 2 seconds. When it came after you had left the key's step and typed another
   address, it landed in the key of that address and went there with your next Enter. Now every
-  change of step lets a paste under way go, and a second Enter while a key is still being kept
-  leaves it in its field.
+  change of step lets a paste under way go, a paste lands only in the line that still has the
+  focus, and a second Enter while a key is still being kept leaves it in its field.
 - **`max_per_day` holds when calls come at the same moment.** Questions from the terminal and a
   `tick` by hand next to the running brain each looked at the day's count first and counted
   later: at the same moment they all went out, past the limit, and fewer were counted. Now a call

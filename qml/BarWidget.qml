@@ -142,7 +142,9 @@ BarWidget {
   // next address that asks for a key would get it on Enter (cos20 #631, K-BO). A paste belongs
   // to the step it was asked in: it may come up to 2 s later, and one asked for in the key of
   // one address landed in the key of the next (Fehlersuche Stück 24, Fund #1). So every change
-  // of step lets a paste under way go (`pasteTarget`), closing the panel too (`close`).
+  // of step lets a paste under way go (`pasteTarget`), and a paste lands only in the line that
+  // still has the focus when it comes (`paster`): closing the panel from the question line was
+  // no change of step, and the paste still went in (cos20 #492, Betreuer-Durchgang 4866b11, B3).
   onStepChanged: {
     pasteTarget = null
     if (step !== "key") keyField.text = ""
@@ -1044,7 +1046,8 @@ BarWidget {
     stdout: StdioCollector {
       onStreamFinished: {
         const s = Model.pastedLine(text)
-        if (root.pasteTarget && s !== "") root.pasteTarget.put(s)
+        // only into the line that still has the focus: any way out of it lets the paste go (B3)
+        if (root.pasteTarget && root.pasteTarget.activeFocus && s !== "") root.pasteTarget.put(s)
         root.pasteTarget = null
       }
     }

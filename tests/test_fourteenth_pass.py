@@ -108,7 +108,7 @@ def test_the_bar_gets_every_field_its_journal_line_reads() -> None:
         assert body, function
         read |= set(re.findall(r"\bentry\.(\w+)", body.group(0)))
     assert read, "the functions were not found"
-    written = set(brain.BAR_JOURNAL_TEXTS) | {"ok"}
+    written = set(brain.BAR_JOURNAL_TEXTS) | {"ok"} | set(brain.BAR_JOURNAL_FLAGS)
     assert read <= written, sorted(read - written)
 
 

@@ -614,6 +614,10 @@ def journal(*entries: dict[str, Any]) -> None:
 # bar only once it stands here.
 BAR_JOURNAL_TEXTS = ("instruction", "preset", "learned", "why", "mission", "text", "words",
                      "kind", "action")
+# Yes-or-no marks of a journal line the bar reads, each as a boolean: a word with no answer from
+# the world (``instruct``) and another move holding this one up (``note_another_move``; cos20 #492,
+# Betreuer-Durchgang 4866b11, B2 and N1).
+BAR_JOURNAL_FLAGS = ("answered", "waiting")
 
 
 def bar_line(entry: dict[str, Any]) -> dict[str, Any]:
@@ -624,6 +628,9 @@ def bar_line(entry: dict[str, Any]) -> dict[str, Any]:
             line[key] = None if entry[key] is None else short(entry[key], SENTENCE_CHARS)
     if "ok" in entry:
         line["ok"] = entry["ok"] is not False
+    for key in BAR_JOURNAL_FLAGS:
+        if key in entry:
+            line[key] = entry[key] is True
     return line
 
 
@@ -999,23 +1006,20 @@ ANOTHER_MOVE = "another move is under way"  # ``tick``: the other process plays 
 
 
 def note_another_move() -> None:
-    """The bar's last sentence says that another move holds this one up: a ``tick`` by hand that
-    does not end (stopped in its terminal) holds every move of the running brain, and until
-    af58853 the panel showed the last move as if nothing waited (cos20 #492, Betreuer-Durchgang
-    af58853, B3). The next move written down replaces it."""
-    path = state_dir() / "status.json"
+    """The journal says that another move holds this one up: a ``tick`` by hand that does not end
+    (stopped in its terminal) holds every move of the running brain, and until af58853 the panel
+    showed the last move as if nothing waited (cos20 #492, Betreuer-Durchgang af58853, B3).
+
+    A journal line, not the status: the panel shows every journal line, but the status's reason
+    only for a move that failed, so after a move that worked it said nothing (Betreuer-Durchgang
+    4866b11, N1); and the status was read, changed and written outside any lock, over the status
+    of a ``tick`` by hand ending its move at that moment (B1). A line is only added."""
+    since = time.strftime("%H:%M", time.gmtime())
+    said = f"{ANOTHER_MOVE} since {since} UTC (a tick by hand): this one plays none until it ends"
     try:
-        status = files.read_object(path)
-        last = status.get("last")
-        if not isinstance(last, dict):
-            last = {}
-        since = time.strftime("%H:%M", time.gmtime())
-        said = (f"{ANOTHER_MOVE} since {since} UTC (a tick by hand): "
-                "this one plays none until it ends")
-        status["last"] = {**last, "why": said}
-        write_status(status)
+        journal({"at": int(time.time()), "waiting": True, "why": said})
     except OSError as exc:  # it says so on stderr instead (cos20 #630)
-        print(f"its status could not be written ({type(exc).__name__})", file=sys.stderr)
+        print(f"its journal could not be written ({type(exc).__name__})", file=sys.stderr)
 
 
 async def tick(
@@ -1201,9 +1205,12 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
         return {"heard": text, "preset": preset, "ok": False, "why": why}
     except Exception:
         # Not reached, or no answer: the panel reads the journal, not this process's output, so
-        # the word says there that it was not taken; ``with_agent`` answers as before (cos20
-        # #492, Gründer 07.11.2026).
-        journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False})
+        # the word stands there, not taken as far as this process knows; ``with_agent`` answers
+        # as before (cos20 #492, Gründer 07.11.2026). ``answered: False``: the world may have
+        # taken it before its answer was lost, so the bar says "no answer", not "not taken"
+        # (Betreuer-Durchgang 4866b11, B2).
+        journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False,
+                 "answered": False})
         raise
     ok = not (isinstance(answer, dict) and answer.get("error"))
     journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": ok})
@@ -1492,18 +1499,17 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
         result: dict[str, Any] = connections.run_loop(connections.probe(patient))
         if result["ok"]:
             # a new connection replaces the old one whole; how often it advises stays
-            before = connections.chosen(home)
-            kept: dict[str, Any] = {k: before[k] for k in ("advise", "every") if k in before}
-            connections.choose(home, {**kept, **choice})
+            change_choice(home, lambda before: {
+                **{k: before[k] for k in ("advise", "every") if k in before}, **choice})
             result["label"] = advisor.who(tried)
         return result
     if what == "advise" and rest:
         if rest[0] not in ("off", "head") and not rest[0].isdecimal():
             return {"ok": False, "why": "advise off, a number of moves, or head"}
         often: int | str = rest[0] if rest[0] in ("off", "head") else max(1, int(rest[0]))
-        kept = {key: value for key, value in connections.chosen(home).items() if key != "every"}
-        connections.choose(home, {**kept, "advise": often,
-                                  **({} if often in ("off", "head") else {"every": often})})
+        change_choice(home, lambda before: {
+            **{key: value for key, value in before.items() if key != "every"}, "advise": often,
+            **({} if often in ("off", "head") else {"every": often})})
         return {"ok": True, "now": advisor_now(cfg)}
     if what == "forget":
         for name in (connections.CHOICE_FILE, connections.KEY_FILE):
@@ -1512,6 +1518,15 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
     usage = ("advisor list | models agent:NAME | key | try agent:NAME [MODEL] | advise off|N|head"
              " | forget — an address goes through the panel or on stdin")
     return {"ok": False, "why": usage}
+
+
+def change_choice(home: Path, change: Callable[[dict[str, Any]], dict[str, Any]]) -> None:
+    """Read, change and write the advisor's choice in one hold: the panel's "try" and "advise" run
+    as processes of their own and may meet (cos20 #492, Betreuer-Durchgang 4866b11, V1)."""
+    import connections
+
+    with files.held(home):
+        connections.choose(home, change(connections.chosen(home)))
 
 
 def pick(connection: str, model: str) -> dict[str, Any] | None:

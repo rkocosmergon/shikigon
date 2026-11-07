@@ -123,6 +123,9 @@ HELD_PLACES = {
     ("advisor.py", "take_call"): "the day's calls: questions from the terminal and look backs too",
     ("advisor.py", "count_move"): "beside the day's calls, in the same file",
     ("lessons.py", "keep"): "the lessons: a look back runs beside the moves",
+    ("shikigon_brain.py", "change_choice"): (
+        "the advisor's choice: the panel's try and advise run as processes of their own, never in "
+        "a move (Betreuer-Durchgang 4866b11, V1)"),
 }
 
 
@@ -291,18 +294,14 @@ def test_b2_making_a_file_private_waits_its_deadline_at_most(tmp_path: Path) -> 
 
 
 # ---------- B3: the panel says that another move holds this one up -------------------------------
+# Since 4866b11 (N1, B1) in a journal line, which the panel always shows; the status's reason it
+# shows only for a move that failed, and the status was read, changed and written without a lock.
 
 
-async def test_b3_the_status_says_another_move_is_under_way_once(
+async def test_b3_the_journal_says_another_move_is_under_way_once(
         monkeypatch: pytest.MonkeyPatch) -> None:
     brain.write_status({"mood": "busy", "last": {"action": "evolve", "ok": True, "why": "grew"}})
-    writes: list[dict[str, Any]] = []
-    real = brain.write_status
-
-    def counted(status: dict[str, Any]) -> None:
-        writes.append(status)
-        real(status)
-
+    before = (brain.state_dir() / "status.json").read_bytes()
     ticks = iter([{"skipped": brain.ANOTHER_MOVE}, {"skipped": brain.ANOTHER_MOVE}])
 
     class Over(Exception):
@@ -317,22 +316,24 @@ async def test_b3_the_status_says_another_move_is_under_way_once(
     async def no_wait(_: float) -> None:
         return None
 
-    monkeypatch.setattr(brain, "write_status", counted)
     monkeypatch.setattr(brain, "guarded_tick", tick)
     monkeypatch.setattr(brain, "world_refusal", lambda cfg: None)
     monkeypatch.setattr(brain, "decider_for_now", lambda cfg, d, c: (d, c))
     monkeypatch.setattr(brain.asyncio, "sleep", no_wait)
     with pytest.raises(Over):
         await brain.run({}, FakeAgent(_brain_state()), CountingDecider(("evolve", {})))
-    assert len(writes) == 1, "said once, not every few seconds"
-    status = json.loads((brain.state_dir() / "status.json").read_text())
-    assert status["last"]["why"].startswith(brain.ANOTHER_MOVE + " since ")
-    assert status["last"]["action"] == "evolve", "the last move stays what it was"
+    recent = json.loads((brain.state_dir() / brain.BAR_JOURNAL).read_text())
+    waiting = [line for line in recent if line.get("waiting")]
+    assert len(waiting) == 1, "said once, not every few seconds"
+    assert waiting[0]["why"].startswith(brain.ANOTHER_MOVE + " since "), waiting
+    assert (brain.state_dir() / "status.json").read_bytes() == before, "the status stays whole"
 
 
-async def test_b3_control_the_next_move_written_down_replaces_it() -> None:
+async def test_b3_control_the_next_move_follows_it_in_the_journal() -> None:
     brain.note_another_move()
     await brain.tick(FakeAgent(_brain_state()), CountingDecider(("evolve", {})))
+    recent = json.loads((brain.state_dir() / brain.BAR_JOURNAL).read_text())
+    assert recent[-2].get("waiting") is True and recent[-1]["action"] == "evolve", recent
     status = json.loads((brain.state_dir() / "status.json").read_text())
     assert brain.ANOTHER_MOVE not in str(status["last"].get("why"))
 
