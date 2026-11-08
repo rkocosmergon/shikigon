@@ -4,6 +4,11 @@ What changed for someone who uses Shikigon. Newest first.
 
 ## Unreleased
 
+- **A read-only `config.toml` keeps its keys, and the agent panel shows the compass the world
+  holds** (cosmergon-agent 0.31.3). Where the file could not be tightened to 0600, every start
+  registered a new anonymous agent; an expired free key re-registers again instead of stopping;
+  the reconnect log no longer quotes the key; a compass set in the Shikigon panel now reaches
+  the terminal.
 - **A compass button shows its compass at once.** The click reached the world, and the journal
   said so, but the panel's compass and its marked button stayed on the old one for up to two
   moves: a move writes down the state it looked at when it began. Now the button you click is
