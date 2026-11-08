@@ -2,7 +2,7 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## Unreleased
+## 0.1.14 (2026-11-08)
 
 - **A read-only `config.toml` keeps its keys, and the agent panel shows the compass the world
   holds** (cosmergon-agent 0.31.3). Where the file could not be tightened to 0600, every start
@@ -249,8 +249,6 @@ What changed for someone who uses Shikigon. Newest first.
   head chose, with its reason and the moves the world refused before it, it now names the
   journal file (`journal.jsonl`), where they are. It also says what the panel shows in a
   tournament in place of the numbers and the last move.
-
-## 0.1.14 (2026-10-31)
 
 - **When your agent has taken over, it writes no word of its own.** A world that offered
   `message` or `say` as moves let your agent write them itself, also with `speak = false`, and
