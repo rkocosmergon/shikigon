@@ -234,7 +234,9 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
   last knows of: the one you clicked, or the one the world named at its last move; a compass you
   change in the terminal shows there after the next move. When the world does not take a click
   (it allows a few changes an hour), the mark goes back and the journal says why; when no answer
-  comes, the journal says so, and the next move shows the compass.
+  comes, the journal says so, and the next move shows the compass. A click that could not even
+  be sent (the world's port on this machine is not yours, or its key may not go there) is said
+  as not sent in the journal, and the panel says why the Shikigon sleeps.
 - **ask** turns the panel to the talk with its advisor: type a question, Enter sends it, the
   answer appears under the model's name; the last two exchanges stay in view. Esc turns the
   panel back. Without a model set, the answer says what is missing.

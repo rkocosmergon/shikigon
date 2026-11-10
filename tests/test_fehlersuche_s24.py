@@ -160,8 +160,12 @@ def test_f2v_bookings_at_the_same_moment_are_all_counted(tmp_path: Path) -> None
 # (a lock across an ``await`` would hold the other process up to 45 s). Each with its reason.
 WHOLE_OR_AFTER_A_WAIT = {
     ("shikigon_brain.py", "write_private"): "the setup file, written whole",
-    ("shikigon_brain.py", "show_journal"): "the bar's view of the journal, written whole",
-    ("shikigon_brain.py", "show_talk"): "the bar's view of the talk, written whole",
+    ("shikigon_brain.py", "show_journal"): "the bar's view of the journal, written whole, under "
+                                           "the journal's own lock (files.lines_held, b964644 B3)",
+    ("shikigon_brain.py", "_show_talk"): "the bar's view of the talk, written whole, under the "
+                                         "talk's own lock in show_talk (b964644 B3)",
+    ("connections.py", "keep_key"): "the advisor's key, replaced whole, under the lock in "
+                                    "advisor_command (b964644 B2)",
     ("shikigon_brain.py", "write_status"): "status.json, written whole from one state",
     ("shikigon_brain.py", "_save"): "Refusals: called only from _note, under the lock in note",
     ("connections.py", "choose"): "the player's choice of advisor, replaced whole",

@@ -69,6 +69,10 @@ function journalLine(entry) {
     // (`answered`, a key, never the sentence; cos20 #492, Betreuer-Durchgang 4866b11, B2).
     if (failed && entry.answered === false)
       return { text: word + "no answer from the world; its next move shows the compass", ok: false }
+    // Refused before it left this machine: not taken, and it sleeps and says why (`sent`, a key;
+    // cos20 #492, Betreuer-Durchgang b964644, B1).
+    if (failed && entry.sent === false)
+      return { text: word + "not sent: it sleeps, and its panel says why", ok: false }
     return failed ? { text: word + "not taken, try again later", ok: false }
                   : { text: word + entry.preset, ok: true }
   }

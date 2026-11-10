@@ -126,6 +126,9 @@ HELD_PLACES = {
     ("shikigon_brain.py", "change_choice"): (
         "the advisor's choice: the panel's try and advise run as processes of their own, never in "
         "a move (Betreuer-Durchgang 4866b11, V1)"),
+    ("shikigon_brain.py", "advisor_command"): (
+        "forget and a key typed in the panel: the advisor's files, beside change_choice, never in "
+        "a move (Betreuer-Durchgang b964644, B2)"),
 }
 
 

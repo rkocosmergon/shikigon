@@ -616,8 +616,9 @@ BAR_JOURNAL_TEXTS = ("instruction", "preset", "learned", "why", "mission", "text
                      "kind", "action")
 # Yes-or-no marks of a journal line the bar reads, each as a boolean: a word with no answer from
 # the world (``instruct``) and another move holding this one up (``note_another_move``; cos20 #492,
-# Betreuer-Durchgang 4866b11, B2 and N1).
-BAR_JOURNAL_FLAGS = ("answered", "waiting")
+# Betreuer-Durchgang 4866b11, B2 and N1), and a word that was never sent (``instruct``,
+# Betreuer-Durchgang b964644, B1).
+BAR_JOURNAL_FLAGS = ("answered", "waiting", "sent")
 
 
 def bar_line(entry: dict[str, Any]) -> dict[str, Any]:
@@ -635,13 +636,23 @@ def bar_line(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def show_journal() -> None:
-    """The journal's last lines for the bar."""
-    lines = files.tail(state_dir() / "journal.jsonl", BAR_LINES, line_bytes=1024)
-    files.write_json(state_dir() / BAR_JOURNAL, [bar_line(line) for line in lines])
+    """The journal's last lines for the bar, read and written under the journal's own lock
+    (``files.lines_held``): the view written last holds every line added before it (cos20 #492,
+    Betreuer-Durchgang b964644, B3)."""
+    path = state_dir() / "journal.jsonl"
+    with files.lines_held(path):
+        lines = files.tail(path, BAR_LINES, line_bytes=1024)
+        files.write_json(state_dir() / BAR_JOURNAL, [bar_line(line) for line in lines])
 
 
 def show_talk() -> None:
-    """The talk's last exchanges for the bar, each cut to what the panel can show."""
+    """The talk's last exchanges for the bar, each cut to what the panel can show; under the
+    talk's own lock, as ``show_journal``."""
+    with files.lines_held(chat_path()):
+        _show_talk()
+
+
+def _show_talk() -> None:
     turns = files.tail(chat_path(), BAR_TURNS, line_bytes=16 * 1024)
     shown = []
     for turn in turns:
@@ -1192,7 +1203,7 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
     preset = preset_for(text, table)
     if preset is None:
         return {"heard": text, "preset": None, "ok": False, "why": "did not understand"}
-    from cosmergon_agent.exceptions import RateLimitError
+    from cosmergon_agent.exceptions import RateLimitError, SendRefusedError
 
     try:
         answer = await agent.set_compass(preset)
@@ -1203,6 +1214,14 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
                "try again later")
         journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False})
         return {"heard": text, "preset": preset, "ok": False, "why": why}
+    except SendRefusedError:
+        # Refused before a byte left (the world's port is not the player's, or its key may not
+        # go there): not taken, and no next move shows the compass, since ``with_agent`` puts
+        # it to sleep with the reason. ``sent: False``; until b964644 it stood as "no answer"
+        # (cos20 #492, Betreuer-Durchgang b964644, B1).
+        journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False,
+                 "sent": False})
+        raise
     except Exception:
         # Not reached, or no answer: the panel reads the journal, not this process's output, so
         # the word stands there, not taken as far as this process knows; ``with_agent`` answers
@@ -1486,7 +1505,8 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
     if what == "key":  # never as an argument, so it never stands in a process list
         if not given.get("key") or not given.get("where"):
             return {"ok": False, "why": "a key comes on stdin with the address it is for"}
-        connections.keep_key(home, str(given["key"]), str(given["where"]))
+        with files.held(home):  # as every other writer of the advisor's files (b964644, B2)
+            connections.keep_key(home, str(given["key"]), str(given["where"]))
         return {"ok": True}
     connection = str(given.get("connection") or (rest[0] if rest else ""))
     if what == "try" and connection:
@@ -1512,8 +1532,12 @@ def advisor_command(cfg: dict[str, Any], what: str, rest: list[str]) -> dict[str
             **({} if often in ("off", "head") else {"every": often})})
         return {"ok": True, "now": advisor_now(cfg)}
     if what == "forget":
-        for name in (connections.CHOICE_FILE, connections.KEY_FILE):
-            (home / name).unlink(missing_ok=True)
+        # In the hold of ``change_choice``: until b964644 a ``try`` or ``advise`` that had read
+        # the choice before this wrote it back after, and the forgotten model was asked again
+        # (cos20 #492, Betreuer-Durchgang b964644, B2).
+        with files.held(home):
+            for name in (connections.CHOICE_FILE, connections.KEY_FILE):
+                (home / name).unlink(missing_ok=True)
         return {"ok": True, "now": advisor_now(cfg)}
     usage = ("advisor list | models agent:NAME | key | try agent:NAME [MODEL] | advise off|N|head"
              " | forget — an address goes through the panel or on stdin")

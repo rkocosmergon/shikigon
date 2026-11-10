@@ -12,6 +12,16 @@ What changed for someone who uses Shikigon. Newest first.
   piling up proposals nobody needs.
 - **When the world asks you to wait, the terminal says why and for how long** (for example
   after a pause, before your agent may resume). It used to say only "Rate limited".
+- **A compass word that was never sent says so.** When the world's port on this machine was not
+  yours at that moment, nothing went out, yet the journal said "no answer from the world; its
+  next move shows the compass", and no next move came: the Shikigon sleeps then. Now the journal
+  says "not sent", and the panel says why it sleeps.
+- **`advisor forget` and a key typed in the panel wait for the panel's other writers.** A
+  `forget` at the moment the panel changed how often the advisor is asked could bring the
+  forgotten model back; a key is now written whole, so nothing reads it half-written.
+- **The panel's journal and talk no longer miss a line written at the same moment.** Two
+  processes writing at once (a move and a compass click) could leave the panel without the
+  newer line until the next move; the compass you clicked then fell back to the old one.
 
 ## 0.1.14 (2026-11-08)
 

@@ -35,7 +35,6 @@ import concurrent.futures
 import contextlib
 import ipaddress
 import itertools
-import json
 import os
 import re
 import select
@@ -437,11 +436,12 @@ def origin(url: str) -> str:
 def keep_key(home: Path, key: str, where: str) -> None:
     """A key the endpoint at ``where`` asked for: kept like the agent's own key, readable by the
     owner only, and bound to that address's origin. It never goes to another address
-    (cos20 #492 F4: a key typed for one endpoint went to every address asked after it)."""
-    home.mkdir(parents=True, exist_ok=True)
-    fd = os.open(home / KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        json.dump({"origin": origin(where), "key": key.strip()}, handle)
+    (cos20 #492 F4: a key typed for one endpoint went to every address asked after it).
+
+    Written whole (``files.write_json``, 0600 from creation): until b964644 it was truncated and
+    written in place, and a reader at that moment found no key (cos20 #492,
+    Betreuer-Durchgang b964644, B2)."""
+    files.write_json(home / KEY_FILE, {"origin": origin(where), "key": key.strip()})
 
 
 def kept_key(home: Path, url: str) -> str:

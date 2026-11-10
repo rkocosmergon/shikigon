@@ -172,6 +172,18 @@ TestCase {
     compare(refused.text, "you: attack → not taken, try again later")
   }
 
+  // Refused before it left this machine: not "no answer", and no next move follows
+  // (cos20 #492, Betreuer-Durchgang b964644, B1).
+  function test_journal_compass_not_sent() {
+    var unsent = Model.journalLine({ instruction: "attack", preset: "attack", ok: false,
+                                     sent: false })
+    compare(unsent.text, "you: attack → not sent: it sleeps, and its panel says why")
+    compare(unsent.ok, false)
+    var sent = Model.journalLine({ instruction: "attack", preset: "attack", ok: false,
+                                   sent: true })
+    compare(sent.text, "you: attack → not taken, try again later")
+  }
+
   // Another move holds this one up: a line of its own, also after a move that worked
   // (cos20 #492, Betreuer-Durchgang 4866b11, N1).
   function test_journal_another_move_under_way() {
