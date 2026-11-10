@@ -210,7 +210,10 @@ def test_b3_control_no_journal_yet_an_empty_view() -> None:
     brain.show_talk()
     assert json.loads((brain.state_dir() / brain.BAR_JOURNAL).read_text()) == []
     assert json.loads((brain.state_dir() / brain.BAR_TALK).read_text()) == []
-    assert not (brain.state_dir() / "journal.jsonl").exists(), "a view makes no journal"
+    # Since 5d315a0 K1 the view opens the file as ``append`` does, so it holds its lock even
+    # before the first line: an empty journal, the player's alone.
+    journal = brain.state_dir() / "journal.jsonl"
+    assert journal.read_bytes() == b"" and (journal.stat().st_mode & 0o777) == 0o600
 
 
 def test_b3_a_view_follows_a_replaced_file() -> None:

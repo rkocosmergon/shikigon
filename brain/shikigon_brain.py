@@ -1215,10 +1215,12 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
         journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False})
         return {"heard": text, "preset": preset, "ok": False, "why": why}
     except SendRefusedError:
-        # Refused before a byte left (the world's port is not the player's, or its key may not
-        # go there): not taken, and no next move shows the compass, since ``with_agent`` puts
-        # it to sleep with the reason. ``sent: False``; until b964644 it stood as "no answer"
-        # (cos20 #492, Betreuer-Durchgang b964644, B1).
+        # Refused before its first try left (the world's port is not the player's, or its key
+        # may not go there): not taken, and no next move shows the compass, since ``with_agent``
+        # puts it to sleep with the reason. ``sent: False``; until b964644 it stood as "no
+        # answer" (cos20 #492, Betreuer-Durchgang b964644, B1). A retry refused after a try that
+        # left is a ``ConnectionError`` (cosmergon-agent >= 0.31.8): "no answer" below, since the
+        # world may have taken it (Betreuer-Durchgang 5d315a0, B1).
         journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False,
                  "sent": False})
         raise

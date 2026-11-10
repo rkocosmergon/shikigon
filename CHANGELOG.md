@@ -16,6 +16,14 @@ What changed for someone who uses Shikigon. Newest first.
   yours at that moment, nothing went out, yet the journal said "no answer from the world; its
   next move shows the compass", and no next move came: the Shikigon sleeps then. Now the journal
   says "not sent", and the panel says why it sleeps.
+- **A word or a move whose first try reached the world is never called "not sent"** (needs
+  cosmergon-agent 0.31.8). When the first try went out and its answer got lost, and the retry was
+  then refused because the world's port was no longer yours, the journal said "not sent" although
+  the world may have taken it, and such a move was missing from the journal and from the learning
+  budget. Now the word says "no answer from the world", and the move is written down and counts
+  against the budget with its whole limit, as any move whose answer got lost.
+- **The panel's journal misses no first line either.** Before the journal or the talk existed, the
+  panel's view of it was written without waiting for a writer of its first line.
 - **`advisor forget` and a key typed in the panel wait for the panel's other writers.** A
   `forget` at the moment the panel changed how often the advisor is asked could bring the
   forgotten model back; a key is now written whole, so nothing reads it half-written.

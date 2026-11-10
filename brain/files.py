@@ -362,25 +362,25 @@ def append(path: Path, entry: dict[str, Any], keep_bytes: int | None = None) -> 
 
 
 @contextlib.contextmanager
-def lines_held(path: Path) -> Iterator[bool]:
+def lines_held(path: Path) -> Iterator[None]:
     """The lock ``append`` takes on a JSON-lines file, held for a read of it and a write of what
-    is shown of it (``True``); ``False``, and no lock, while the file is not there yet.
+    is shown of it.
 
     The bar's view of the journal and the talk was read and written outside any lock: a view
     read before another process added its line could be written after that process's view, and
     the bar lacked the line until the next one (cos20 #492, Betreuer-Durchgang b964644, B3).
-    Under this lock the view written last has read every line added before it. At most
-    ``HELD_WAIT_S``, then ``TimeoutError`` (an ``OSError``), as ``append``."""
+    Under this lock the view written last has read every line added before it. The file is
+    opened as ``append`` opens it, made empty (0600) if it is not there yet: until 5d315a0 a file
+    not there yet took no lock, and an empty view could land after the view of its first line
+    (Betreuer-Durchgang 5d315a0, K1). At most ``HELD_WAIT_S``, then ``TimeoutError`` (an
+    ``OSError``), as ``append``."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     while True:
-        try:
-            fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC)
-        except FileNotFoundError:
-            yield False
-            return
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_CLOEXEC, 0o600)
         try:
             _lock_within(fd, HELD_WAIT_S)  # released when the file closes
             if _still_there(path, fd):  # else ``keep_private`` replaced it: the new one
-                yield True
+                yield
                 return
         finally:
             os.close(fd)
