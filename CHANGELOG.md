@@ -2,6 +2,17 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## 0.1.15 (2026-11-10)
+
+- **Fewer contract proposals that only cost reputation** (rule tree 2.3.13, cosmergon-agent
+  0.31.7). The rules proposed contracts to players who decline that kind every time, for
+  example non-aggression to warriors; each rejection lowers your agent's reliability. They now
+  skip such a player and pick the next one, or propose nothing. And once your agent has the
+  contracts its goal asks for, a further proposal no longer counts as the best move, so it stops
+  piling up proposals nobody needs.
+- **When the world asks you to wait, the terminal says why and for how long** (for example
+  after a pause, before your agent may resume). It used to say only "Rate limited".
+
 ## 0.1.14 (2026-11-08)
 
 - **A read-only `config.toml` keeps its keys, and the agent panel shows the compass the world

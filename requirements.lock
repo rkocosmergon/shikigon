@@ -14,15 +14,15 @@ certifi==2026.10.23 \
     # via
     #   httpcore
     #   httpx
-cosmergon-agent==0.31.3 \
-    --hash=sha256:c0fd988c21a28c3f1f56a70ecb7e6fe467ed7d700290982d7a782eb92f5e0953 \
-    --hash=sha256:fec2038f6689d3b86d103a8b862a31ec1e8c6b9aa816a92f7e92b179aa15dba0
+cosmergon-agent==0.31.7 \
+    --hash=sha256:45f5fb82900b395920a6ae546e5a50e65dd6fad01186411e1113056572a00307 \
+    --hash=sha256:599359a973e08b76b7ec4f21f5c155b363170d32837d4b6bfa4a05f45651beb7
     # via
     #   pyproject.toml
     #   cosmergon-decider-tree
-cosmergon-decider-tree==2.3.11 \
-    --hash=sha256:4173849ab56b2c060b807231345c9dd9dd8af59313c2278f91791806af80664a \
-    --hash=sha256:dc54c6da1e1b55926192ce32d40456d156ce8b9026363321d31b692e49c7be5a
+cosmergon-decider-tree==2.3.13 \
+    --hash=sha256:351122feea56ce1de82229c88f75c87d6249101875668bfd39b1bd7baef23dfa \
+    --hash=sha256:cecf6851e5d65bac735a32b8b65d8ba846b142602aac84a83d93a56d118c5b8f
     # via pyproject.toml
 h11==0.16.0 \
     --hash=sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1 \
