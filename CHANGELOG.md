@@ -21,7 +21,9 @@ What changed for someone who uses Shikigon. Newest first.
   then refused because the world's port was no longer yours, the journal said "not sent" although
   the world may have taken it, and such a move was missing from the journal and from the learning
   budget. Now the word says "no answer from the world", and the move is written down and counts
-  against the budget with its whole limit, as any move whose answer got lost.
+  against the budget with its whole limit, as any move whose answer got lost. Such a word no
+  longer promises that the next move shows the compass: while the port is not yours, the next
+  move is refused too and the Shikigon sleeps, so the journal says the panel tells why.
 - **The panel's journal misses no first line either.** Before the journal or the talk existed, the
   panel's view of it was written without waiting for a writer of its first line.
 - **`advisor forget` and a key typed in the panel wait for the panel's other writers.** A

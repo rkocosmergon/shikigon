@@ -67,6 +67,11 @@ function journalLine(entry) {
     var word = "you: " + entry.instruction + " → "
     // No answer is not "not taken": the world may have taken it before its answer was lost
     // (`answered`, a key, never the sentence; cos20 #492, Betreuer-Durchgang 4866b11, B2).
+    // Its retry was refused by the port check: while the port is not the player's, no next move
+    // comes and it sleeps, so none is promised (`retry_refused`, a key; Betreuer-Durchgang
+    // 15472e8, B2).
+    if (failed && entry.answered === false && entry.retry_refused === true)
+      return { text: word + "no answer from the world; if it sleeps, its panel says why", ok: false }
     if (failed && entry.answered === false)
       return { text: word + "no answer from the world; its next move shows the compass", ok: false }
     // Refused before it left this machine: not taken, and it sleeps and says why (`sent`, a key;

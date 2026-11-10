@@ -172,6 +172,18 @@ TestCase {
     compare(refused.text, "you: attack → not taken, try again later")
   }
 
+  // Its retry was refused by the port check: "no answer", and no next move is promised
+  // (cos20 #492, Betreuer-Durchgang 15472e8, B2).
+  function test_journal_compass_retry_refused() {
+    var line = Model.journalLine({ instruction: "attack", preset: "attack", ok: false,
+                                   answered: false, retry_refused: true })
+    compare(line.text, "you: attack → no answer from the world; if it sleeps, its panel says why")
+    compare(line.ok, false)
+    var lost = Model.journalLine({ instruction: "attack", preset: "attack", ok: false,
+                                   answered: false, retry_refused: false })
+    compare(lost.text, "you: attack → no answer from the world; its next move shows the compass")
+  }
+
   // Refused before it left this machine: not "no answer", and no next move follows
   // (cos20 #492, Betreuer-Durchgang b964644, B1).
   function test_journal_compass_not_sent() {

@@ -32,7 +32,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "brain"))
 
 import connections
-import cosmergon_agent
 import files
 import shikigon_brain as brain
 from cosmergon_agent.exceptions import ConnectionError as CsgConnectionError
@@ -46,9 +45,6 @@ PINNED = (0, 31, 8)
 
 def _version(text: str) -> tuple[int, ...]:
     return tuple(int(part) for part in re.findall(r"\d+", text)[:3])
-
-
-SDK_BEFORE_THE_FIX = _version(cosmergon_agent.__version__) < PINNED
 
 
 def _refused_retry() -> CsgConnectionError:
@@ -116,8 +112,8 @@ def _sdk_agent(verdicts: list[str], answers: list[Any]) -> Any:
     return agent
 
 
-@pytest.mark.xfail(SDK_BEFORE_THE_FIX, strict=True,
-                   reason="the fix is in cosmergon-agent >= 0.31.8; the lock still pins 0.31.7")
+# Through the SDK the lock pins, without a mark: until 15472e8 this stood as a strict ``xfail`` on
+# 0.31.7, and the gap between the promise and the pin was green (Betreuer-Durchgang 15472e8, B1).
 async def test_b1_the_sdk_says_a_refused_retry_of_a_word_has_no_known_outcome(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -131,6 +127,7 @@ async def test_b1_the_sdk_says_a_refused_retry_of_a_word_has_no_known_outcome(
         await brain.instruct(agent, "attack now", TABLE)
     await agent._client.aclose()
     assert _last_line()["answered"] is False and "sent" not in _last_line()
+    assert _last_line()["retry_refused"] is True  # Betreuer-Durchgang 15472e8, B2
 
 
 def test_b1_the_brain_asks_for_the_sdk_that_says_so() -> None:

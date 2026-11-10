@@ -616,9 +616,10 @@ BAR_JOURNAL_TEXTS = ("instruction", "preset", "learned", "why", "mission", "text
                      "kind", "action")
 # Yes-or-no marks of a journal line the bar reads, each as a boolean: a word with no answer from
 # the world (``instruct``) and another move holding this one up (``note_another_move``; cos20 #492,
-# Betreuer-Durchgang 4866b11, B2 and N1), and a word that was never sent (``instruct``,
-# Betreuer-Durchgang b964644, B1).
-BAR_JOURNAL_FLAGS = ("answered", "waiting", "sent")
+# Betreuer-Durchgang 4866b11, B2 and N1), a word that was never sent (``instruct``,
+# Betreuer-Durchgang b964644, B1), and a word whose retry the port check refused (``instruct``,
+# Betreuer-Durchgang 15472e8, B2).
+BAR_JOURNAL_FLAGS = ("answered", "waiting", "sent", "retry_refused")
 
 
 def bar_line(entry: dict[str, Any]) -> dict[str, Any]:
@@ -1224,14 +1225,21 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
         journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False,
                  "sent": False})
         raise
-    except Exception:
+    except Exception as exc:
         # Not reached, or no answer: the panel reads the journal, not this process's output, so
         # the word stands there, not taken as far as this process knows; ``with_agent`` answers
         # as before (cos20 #492, Gründer 07.11.2026). ``answered: False``: the world may have
         # taken it before its answer was lost, so the bar says "no answer", not "not taken"
         # (Betreuer-Durchgang 4866b11, B2).
-        journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False,
-                 "answered": False})
+        entry = {"at": int(time.time()), "instruction": text, "preset": preset, "ok": False,
+                 "answered": False}
+        # A retry refused by the port check (cosmergon-agent >= 0.31.8: a ``ConnectionError``
+        # caused by ``SendRefusedError``): while the port is not the player's, the next move is
+        # refused too and the Shikigon sleeps, so the bar does not promise a next move that shows
+        # the compass (``retry_refused``, a key; Betreuer-Durchgang 15472e8, B2).
+        if isinstance(exc.__cause__, SendRefusedError):
+            entry["retry_refused"] = True
+        journal(entry)
         raise
     ok = not (isinstance(answer, dict) and answer.get("error"))
     journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": ok})
