@@ -16,14 +16,16 @@ What changed for someone who uses Shikigon. Newest first.
   yours at that moment, nothing went out, yet the journal said "no answer from the world; its
   next move shows the compass", and no next move came: the Shikigon sleeps then. Now the journal
   says "not sent", and the panel says why it sleeps.
-- **A word or a move whose first try reached the world is never called "not sent"** (needs
-  cosmergon-agent 0.31.8). When the first try went out and its answer got lost, and the retry was
-  then refused because the world's port was no longer yours, the journal said "not sent" although
-  the world may have taken it, and such a move was missing from the journal and from the learning
-  budget. Now the word says "no answer from the world", and the move is written down and counts
-  against the budget with its whole limit, as any move whose answer got lost. Such a word no
-  longer promises that the next move shows the compass: while the port is not yours, the next
-  move is refused too and the Shikigon sleeps, so the journal says the panel tells why.
+- **A word or a move whose first try reached the world is never called "not sent" or "not
+  taken"** (needs cosmergon-agent 0.31.9). When the first try went out and its answer got lost,
+  the retry could be refused: because the world's port was no longer yours, or by the world
+  itself, which allows one move per tick and a few compass changes an hour and counts the retry
+  against them. The journal then said "not sent" or "not taken" although the
+  world may have taken it, and such a move was missing from the learning budget. Now the word says
+  "no answer from the world", and the move counts against the budget with its whole limit, as any
+  move whose answer got lost. A word whose retry the port refused no longer promises that the
+  next move shows the compass: while the port is not yours, the next move is refused too and the
+  Shikigon sleeps, so the journal says the panel tells why.
 - **The panel's journal misses no first line either.** Before the journal or the talk existed, the
   panel's view of it was written without waiting for a writer of its first line.
 - **`advisor forget` and a key typed in the panel wait for the panel's other writers.** A
