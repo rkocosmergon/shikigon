@@ -85,8 +85,10 @@ if that fails, the old one stays. An environment that can no longer load its pac
 your system moved to a new Python, for example) is rebuilt by itself, within a minute. A brain
 that keeps stopping comes back later each time, at most half an hour apart, and the panel says why
 in one sentence, with **try again**. The bar
-itself loads a new version of the plugin after `omarchy restart shell`; a terminal window that
-is open keeps the version it started with until you close it (`q`) and open it again.
+itself loads a new version of the plugin after `omarchy restart shell`. A terminal window that is
+open is not part of that: close it before an update (`q`) and open it again afterwards. Left open,
+its `M` may fail while the brain's environment is rebuilt, and what it loads later may come from
+the new one.
 
 ## Remove
 

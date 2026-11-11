@@ -17,10 +17,13 @@ What changed for someone who uses Shikigon. Newest first.
   game loop itself, now end when the shell does, also when it crashes or is killed without
   tearing anything down. Until now they ran on: a step to its deadline, the game loop without
   any end, and the shell that came back started a second game loop beside it.
-- **Setting up the brain and its other steps never run at once.** A move by the `tick` shortcut, a
-  question or a word while the brain is being set up is answered "busy", and the setup waits for
-  a step already running. Until now such a step could start the brain from an environment that
-  was still being filled.
+- **The steps the bar starts and setting up the brain take turns.** While the brain is being set
+  up, the bar takes no new step (a move by the `tick` shortcut, a question or a word, looking for
+  advisors or models, trying one, keeping a key, changing the advice); the shortcuts answer
+  "busy". The setup waits for the steps already under way, a word that waited behind one among
+  them, and for the game loop to end. Until now such a step could start the brain from an
+  environment that was still being filled, and "wake a new one" ran beside a game loop that was
+  still ending. The terminal is not held back: close it before an update (README, "Install").
 - **A move stopped on its way still counts.** What a move your agent wrote itself may cost is now
   counted against the learning budget before it goes out, and given back once the world's answer
   says it cost less or did not take it. When the brain is stopped in between (a move by the `tick`

@@ -50,16 +50,20 @@ Item {
   property string lastError: ""
   // What the wake script last wrote (setup.json: stage, said) and whether it is at work.
   property var setup: ({})
-  // The wake script and the brain's commands never run at once: it may move or rebuild the
-  // environment they run from. A command waits behind a wake ("busy"), a wake behind the commands
-  // still running (`wakeWaiting`); the game loop stops for it (`wantRunning`). Until 0.1.16 only
-  // the game loop did, and a `tick` shortcut during a rebuild started Python in a half-filled
-  // environment (cos20 #492, Betreuer-Durchgang 57b426a, K1).
+  // The wake script and the brain's commands the bar starts never run at once: it may move or
+  // rebuild the environment they run from. A command waits behind a wake ("busy"), a wake behind
+  // the commands still running (`wakeWaiting`); the game loop stops for it (`wantRunning`) and the
+  // wake waits for its end (`runner` in `brainBusy`). Until 0.1.16 only the game loop stopped, and
+  // a `tick` shortcut during a rebuild started Python in a half-filled environment (cos20 #492,
+  // Betreuer-Durchgang 57b426a, K1); "wake a new one" ran beside a game loop that was still
+  // ending: it could book into the files `register --new` had cleared, and when it ended after the
+  // wake, nothing started it again (Betreuer-Durchgang 1d7ff4d, B2). The terminal, its `M` and a
+  // sign-in start outside the bar and are not held here (README: close it before an update).
   property bool wakeWaiting: false
   readonly property bool settingUp: waker.running || wakeWaiting
-  readonly property bool brainBusy: ticker.running || advisorLister.running || modelLister.running
-    || prober.running || asker.running || instructor.running || keyKeeper.running
-    || adviser.running
+  readonly property bool brainBusy: runner.running || ticker.running || advisorLister.running
+    || modelLister.running || prober.running || asker.running || instructor.running
+    || keyKeeper.running || adviser.running
   // The brain starts only after the wake script has looked at it once since the shell
   // started: after a plugin update that is where its environment is rebuilt.
   property bool brainChecked: false
