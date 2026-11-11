@@ -863,4 +863,28 @@ TestCase {
     compare(Model.currentCompass({ compass: "grow", seen_at: 100 }, undefined), "grow")
     compare(Model.currentCompass(undefined, undefined), "")
   }
+
+  // Marketplace review #14438: every finite helper runs under `timeout`, through the PATH rule,
+  // and says why it ended without its result.
+  function test_a_helper_runs_under_timeout_through_the_rule() {
+    var argv = Model.bounded(30, ["/x/python", "-I", "b.py"])
+    compare(argv.slice(0, 4), Model.outside([]))
+    compare(argv.slice(4), ["timeout", "-k", "5", "30", "/x/python", "-I", "b.py"])
+    verify(Model.HELPER_QUICK_S < Model.HELPER_ASKS_S && Model.HELPER_ASKS_S < Model.HELPER_SETUP_S)
+    verify(Model.HELPER_ASKS_S > 270)  // the bar waits 270 s for an answer (BarWidget)
+  }
+
+  function test_a_helper_says_why_it_ended_without_its_result() {
+    compare(Model.helperWhy(null), "could not start")   // FailedToStart: no `exited`
+    compare(Model.helperWhy(undefined), "could not start")
+    compare(Model.helperWhy(127), "could not start")    // no venv Python
+    compare(Model.helperWhy(126), "could not start")
+    compare(Model.helperWhy(125), "could not start")
+    compare(Model.helperWhy(124), "took too long")      // timeout's deadline
+    compare(Model.helperWhy(137), "took too long")      // its KILL after the deadline
+    compare(Model.helperWhy(139), "was stopped")       // another signal, e.g. a crash
+    compare(Model.helperWhy(0), "")
+    compare(Model.helperWhy(1), "")                     // its own answer: the caller reads it
+    compare(Model.helperNotice("Asking", "took too long"), "Asking: took too long. Try again.")
+  }
 }

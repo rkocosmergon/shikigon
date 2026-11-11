@@ -2,6 +2,16 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## 0.1.16 (unreleased)
+
+- **Nothing the bar starts hangs without an end** (marketplace review #14438). Setting up, looking
+  for advisors or models, trying one, asking, passing on a word, keeping a key: each such step
+  now ends with a reason within its time and leaves nothing of it running. Until now a step that
+  could not start at all, for example with the plugin's Python environment missing, left the
+  panel on "asking…" or "asking it once…" without end. Now the panel says "could not start" or
+  "took too long" where it waits for an answer, and a desktop notice says it for the others, with
+  "Try again". The game loop and the terminal are meant to go on and have no such end.
+
 ## 0.1.15 (2026-11-10)
 
 - **Fewer contract proposals that only cost reputation** (rule tree 2.3.13, cosmergon-agent

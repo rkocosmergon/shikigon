@@ -30,6 +30,41 @@ function shell(body, args) {
   return ["/bin/sh", "-c", PATH_RULE + body, "sh"].concat(args || [])
 }
 
+// ---------- Finite helpers (marketplace review #14438) ----------
+// A helper the bar starts to set up, look up, ask or write something ends, whichever way: its
+// deadline is held by `timeout`, which on the deadline (and when it is stopped itself) ends the
+// helper's whole process group, KILL `HELPER_KILL_S` after TERM, and returns only once its
+// child is reaped. Three classes, not one number per helper:
+//   QUICK  a local file, a notice
+//   ASKS   anything that may reach the world, a model server or an agent: above the 270 s the bar
+//          already waits for an answer (BarWidget), itself above connections.AGENT_ANSWER_S
+//   SETUP  the wake script: a new environment and its packages from the index, generously
+var HELPER_QUICK_S = 30
+var HELPER_ASKS_S = 300
+var HELPER_SETUP_S = 1800
+var HELPER_KILL_S = 5
+
+function bounded(seconds, argv) {
+  return outside(["timeout", "-k", String(HELPER_KILL_S), String(seconds)].concat(argv))
+}
+
+// Why a helper ended without its result; "" when it ran to its end (its own exit code says the
+// rest). `code` is null when it never started (Quickshell's FailedToStart sends no `exited`).
+// 124 is `timeout`'s deadline, 137 its KILL after it, 125 `timeout` itself failed, 126/127 a
+// program that cannot run.
+function helperWhy(code) {
+  if (code === null || code === undefined) return "could not start"
+  if (code === 124 || code === 137) return "took too long"
+  if (code === 125 || code === 126 || code === 127) return "could not start"
+  if (code > 128) return "was stopped"  // ended by another signal (Helper: 128 + its number)
+  return ""
+}
+
+// What the notice says when a helper ended without its result: fixed words only.
+function helperNotice(what, why) {
+  return String(what) + ": " + String(why) + ". Try again."
+}
+
 // The brain reports "free" under the server's name for it.
 function isCurrentPreset(name, compass) {
   return compass === name || (name === "free" && compass === "autonomous")
@@ -738,6 +773,9 @@ if (typeof module !== "undefined") {
     stateHome: stateHome,
     PATH_RULE: PATH_RULE,
     outside: outside,
-    shell: shell
+    shell: shell,
+    bounded: bounded,
+    helperWhy: helperWhy,
+    helperNotice: helperNotice
   }
 }

@@ -150,16 +150,75 @@ Item {
   onWantRunningChanged: sync()
   Component.onCompleted: recheck()
 
-  Process {
+  // ---------- Finite helpers (marketplace review #14438) ----------
+  // A helper that is meant to end says so exactly once, through `settled`, whichever way it
+  // ended: it ran to its end, it could not start, or its deadline passed (Model.bounded:
+  // `timeout` ends its whole process group and returns once it is reaped, so whatever waits
+  // behind a helper starts only after that). `why` is "" when it ran to its end.
+  // Quickshell (src/io/process.cpp): a finished process ends its output stream first, then sends
+  // `exited`, then `runningChanged`; one that could not start sends `runningChanged` alone, so a
+  // handler on `exited` or on the stream never ran for it. Until 0.1.16 only the brain's runner
+  // knew that. The game loop (runner) and the terminal are meant to go on and stay outside.
+  component Helper: Process {
+    id: helper
+    property var argv: []
+    property int seconds: Model.HELPER_QUICK_S
+    property bool exitSeen: false
+    // What it printed, read through the bar's door (K47); null when nothing readable came.
+    property var answer: null
+    signal settled(int exitCode, string why, var answer)
+    command: Model.bounded(seconds, argv)
+    // `exitSeen` is let go of only by the `runningChanged` that follows every `exited`: once
+    // per run, either way.
+    function settle(code) {
+      var said = answer
+      answer = null
+      settled(code, Model.helperWhy(code), said)
+    }
+    onRunningChanged: {
+      if (running) { exitSeen = false; answer = null }
+      else if (exitSeen) exitSeen = false
+      else settle(null)
+    }
+    // A process ended by a signal comes as CrashExit with the signal's number (measured on the
+    // device: `timeout`'s KILL after the deadline reaches `timeout` itself, code 9): counted as
+    // the shell counts it, 128 + the signal.
+    onExited: (code, status) => {
+      exitSeen = true
+      settle(status === 0 ? code : 128 + code)
+    }
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try { helper.answer = Model.readJson(text) } catch (e) { helper.answer = null }
+      }
+    }
+  }
+
+  // A helper that ended without its result says so on the desktop, once, in fixed words.
+  function failed(what, why) {
+    if (why === "" || notifier.running) return
+    notifier.body = Model.helperNotice(what, why)
+    notifier.running = true
+  }
+  Helper {
+    id: notifier
+    property string body: ""
+    argv: Model.shell('notify-send -a Shikigon -- "Shikigon" "$1"', [body])
+  }
+
+  Helper {
     id: waker
     property bool fresh: false
     // Started here without a click: it looks after the brain and registers nothing (cos20 #630).
     property bool look: false
-    command: [root.wakeScript].concat(fresh ? ["--new"] : (look ? ["--look"] : []))
-    onExited: {
+    seconds: Model.HELPER_SETUP_S
+    argv: [root.wakeScript].concat(fresh ? ["--new"] : (look ? ["--look"] : []))
+    onSettled: (exitCode, why) => {
       root.brainChecked = true
       setupFile.reload()
       root.recheck()
+      root.failed("Waking", why)
     }
   }
 
@@ -186,9 +245,9 @@ Item {
 
   // Said once, to someone who has just installed it and sees two closed eyes.
   // umask 077: what is made here, the state folder among it, is the player's alone (K2).
-  Process {
+  Helper {
     id: greeter
-    command: Model.shell(
+    argv: Model.shell(
       'umask 077; test -e "$1/greeted" && exit 0; mkdir -p "$1" && : > "$1/greeted" && '
       + 'notify-send -a Shikigon -- "Shikigon moved into your bar" "Click its eyes to wake it."',
       [root.stateDir])
@@ -253,12 +312,12 @@ Item {
   }
 
   // Written before it is shown: a hint is never shown twice, even if the shell restarts.
-  Process {
+  Helper {
     id: tipper
     property string title: ""
     property string body: ""
     property string saved: ""
-    command: Model.shell(
+    argv: Model.shell(
       'umask 077; mkdir -p "$4" && printf %s "$3" > "$4/tips.json.tmp" '
       + '&& mv "$4/tips.json.tmp" "$4/tips.json" && '
       + 'notify-send -a Shikigon -- "$1" "$2"',  // fixed words only, title and body (Model.nextTip)
@@ -355,83 +414,78 @@ Item {
                                           .concat(brainCommand(["sign-in", String(agent)]))))
   }
 
-  function parsed(text, fallback) {
-    try { return Model.readJson(text) } catch (e) { return fallback }
-  }
-
-  Process {
+  Helper {
     id: advisorLister
-    command: root.brainCommand(["advisor", "list"])
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        root.advisors = root.parsed(text, root.advisors)
-        root.advisorsRead = true
-      }
+    seconds: Model.HELPER_ASKS_S
+    argv: root.brainCommand(["advisor", "list"])
+    onSettled: (exitCode, why, answer) => {
+      if (answer) root.advisors = answer
+      root.advisorsRead = true
+      root.failed("Looking for advisors", why)
     }
   }
   // An address and a model go over stdin too: an address can carry a name and a password
   // (https://me:pw@…), and arguments stand in every local user's process list (cos20 #492 F3).
-  Process {
+  Helper {
     id: modelLister
     property string where: ""
     property string next: ""
-    onExited: {
-      if (!next) return
-      where = next
-      next = ""
-      running = true
-    }
-    command: root.brainCommand(["advisor", "models"])
+    seconds: Model.HELPER_ASKS_S
+    argv: root.brainCommand(["advisor", "models"])
     stdinEnabled: true
     onStarted: write(JSON.stringify({ where: where }) + "\n")
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        if (modelLister.next) return
-        var said = root.parsed(text, { ok: false, models: [], why: "no answer" })
-        said.where = modelLister.where
-        root.models = said
+    onSettled: (exitCode, why, answer) => {
+      if (next) {  // the answer of the old address never stands under the new (#628, F11)
+        where = next
+        next = ""
+        running = true
+        return
       }
+      var models = why ? { ok: false, models: [], why: why }
+                       : (answer || { ok: false, models: [], why: "no answer" })
+      models.where = where
+      root.models = models
     }
   }
-  Process {
+  Helper {
     id: prober
     property string connection: ""
     property string model: ""
-    command: root.brainCommand(["advisor", "try"])
+    seconds: Model.HELPER_ASKS_S
+    argv: root.brainCommand(["advisor", "try"])
     stdinEnabled: true
     onStarted: write(JSON.stringify({ connection: connection, model: model }) + "\n")
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        root.tried = root.parsed(text, { ok: false, why: "no answer" })
-        root.refreshAdvisors()
-      }
+    onSettled: (exitCode, why, answer) => {
+      root.tried = why ? { ok: false, why: why } : (answer || { ok: false, why: "no answer" })
+      root.refreshAdvisors()
     }
   }
   // A question and an instruction: over stdin like the key below (see oneLine).
-  Process {
+  Helper {
     id: asker
     property string said: ""
-    command: root.brainCommand(["ask"])
+    seconds: Model.HELPER_ASKS_S
+    argv: root.brainCommand(["ask"])
     stdinEnabled: true
     onStarted: {
       write(said + "\n")
       said = ""
     }
+    onSettled: (exitCode, why) => root.failed("Asking", why)
   }
-  Process {
+  Helper {
     id: instructor
     property string said: ""
     property string next: ""
-    command: root.brainCommand(["instruct"])
+    seconds: Model.HELPER_ASKS_S
+    argv: root.brainCommand(["instruct"])
     stdinEnabled: true
     onStarted: {
       write(said + "\n")
       said = ""
     }
-    onExited: {
+    onSettled: (exitCode, why) => {
+      root.failed("Passing on the word", why)
       if (next === "") { root.instructed(); return }
       said = next
       next = ""
@@ -440,22 +494,29 @@ Item {
   }
   // A key an address asked for goes over stdin, never as an argument, with the address it is
   // for: the brain sends it there and nowhere else (cos20 #492 F4).
-  Process {
+  Helper {
     id: keyKeeper
     property string secret: ""
-    command: root.brainCommand(["advisor", "key"])
+    argv: root.brainCommand(["advisor", "key"])
     stdinEnabled: true
     onStarted: {
       write(JSON.stringify({ key: secret, where: root.models.where }) + "\n")
       secret = ""
     }
-    onExited: root.listModels(root.models.where)
+    onSettled: (exitCode, why) => {
+      root.failed("Keeping the key", why)
+      root.listModels(root.models.where)
+    }
   }
-  Process {
+  Helper {
     id: adviser
     property string value: "off"
-    command: root.brainCommand(["advisor", "advise", value])
-    onExited: { root.refreshAdvisors(); root.restartBrain() }
+    argv: root.brainCommand(["advisor", "advise", value])
+    onSettled: (exitCode, why) => {
+      root.failed("Changing the advice", why)
+      root.refreshAdvisors()
+      root.restartBrain()
+    }
   }
 
   // A crashed brain comes back, later each time (brainStopped), and through the wake script: it
@@ -473,11 +534,12 @@ Item {
     }
   }
 
-  Process {
+  // A start that failed counts as no key file: it sleeps and greets, as before a first wake.
+  Helper {
     id: credentialCheck
-    command: Model.outside(["test", "-f", root.stateDir + "/credentials.json"])
-    onExited: code => {
-      root.awake = (code === 0)
+    argv: ["test", "-f", root.stateDir + "/credentials.json"]
+    onSettled: (exitCode, why) => {
+      root.awake = (why === "" && exitCode === 0)
       if (root.awake && !root.brainChecked && !waker.running) {
         waker.fresh = false
         waker.look = true

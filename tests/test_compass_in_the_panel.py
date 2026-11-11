@@ -198,7 +198,8 @@ def click_problems(service: str) -> list[str]:
     elif "instructor.next = said" not in body[1]:
         found.append("a click while the last word is on its way is not kept")
     proc = re.search(r"id: instructor\n(.*?)\n  \}\n", code, re.DOTALL)
-    if not proc or not re.search(r"onExited:.*?said = next.*?running = true", proc[1], re.DOTALL):
+    # Since #14438 a helper is done through `onSettled` (it is done on a failed start as well).
+    if not proc or not re.search(r"onSettled:.*?said = next.*?running = true", proc[1], re.DOTALL):
         found.append("a kept click is never sent")
     return found
 
@@ -275,7 +276,7 @@ def pending_problems(bar: str, service: str) -> list[str]:
     instructed = _fn(bar, "function onInstructed()")
     if "root.compassDone = true" not in instructed or "journalFile.reload()" not in instructed:
         found.append("a word done does not read the journal again")
-    exited = _fn(service, "onExited: {\n      if (next")
+    exited = _fn(service, 'onSettled: (exitCode, why) => {\n      root.failed("Passing on')
     if not re.search(r'if \(next === ""\) \{ root\.instructed\(\); return \}', exited):
         found.append("the service does not say when the last word is done")
     return found

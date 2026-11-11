@@ -113,6 +113,28 @@ def endless_timers(source: str) -> list[str]:
     return bad
 
 
+# Marketplace review #14438: a process meant to end ends exactly once, through the Helper
+# component of Service.qml (bounded by `timeout`, settled on a failed start as well). Outside it
+# only the game loop (meant to go on) and the bar's clipboard reader (its own `timeout 2`, a
+# failed start leaves the line as it was).
+ENDLESS_OR_OWN = ("runner", "paster")
+
+
+def unsettled_processes(source: str) -> list[str]:
+    """H7: a Process that is not a Helper, or a Helper that settles on `exited` alone."""
+    bad = []
+    for block in _blocks(source, "Process"):
+        if "signal settled(" in block:  # the Helper component itself
+            continue
+        name = re.search(r"^\s*id:\s*(\w+)", block, re.MULTILINE)
+        if not name or name.group(1) not in ENDLESS_OR_OWN:
+            bad.append(block)
+    for block in _blocks(source, "Helper"):
+        if re.search(r"^\s*(onExited|command):", block, re.MULTILINE):
+            bad.append(block)
+    return bad
+
+
 # Shown only in the open panel; the README says so ("On your desktop").
 PANEL_FILES = ("journal_recent.json", "talk.json", "lessons.json")
 
@@ -278,6 +300,11 @@ def test_every_text_from_outside_goes_through_the_bars_door() -> None:
         assert not unfiltered_reads(source), f"{name}: {unfiltered_reads(source)}"
 
 
+def test_every_finite_process_settles_once() -> None:
+    for name, source in _sources():
+        assert not unsettled_processes(source), f"{name}: {unsettled_processes(source)}"
+
+
 def test_the_guards_see_what_they_guard() -> None:
     """Counter-tests: each guard reports a violation it is fed, and finds the real elements."""
     assert editable_lines("TextField {\n  id: a\n}")
@@ -304,6 +331,15 @@ def test_the_guards_see_what_they_guard() -> None:
     )
     service = (QML / "Service.qml").read_text(encoding="utf-8")
     assert len(_blocks(service, "IpcHandler")) == 1
+    # #14438: a bare Process, a Helper on `exited` alone; the real Helpers and the two outside it.
+    assert unsettled_processes("Process {\n  id: lister\n}")
+    assert unsettled_processes("Helper {\n  id: x\n  onExited: root.f()\n}")
+    assert not unsettled_processes("Helper {\n  id: x\n  onSettled: root.f()\n}")
+    assert len(_blocks(service, "Helper")) >= 12  # the notifier and eleven helpers
+    assert [b for b in _blocks(service, "Process") if "id: runner" in b]
+    helper = next(b for b in _blocks(service, "Process") if "signal settled(" in b)
+    assert "command: Model.bounded(seconds, argv)" in helper
+    assert "else settle(null)" in helper  # a failed start: `runningChanged` without `exited`
     assert blocking_calls("FileView {\n  blockLoading: true\n}")
     assert blocking_calls("xhr.open('GET', url, false)")
     assert endless_timers("Timer {\n  interval: 5000\n  running: true\n  repeat: true\n}")
@@ -347,6 +383,7 @@ def test_the_guards_see_what_they_guard() -> None:
     both = service + bar
     # setup, tips, status twice, talk, lessons, journal
     assert both.count("Model.readJson(text())") == 7
-    assert both.count("root.parsed(text") == 3  # advisor list, models, try
+    # advisor list, models, try: since #14438 one collector in the Helper component reads them
+    assert both.count("helper.answer = Model.readJson(text)") == 1
     assert both.count("Model.readLine(data)") == 1
-    assert len(_blocks(both, "StdioCollector")) == 4  # the three above and the paste
+    assert len(_blocks(both, "StdioCollector")) == 2  # the Helper's and the paste

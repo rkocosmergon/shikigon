@@ -121,7 +121,7 @@ def test_the_bar_starts_programs_only_through_the_rule() -> None:
     ``Model.outside``/``Model.shell``: no program by its bare name, which QProcess and sh look up
     in every entry of PATH."""
     ours = re.compile(r"^(root\.)?(brainCommand\(|wakeScript\b|\[root\.wakeScript\]|"
-                      r"Model\.outside\(|Model\.shell\()")
+                      r"Model\.outside\(|Model\.shell\(|Model\.bounded\()")
     bad = []
     for qml in sorted((ROOT / "qml").glob("*.qml")):
         text = qml.read_text(encoding="utf-8")
@@ -137,6 +137,9 @@ def test_the_bars_ways_put_the_rule_first() -> None:
     text = MODEL.read_text(encoding="utf-8")
     assert '["/bin/sh", "-c", PATH_RULE + \'exec "$@"\', "sh"].concat(argv)' in text
     assert '["/bin/sh", "-c", PATH_RULE + body, "sh"].concat(args || [])' in text
+    # A finite helper (marketplace review #14438) runs `timeout` through the rule as well.
+    bounded = 'outside(["timeout", "-k", String(HELPER_KILL_S), String(seconds)].concat(argv))'
+    assert "return " + bounded in text
 
 
 def test_what_the_brain_starts_inherits_the_rule(tmp_path: Path) -> None:
