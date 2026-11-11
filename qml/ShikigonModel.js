@@ -25,9 +25,23 @@ function outside(argv) {
   return ["/bin/sh", "-c", PATH_RULE + 'exec "$@"', "sh"].concat(argv)
 }
 
+// A process the bar holds, tied to the shell's life: the kernel sends it TERM when the thread of
+// the shell that started it ends, also when the shell ends without tearing its objects down
+// (a signal, a crash, the OOM killer). Quickshell ends a running Process only in `~Process`
+// (src/io/process.cpp), and until 0.1.16 a helper then ran on to its deadline and the game loop
+// without any end, a second one beside it after the shell came back (cos20 #492,
+// Betreuer-Durchgang 57b426a, B1, V1). By its full path: QProcess looks up the first word itself,
+// outside PATH_RULE. The one way the bar starts a process it holds (Model.shell, Model.bounded,
+// the game loop); `outside` is for what is meant to go on (the terminal, a sign-in).
+var TIE = ["/usr/bin/setpriv", "--pdeathsig", "TERM", "--"]
+
+function tied(argv) {
+  return TIE.concat(argv)
+}
+
 // A short shell body of the bar's own, under PATH_RULE; `args` are its $1, $2, ...
 function shell(body, args) {
-  return ["/bin/sh", "-c", PATH_RULE + body, "sh"].concat(args || [])
+  return tied(["/bin/sh", "-c", PATH_RULE + body, "sh"].concat(args || []))
 }
 
 // ---------- Finite helpers (marketplace review #14438) ----------
@@ -786,6 +800,8 @@ if (typeof module !== "undefined") {
     stateHome: stateHome,
     PATH_RULE: PATH_RULE,
     outside: outside,
+    TIE: TIE,
+    tied: tied,
     shell: shell,
     HELPER_BODY: HELPER_BODY,
     bounded: bounded,

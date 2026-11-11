@@ -385,9 +385,13 @@ def test_every_start_of_the_waker_says_what_it_is() -> None:
     """Every place that starts the waker sets ``look`` right before it: the click clears it,
     whatever starts it on its own sets it. A new start without either is the old finding."""
     text = (ROOT / "qml" / "Service.qml").read_text(encoding="utf-8")
-    starts = re.findall(r"(waker\.look = (?:true|false)\n\s*)?waker\.running = true", text)
-    assert len(starts) == 3 and all(starts), starts
-    wake = text[text.index("function wake(fresh)"):text.index("function recheck()")]
-    assert "waker.look = false" in wake and "waker.look = true" not in wake
+    # Since Betreuer-Durchgang 57b426a (K1) every start goes through ``startWaker(fresh, look)``,
+    # which sets both before it starts or defers the start.
+    starts = re.findall(r"startWaker\((\w+), (true|false)\)", text)
+    assert len(starts) == 3, starts
+    wake = text[text.index("function wake(fresh)"):text.index("function startWaker(")]
+    assert "startWaker(fresh, false)" in wake and "true)" not in wake
     own = text[text.index("id: restartLater"):text.index("IpcHandler {")]
-    assert own.count("waker.look = true") == 2 and "waker.look = false" not in own
+    assert own.count("root.startWaker(false, true)") == 2
+    start = text[text.index("function startWaker("):text.index("onBrainBusyChanged:")]
+    assert start.index("waker.look = !!look") < start.index("waker.running = true")

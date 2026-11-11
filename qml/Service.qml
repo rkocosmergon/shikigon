@@ -50,7 +50,16 @@ Item {
   property string lastError: ""
   // What the wake script last wrote (setup.json: stage, said) and whether it is at work.
   property var setup: ({})
-  readonly property bool settingUp: waker.running
+  // The wake script and the brain's commands never run at once: it may move or rebuild the
+  // environment they run from. A command waits behind a wake ("busy"), a wake behind the commands
+  // still running (`wakeWaiting`); the game loop stops for it (`wantRunning`). Until 0.1.16 only
+  // the game loop did, and a `tick` shortcut during a rebuild started Python in a half-filled
+  // environment (cos20 #492, Betreuer-Durchgang 57b426a, K1).
+  property bool wakeWaiting: false
+  readonly property bool settingUp: waker.running || wakeWaiting
+  readonly property bool brainBusy: ticker.running || advisorLister.running || modelLister.running
+    || prober.running || asker.running || instructor.running || keyKeeper.running
+    || adviser.running
   // The brain starts only after the wake script has looked at it once since the shell
   // started: after a plugin update that is where its environment is rebuilt.
   property bool brainChecked: false
@@ -62,7 +71,7 @@ Item {
   property bool exitSeen: false
   // Why it keeps stopping, for the panel. One stop says nothing: that is how a new system Python
   // gets repaired, and the brain is back within a minute.
-  readonly property string stuck: awake && stops >= 2 && !runner.running && !waker.running
+  readonly property string stuck: awake && stops >= 2 && !runner.running && !settingUp
     ? Model.stuckSaid(Model.setupSaid(setup), lastError) : ""
 
   function brainCommand(args) { return [python, "-I", brain].concat(args) }
@@ -83,7 +92,7 @@ Item {
   // with no end and no word when it could not start (marketplace review #14438).
   function tickNow() {
     if (!awake) return "asleep"
-    if (ticker.running) return "busy"
+    if (ticker.running || settingUp) return "busy"
     ticker.running = true
     return "ok"
   }
@@ -96,6 +105,7 @@ Item {
     if (!awake) return "asleep"
     var said = oneLine(text)
     if (said === "") return "empty"
+    if (settingUp) return "busy"
     // A click while the last word is still on its way is kept, the latest one wins, and goes
     // when that one is done: until 07.11.2026 it was dropped without a word (cos20 #492).
     if (instructor.running) { instructor.next = said; return "ok" }
@@ -121,7 +131,8 @@ Item {
     if (!awake) return "asleep"
     var asked = oneLine(text)
     if (asked === "") return "empty"
-    if (asker.running) return "busy"  // the bar waits for one question at a time anyway
+    // the bar waits for one question at a time anyway; none while its brain is set up
+    if (asker.running || settingUp) return "busy"
     asker.said = asked
     asker.running = true
     return "ok"
@@ -138,12 +149,24 @@ Item {
   // Creates a new agent on the Cosmergon server: only on an explicit request.
   // `fresh` replaces the one that lives here (after its key ended).
   function wake(fresh) {
-    if (waker.running) return "busy"
+    if (settingUp) return "busy"
     if (awake && !fresh) return tryAgain()
-    waker.fresh = !!fresh
-    waker.look = false
-    waker.running = true
+    startWaker(fresh, false)
     return "ok"
+  }
+
+  // The one way the wake script starts: at once, or once the brain's commands still running are
+  // done (`brainBusy`, K1).
+  function startWaker(fresh, look) {
+    waker.fresh = !!fresh
+    waker.look = !!look
+    if (brainBusy) { wakeWaiting = true; return }
+    waker.running = true
+  }
+  onBrainBusyChanged: {
+    if (brainBusy || !wakeWaiting) return
+    waker.running = true  // first: `settingUp` stays true, the game loop does not start between
+    wakeWaiting = false
   }
 
   // Looks for the key file again (a register in a terminal works too). Called when the
@@ -340,7 +363,10 @@ Item {
 
   Process {
     id: runner
-    command: root.brainCommand(["run"])
+    // Tied to the shell's life (Model.tied): a shell that ended without tearing it down left it
+    // playing on, and the next shell started a second one beside it (Betreuer-Durchgang 57b426a,
+    // V1).
+    command: Model.tied(root.brainCommand(["run"]))
     // A program that cannot be started says this and no `exited` (no environment left after a
     // failed install): nothing brought it back, and the panel said nothing (cos20 #492, B1).
     onRunningChanged: {
@@ -379,8 +405,14 @@ Item {
   property bool restartWanted: false
   property bool stoppedHere: false
 
-  function refreshAdvisors() { if (awake && !advisorLister.running) advisorLister.running = true }
+  function refreshAdvisors() {
+    if (awake && !advisorLister.running && !settingUp) advisorLister.running = true
+  }
   function listModels(where) {
+    if (settingUp) {  // its brain is set up (K1): said where the models would stand
+      models = ({ where: where, ok: false, models: [], why: "its brain is being set up" })
+      return
+    }
     models = ({ where: where, ok: false, models: [], why: "", pending: true })
     // One asks at a time; the answer of the old address never stands under the new (#628, F11).
     if (modelLister.running) { modelLister.next = where; return }
@@ -389,7 +421,7 @@ Item {
   }
   // One real question to a connection; the brain keeps it only if an answer comes.
   function tryConnection(connection, model) {
-    if (prober.running) return "busy"
+    if (prober.running || settingUp) return "busy"
     tried = null
     prober.connection = connection
     prober.model = model || ""
@@ -399,7 +431,7 @@ Item {
   // One key at a time: a second Enter while the first is written replaced it unwritten, and
   // the field was empty already (Fehlersuche Stück 24, K22). "busy" keeps it in the field.
   function keepKey(key) {
-    if (keyKeeper.running) return "busy"
+    if (keyKeeper.running || settingUp) return "busy"
     keyKeeper.secret = key
     keyKeeper.running = true
     return "ok"
@@ -407,8 +439,10 @@ Item {
   // 0 = off, "head" = its agent takes over; the brain reads it at its start, so it is
   // started again.
   function setAdvise(every) {
+    if (settingUp) return "busy"
     adviser.value = every === "head" ? "head" : (every > 0 ? String(every) : "off")
     adviser.running = true
+    return "ok"
   }
   function restartBrain() {
     if (!runner.running) { sync(); return }
@@ -548,10 +582,8 @@ Item {
     interval: 30000
     onTriggered: {
       if (runner.running) return // came back meanwhile: waking stops it for nothing (#628, F6)
-      if (!root.awake || waker.running) { root.sync(); return }
-      waker.fresh = false
-      waker.look = true
-      waker.running = true
+      if (!root.awake || root.settingUp) { root.sync(); return }
+      root.startWaker(false, true)
     }
   }
 
@@ -561,10 +593,8 @@ Item {
     argv: ["test", "-f", root.stateDir + "/credentials.json"]
     onSettled: (exitCode, why) => {
       root.awake = (why === "" && exitCode === 0)
-      if (root.awake && !root.brainChecked && !waker.running) {
-        waker.fresh = false
-        waker.look = true
-        waker.running = true
+      if (root.awake && !root.brainChecked && !root.settingUp) {
+        root.startWaker(false, true)
       } else if (!root.awake && !root.greeted) {
         root.greeted = true
         greeter.running = true

@@ -869,10 +869,12 @@ TestCase {
   function test_a_helper_runs_under_timeout_through_the_rule() {
     var argv = Model.bounded(30, ["/x/python", "-I", "b.py"])
     // `timeout` a child of the line, not in its place: it dies with it (e859803, B3)
-    compare(argv.slice(0, 4), Model.shell(Model.HELPER_BODY))
+    compare(argv.slice(0, 8), Model.shell(Model.HELPER_BODY))
+    // the line itself tied to the shell, by a full path (57b426a, B1)
+    compare(argv.slice(0, 4), ["/usr/bin/setpriv", "--pdeathsig", "TERM", "--"])
     verify(Model.HELPER_BODY.indexOf("setpriv --pdeathsig TERM --") === 0)
     verify(Model.HELPER_BODY.indexOf("exec") < 0)
-    compare(argv.slice(4), ["timeout", "-k", "5", "30", "/x/python", "-I", "b.py"])
+    compare(argv.slice(8), ["timeout", "-k", "5", "30", "/x/python", "-I", "b.py"])
     verify(Model.HELPER_QUICK_S < Model.HELPER_ASKS_S && Model.HELPER_ASKS_S < Model.HELPER_SETUP_S)
     verify(Model.HELPER_ASKS_S > 270)  // the bar waits 270 s for an answer (BarWidget)
   }
@@ -893,5 +895,12 @@ TestCase {
     compare(Model.helperWhy(0, false), "")
     compare(Model.helperWhy(127, false), "could not start")
     compare(Model.helperNotice("Asking", "took too long"), "Asking: took too long. Try again.")
+  }
+
+  // Every process the bar holds is tied to the shell; what is meant to go on is not (B1).
+  function test_what_the_bar_holds_is_tied_to_the_shell() {
+    compare(Model.tied(["/x"]), ["/usr/bin/setpriv", "--pdeathsig", "TERM", "--", "/x"])
+    compare(Model.shell("true").slice(0, 5), Model.TIE.concat(["/bin/sh"]))
+    compare(Model.outside(["omarchy-menu"])[0], "/bin/sh")
   }
 }

@@ -65,22 +65,37 @@ install_brain() {
         --only-binary=:all: -r "$lock" >> "$log" 2>&1
 }
 
+# A folder goes by a new name first and only then away: an `rm` cut off (the bar's deadline, a
+# stopped shell, a KILL no trap sees) leaves "<folder>.gone", which nothing ever brings back. Until
+# 0.1.16 a cut-off `rm -rf "$venv.old"` after a rebuild that worked left half an old brain, and the
+# next start put it in the place of the new one (cos20 #492, Betreuer-Durchgang 57b426a, B2).
+discard() {
+    rm -rf "$1.gone"
+    [ -e "$1" ] || return 0
+    mv "$1" "$1.gone" && rm -rf "$1.gone"
+}
+
 [ -f "$lock" ] || fail "The plugin's requirements.lock is missing."
 want="$(sha256sum "$lock" | cut -d' ' -f1)"
-# A rebuild below that was cut off (the bar's deadline, a stopped shell) left the old brain in
-# "$venv.old": it is the last one that worked, so it comes back before anything is looked at, and
-# the rebuild starts again from there. Until 0.1.16 the next rebuild removed it first, and a second
-# cut-off left no brain at all (cos20 #492, Betreuer-Durchgang e859803, B2). Also after a KILL,
-# which no trap would see.
-if [ -d "$venv.old" ]; then
-    rm -rf "$venv"
-    mv "$venv.old" "$venv"
-fi
 # Rebuilt when the lock changed, or when the brain can no longer load its packages. The second
 # happens without any change here: the environment points at the system's python3, and when
 # the system moves to a new Python (3.14 to 3.15), its packages sit in the old version's folder.
 healthy() { "$venv/bin/python" -I -c 'import cosmergon_agent, cosmergon_decider_tree' 2>/dev/null; }
-if [ "$(cat "$venv/.lock-sha256" 2>/dev/null)" != "$want" ] || ! healthy; then
+current() { [ "$(cat "$venv/.lock-sha256" 2>/dev/null)" = "$want" ] && healthy; }
+rm -rf "$venv.gone" "$venv.old.gone"  # what a cut-off discard left behind
+# A rebuild below that was cut off left the old brain in "$venv.old". When the new one is not whole
+# (no hash of this lock, or it cannot load its packages), the old one is the last that worked and
+# comes back before anything else (cos20 #492, Betreuer-Durchgang e859803, B2). When it is whole,
+# only the cleanup was cut off, and the old one goes (57b426a, B2).
+if [ -d "$venv.old" ]; then
+    if current; then
+        discard "$venv.old"
+    else
+        discard "$venv"
+        mv "$venv.old" "$venv"
+    fi
+fi
+if ! current; then
     say brain
     # An update that fails must not leave it without a brain: the old one steps aside and
     # comes back if the new one cannot be built. (An environment cannot be moved once it is
@@ -88,9 +103,9 @@ if [ "$(cat "$venv/.lock-sha256" 2>/dev/null)" != "$want" ] || ! healthy; then
     [ -d "$venv" ] && mv "$venv" "$venv.old"
     if install_brain; then
         echo "$want" > "$venv/.lock-sha256"
-        rm -rf "$venv.old"
+        discard "$venv.old"
     else
-        rm -rf "$venv"
+        discard "$venv"
         [ -d "$venv.old" ] && mv "$venv.old" "$venv"
         fail "Its brain could not be installed. Details: $log"
     fi

@@ -122,7 +122,7 @@ def test_b1_the_panel_gets_the_stuck_sentence_from_the_service() -> None:
     assert "stuck: service ? service.stuck" in BAR
     held = SERVICE[SERVICE.index("readonly property string stuck"):]
     held = held[:held.index("\n\n")]
-    for needed in ("awake", "stops", "runner.running", "waker.running", "Model.stuckSaid("):
+    for needed in ("awake", "stops", "runner.running", "settingUp", "Model.stuckSaid("):
         assert needed in held, needed
 
 
@@ -136,7 +136,8 @@ def test_b1_try_again_with_a_shikigon_brings_the_restart_forward_and_registers_n
 
 def test_b1_the_timer_stays_one_that_ends() -> None:
     timer = SERVICE[SERVICE.index("id: restartLater"):SERVICE.index("id: credentialCheck")]
-    assert "repeat" not in timer and "waker.look = true" in timer
+    # through the one start of the wake script, looking (Betreuer-Durchgang 57b426a, K1)
+    assert "repeat" not in timer and "root.startWaker(false, true)" in timer
 
 
 # ---------- B2: what the README says of the IPC target ``tick`` ----------

@@ -270,7 +270,8 @@ def test_f1_the_paste_guard_sees_what_it_guards() -> None:
 def test_k22_a_second_key_while_the_first_is_written_stays_in_its_field() -> None:
     service = (QML / "Service.qml").read_text(encoding="utf-8")
     keep = re.search(r"function keepKey\(key\) \{(.*?)\n  \}", service, re.DOTALL)
-    assert keep and re.search(r'if \(keyKeeper\.running\) return "busy"', keep.group(1))
+    assert keep and re.search(r'if \(keyKeeper\.running( \|\| settingUp)?\) return "busy"',
+                                  keep.group(1))
     bar = (QML / "BarWidget.qml").read_text(encoding="utf-8")
     submit = re.search(r"function submitKey\(\) \{(.*?)\n  \}", bar, re.DOTALL)
     assert submit and 'service.keepKey(keyField.text) !== "ok") return' in submit.group(1)

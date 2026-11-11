@@ -309,7 +309,13 @@ def test_nothing_is_installed_or_sent_before_the_first_click() -> None:
     where a Shikigon already lives here (``root.awake``); the brain runs only then."""
     source = (ROOT / "qml" / "Service.qml").read_text(encoding="utf-8")
     lines = source.splitlines()
-    starts = [i for i, line in enumerate(lines) if "waker.running = true" in line]
+    # The wake script starts only through `startWaker` (and the deferred start it set up,
+    # Betreuer-Durchgang 57b426a, K1); `startWaker` is called on the click or where one lives.
+    held = [line.strip() for line in lines if "waker.running = true" in line]
+    assert len(held) == 2, held
+    assert "function startWaker(" in source and "onBrainBusyChanged:" in source
+    starts = [i for i, line in enumerate(lines) if "startWaker(" in line
+              and "function startWaker(" not in line]
     assert len(starts) == 3, starts
     for i in starts:
         before = "\n".join(lines[max(0, i - 6):i])

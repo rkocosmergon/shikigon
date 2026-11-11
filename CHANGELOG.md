@@ -13,6 +13,14 @@ What changed for someone who uses Shikigon. Newest first.
   end. Now the panel says "could not start" or "took too long" where it waits for an answer, and a
   desktop notice says it for the others, with "Try again"; a step that broke off says "did not
   finish". The game loop and the terminal are meant to go on and have no such end.
+- **What the bar holds ends with the shell, however the shell ends.** A step under way, and the
+  game loop itself, now end when the shell does, also when it crashes or is killed without
+  tearing anything down. Until now they ran on: a step to its deadline, the game loop without
+  any end, and the shell that came back started a second game loop beside it.
+- **Setting up the brain and its other steps never run at once.** A move by the `tick` shortcut, a
+  question or a word while the brain is being set up is answered "busy", and the setup waits for
+  a step already running. Until now such a step could start the brain from an environment that
+  was still being filled.
 - **A move stopped on its way still counts.** What a move your agent wrote itself may cost is now
   counted against the learning budget before it goes out, and given back once the world's answer
   says it cost less or did not take it. When the brain is stopped in between (a move by the `tick`
@@ -21,7 +29,9 @@ What changed for someone who uses Shikigon. Newest first.
   and the next move had the whole rest again.
 - **Setting up the brain anew never leaves you without one.** A rebuild that was cut off (past its
   time, or the shell stopped) kept the old environment aside, and the next rebuild removed it
-  first. Now the old one comes back before anything else.
+  first. Now the old one comes back before anything else, unless the new one was already whole:
+  then only its cleanup was cut off, and the new one stays. A folder that goes is first renamed,
+  so a removal cut off half way never brings half a brain back.
 - **A word or a move whose first try reached the world is never called "not taken" or
   "refused", whatever the retry is answered** (needs cosmergon-agent 0.31.10). When the first
   try went out, its answer got lost, and the last retry got an error page (for example an empty
