@@ -12,12 +12,13 @@ What changed for someone who uses Shikigon. Newest first.
   plugin's Python environment missing, left the panel on "asking…" or "asking it once…" without
   end. Now the panel says "could not start" or "took too long" where it waits for an answer, and a
   desktop notice says it for the others, with "Try again"; a step that broke off says "did not
-  finish", and two notices at once both come. The game loop and the terminal are meant to go on
-  and have no such end.
-- **A move stopped on its way still counts.** When a move by the `tick` shortcut runs past its
-  time, or the panel restarts the game loop (changing "advise on moves", waking), the move may
-  already have reached the world. It now stands in the journal and counts against the learning
-  budget with its whole limit, as any move whose answer got lost.
+  finish". The game loop and the terminal are meant to go on and have no such end.
+- **A move stopped on its way still counts.** What a move your agent wrote itself may cost is now
+  counted against the learning budget before it goes out, and given back once the world's answer
+  says it cost less or did not take it. When the brain is stopped in between (a move by the `tick`
+  shortcut past its time, the panel restarting the game loop, the shell going away), the move
+  counts with its whole limit, as any move whose answer got lost. Until now it counted nowhere,
+  and the next move had the whole rest again.
 - **Setting up the brain anew never leaves you without one.** A rebuild that was cut off (past its
   time, or the shell stopped) kept the old environment aside, and the next rebuild removed it
   first. Now the old one comes back before anything else.

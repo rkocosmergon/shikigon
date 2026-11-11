@@ -894,12 +894,4 @@ TestCase {
     compare(Model.helperWhy(127, false), "could not start")
     compare(Model.helperNotice("Asking", "took too long"), "Asking: took too long. Try again.")
   }
-
-  // e859803, B4: a notice while one is on its way waits, once, at most four.
-  function test_notices_wait_in_order_each_once() {
-    compare(Model.noticesAfter([], "a"), ["a"])
-    compare(Model.noticesAfter(["a", "b"], "a"), ["b", "a"])
-    compare(Model.noticesAfter(["a", "b", "c", "d"], "e"), ["b", "c", "d", "e"])
-    compare(Model.noticesAfter(undefined, "a"), ["a"])
-  }
 }

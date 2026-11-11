@@ -3,8 +3,9 @@
 One family: what a stop does to the work it stops (the deadline of a finite helper, the bar
 stopping the brain, Quickshell tearing a helper down).
 
-B1: a move that went out when the brain was stopped (SIGTERM) stood neither in the journal nor
-against the learning budget. Now the end books it as a move whose answer was lost (cos20 #614).
+B1: a move that went out when the brain was stopped (SIGTERM, or a KILL) did not count against the
+learning budget. Now ``play`` books what it may cost before it goes out and gives back what it did
+not lose: a stop in between leaves it counted as a move whose answer was lost (cos20 #614).
 
 B2: a rebuild of the brain's environment that was cut off left the old one in ``$venv.old``, and
 the next rebuild removed it first. Now it comes back before anything else.
@@ -13,8 +14,8 @@ B3: Quickshell tears a running helper down with SIGKILL to the process it starte
 ``timeout``: the helper's program went on without its deadline. Now ``timeout`` is a child of the
 shell line and gets TERM when it dies (``setpriv --pdeathsig``).
 
-B4: a command of the brain that broke off (a traceback, no JSON) ended without a word; a second
-notice while one was on its way was dropped. Now "did not finish", and the notices wait.
+B4: a command of the brain that broke off (a traceback, no JSON) ended without a word. Now "did
+not finish".
 
 Red on e859803, the controls green.
 """
@@ -22,7 +23,6 @@ Red on e859803, the controls green.
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import re
 import shutil
@@ -46,6 +46,7 @@ import shikigon_brain as brain
 from test_betreuer_1d81304 import REST, BookingWorld, _gift_head, _spent
 from test_betreuer_c01ec84 import _rule
 from test_betreuer_c47b7f1 import TOTAL
+from test_brain import FakeResult
 from test_effect import _with_total
 from test_qml import _blocks
 
@@ -56,7 +57,7 @@ def _private_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
 
 
-# ---------- B1: a move under way is booked when the brain is stopped ------------------------------
+# ---------- B1: what a move may cost is booked before it goes out --------------------------------
 
 
 @pytest.fixture
@@ -83,11 +84,6 @@ class StoppedWorld(BookingWorld):
         raise AssertionError("the brain was stopped before this")
 
 
-def _journal() -> list[dict[str, Any]]:
-    path = brain.state_dir() / "journal.jsonl"
-    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
-
-
 @pytest.mark.usefixtures("_ends_as_the_brain_does")
 def test_b1_a_move_stopped_before_its_answer_counts_with_its_whole_limit() -> None:
     world = StoppedWorld(_with_total(TOTAL), REST / 5)
@@ -96,61 +92,92 @@ def test_b1_a_move_stopped_before_its_answer_counts_with_its_whole_limit() -> No
     assert ended.value.code == 128 + signal.SIGTERM
     assert world.acted and world.acted[0][0] == "transfer_energy"
     assert _spent() == REST, "not known is given: the whole limit (cos20 #614)"
-    last = _journal()[-1]
-    assert last["action"] == "transfer_energy" and last["unknown"] is True, last
-    assert brain.STOPPED_IN_MOVE in last["why"], last
-    assert brain.UNDER_WAY == {}, "nothing stays under way after the move"
 
 
-@pytest.mark.usefixtures("_ends_as_the_brain_does")
-def test_b1_control_a_move_written_down_is_booked_once() -> None:
-    """Stopped after the move was written down: the end books and writes nothing more."""
-    world = BookingWorld(_with_total(TOTAL), REST / 5)
-    connections.run_loop(brain.tick(world, _gift_head()))
-    spent, lines = _spent(), len(_journal())
-    brain.UNDER_WAY.update({"move": {"action": "transfer_energy", "ok": True}, "written": True})
-    try:
-        brain.book_the_move_under_way()
-    finally:
-        brain.UNDER_WAY.clear()
-    assert (_spent(), len(_journal())) == (spent, lines) == (REST / 5, lines)
+KILLED_IN_MOVE = """
+import os, signal, sys
+sys.path[:0] = [sys.argv[1], sys.argv[2]]
+import connections, shikigon_brain as brain
+from test_betreuer_1d81304 import REST, BookingWorld, _gift_head
+from test_betreuer_c47b7f1 import TOTAL
+from test_effect import _with_total
+
+class Killed(BookingWorld):
+    async def act(self, action, **params):
+        os.kill(os.getpid(), signal.SIGKILL)
+
+connections.run_loop(brain.tick(Killed(_with_total(TOTAL), REST / 5), _gift_head()))
+"""
 
 
-@pytest.mark.usefixtures("_ends_as_the_brain_does")
-def test_b1_stopped_after_its_booking_the_move_is_booked_once(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Stopped between the booking in ``write_down`` and its journal line: the end writes the
-    line and books nothing a second time (``UNDER_WAY["booked"]``)."""
-    real, calls = brain.journal, []
+def test_b1_a_move_killed_on_its_way_counts_with_its_whole_limit() -> None:
+    """KILL, which no handler sees: Quickshell tearing the game loop down, ``timeout -k``. The
+    booking stands from before the move went out."""
+    done = subprocess.run([sys.executable, "-c", KILLED_IN_MOVE, str(ROOT / "tests"), str(BRAIN)],
+                          capture_output=True, text=True, timeout=60, check=False)
+    assert done.returncode == -signal.SIGKILL, done.stderr
+    assert _spent() == REST, "not known is given: the whole limit (cos20 #614)"
 
-    def stopping(*entries: dict[str, Any]) -> None:
-        calls.append(entries)
-        if len(calls) == 1:
-            os.kill(os.getpid(), signal.SIGTERM)
-        real(*entries)
 
-    monkeypatch.setattr(brain, "journal", stopping)
-    world = BookingWorld(_with_total(TOTAL), REST / 5)
-    with pytest.raises(SystemExit):
+class RefusedFirst(BookingWorld):
+    """Refuses the first move, books ``loss`` for every later one; notes what stood booked."""
+
+    def __init__(self, state: Any, loss: float) -> None:
+        super().__init__(state, loss)
+        self.booked_while_out: list[float] = []
+
+    async def act(self, action: str, **params: Any) -> Any:  # type: ignore[override]
+        self.booked_while_out.append(_spent())
+        if not self.acted:
+            self.acted.append((action, params))
+            return FakeResult(False, "Not enough energy")
+        return await super().act(action, **params)
+
+
+def test_b1_a_refused_move_gives_back_what_it_held() -> None:
+    """The head's gift is refused, the rules build a field: nothing counts (cos20 #566, F2), and
+    the gift's limit stood booked only while it was out."""
+    world = RefusedFirst(_with_total(TOTAL), REST / 5)
+    last = connections.run_loop(brain.tick(world, _gift_head(), refusals=brain.Refusals()))
+    assert [a for a, _ in world.acted] == ["transfer_energy", "create_field"], world.acted
+    assert world.acted[0][1].get("max_cost") == REST
+    assert world.booked_while_out == [REST, 0.0], "held while out, back before the next one"
+    assert last["action"] == "create_field" and _spent() == 0.0
+
+
+class KeyEnded(BookingWorld):
+    async def act(self, action: str, **params: Any) -> Any:  # type: ignore[override]
+        from cosmergon_agent.exceptions import AuthenticationError
+
+        self.acted.append((action, params))
+        raise AuthenticationError("ended")
+
+
+def test_b1_a_move_the_world_did_not_take_gives_back_what_it_held() -> None:
+    """A key that ended: the move was not taken, and the brain goes to sleep with its budget."""
+    from cosmergon_agent.exceptions import AuthenticationError
+
+    world = KeyEnded(_with_total(TOTAL), REST / 5)
+    with pytest.raises(AuthenticationError):
         connections.run_loop(brain.tick(world, _gift_head()))
-    assert _spent() == REST / 5, "booked once"
-    assert _journal()[-1]["action"] == "transfer_energy"
+    assert world.acted and _spent() == 0.0
 
 
-def test_b1_control_nothing_under_way_nothing_written() -> None:
-    brain.book_the_move_under_way()
-    assert _journal() == []
+def test_b1_control_a_move_taken_counts_what_it_lost_once() -> None:
+    world = BookingWorld(_with_total(TOTAL), REST / 5)
+    last = connections.run_loop(brain.tick(world, _gift_head()))
+    assert last["ok"] and last["held"] == REST
+    assert _spent() == REST / 5, "the loss, not the limit and not both"
 
 
-def test_b1_every_move_goes_out_through_the_door_that_keeps_it() -> None:
-    """``agent.act`` only in ``_play``, and ``_play`` only from ``play``: no move leaves past
-    ``UNDER_WAY``."""
+def test_b1_every_move_goes_out_with_the_day_it_was_chosen() -> None:
+    """``agent.act`` only in ``_play``, ``_play`` only from ``play``, and every ``play`` is told
+    the day of the choice: the booking before and after it fall on one day (c611ee5)."""
     source = (BRAIN / "shikigon_brain.py").read_text(encoding="utf-8")
     assert source.count("agent.act(") == 1
     assert re.findall(r"await _play\(", source) == ["await _play("]
-    play = source[source.index("async def play("):source.index("async def _play(")]
-    assert 'UNDER_WAY["move"]' in play and "await _play(" in play
+    calls = re.findall(r"await play\([^)]*\)[^\n]*", source)
+    assert calls and all("chosen_day(decider)" in call for call in calls), calls
 
 
 # ---------- B2: a rebuild cut off leaves the old brain --------------------------------------------
@@ -278,7 +305,7 @@ def test_b3_every_helper_goes_through_the_body() -> None:
     assert "command: Model.bounded(seconds, argv)" in service
 
 
-# ---------- B4: a brain that broke off says so; no notice is dropped ------------------------------
+# ---------- B4: a brain that broke off says so ----------------------------------------------------
 
 
 def test_b4_every_command_of_the_brain_is_read_as_one_that_answers() -> None:
@@ -290,10 +317,3 @@ def test_b4_every_command_of_the_brain_is_read_as_one_that_answers() -> None:
                                                          if "answers: true" not in b]
     assert not any("answers: true" in b for b in helpers if b not in brainy)
     assert "Model.helperWhy(code, answers ? said !== null : undefined)" in service
-
-
-def test_b4_a_notice_while_one_is_on_its_way_waits() -> None:
-    service = (QML / "Service.qml").read_text(encoding="utf-8")
-    failed = service[service.index("function failed("):service.index("Helper {\n    id: notifier")]
-    assert 'why === "" || notifier.running' not in failed
-    assert "Model.noticesAfter(notifier.waiting, body)" in failed

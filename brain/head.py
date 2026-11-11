@@ -725,21 +725,25 @@ def budget_started(home: Path, day: str | None = None) -> bool:
     return bool(_budget_data(home, day))
 
 
-def budget_spend(home: Path, loss: float, day: str | None = None) -> None:
-    """Count what one of its own moves lost (a positive number) on the day it was chosen
-    (``day``, today unless named). Where that day's budget is no longer in the file (another
-    process began the next day first), nothing is counted: the next day stays whole. Under the
-    move's lock, outside a move the folder's: a booking of a ``tick`` by hand next to the running
-    brain was lost when both wrote at the same moment (Fehlersuche Stück 24, variant of Fund #2).
+def budget_spend(home: Path, loss: float, day: str | None = None) -> float:
+    """Count what one of its own moves lost on the day it was chosen (``day``, today unless
+    named); returns what it counted. Below 0 it gives back what a move held before it went out
+    and did not lose (``play``). Where that day's budget is no longer
+    in the file (another process began the next day first), nothing is counted: the next day
+    stays whole. Under the move's lock, outside a move the folder's: a booking of a ``tick`` by
+    hand next to the running brain was lost when both wrote at the same moment (Fehlersuche
+    Stück 24, variant of Fund #2).
     Inside a move it never waits: until af58853 it waited for the folder's lock and, past its
     deadline, the move that had gone out was counted nowhere (Betreuer-Durchgang af58853, B1)."""
-    if loss <= 0:
-        return
+    if not loss:
+        return 0.0
     with files.in_move_or_held(home):
         data = _budget_data(home, day)
-        if data:
-            data["spent"] += loss
-            files.write_json(home / BUDGET_FILE, data)
+        if not data:
+            return 0.0
+        data["spent"] += loss
+        files.write_json(home / BUDGET_FILE, data)
+    return loss
 
 
 class HeadDecider:

@@ -164,11 +164,9 @@ def held_outside(sources: dict[str, str]) -> list[str]:
 # Who may book or measure the learning budget: steps of a move only (under ``files.one_move``).
 BUDGET_CALLS = {
     "budget_left": {("head.py", "decide")},
-    "budget_spend": {("shikigon_brain.py", "spend_budget")},
-    # and the end on SIGTERM, for the move under way: only inside this process's move (``UNDER_WAY``
-    # is filled under ``tick``'s lock), where nothing waits (Betreuer-Durchgang e859803, B1)
-    "spend_budget": {("shikigon_brain.py", "write_down"),
-                     ("shikigon_brain.py", "book_the_move_under_way")},
+    # and in ``play``, before the move goes out and back if it was not taken (e859803, B1)
+    "budget_spend": {("shikigon_brain.py", "spend_budget"), ("shikigon_brain.py", "play")},
+    "spend_budget": {("shikigon_brain.py", "write_down")},
 }
 
 

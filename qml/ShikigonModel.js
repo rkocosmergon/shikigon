@@ -73,15 +73,6 @@ function helperWhy(code, answered) {
   return ""
 }
 
-// The notices still to show while one is on its way: each once, the oldest dropped past
-// NOTICES_KEPT. Until 0.1.16 a second notice in that moment was dropped (B4).
-var NOTICES_KEPT = 4
-
-function noticesAfter(waiting, body) {
-  var kept = (Array.isArray(waiting) ? waiting : []).filter(function(b) { return b !== body })
-  return kept.concat([body]).slice(-NOTICES_KEPT)
-}
-
 // What the notice says when a helper ended without its result: fixed words only.
 function helperNotice(what, why) {
   return String(what) + ": " + String(why) + ". Try again."
@@ -799,7 +790,6 @@ if (typeof module !== "undefined") {
     HELPER_BODY: HELPER_BODY,
     bounded: bounded,
     helperWhy: helperWhy,
-    noticesAfter: noticesAfter,
     helperNotice: helperNotice
   }
 }

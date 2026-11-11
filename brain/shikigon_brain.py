@@ -773,13 +773,30 @@ def fall_asleep(reason: str, why: str) -> dict[str, Any]:
     return last
 
 
-async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any]:
-    """``_play``, the move kept in ``UNDER_WAY`` from before it is sent until its answer is read:
-    stopped in between, it is booked as a move whose answer was lost (B1)."""
-    UNDER_WAY["move"] = {"action": action, "ok": False, "why": "the world did not answer",
-                         "unknown": True}
-    done = await _play(agent, action, params)
-    UNDER_WAY["move"] = done
+async def play(
+    agent: Any, action: str, params: dict[str, Any], day: str | None = None
+) -> dict[str, Any]:
+    """``_play``, with what the move may cost booked before it goes out (``max_cost``, a move the
+    head wrote itself) on ``day``, the day it was chosen. Not taken (refused, not sent), it comes
+    back at once; taken or not known, ``held`` says what stands booked, and ``spend_budget`` sets
+    the loss against it. Until 0.1.16 a move was booked only once it was written down, and every
+    stop in between (the deadline of a tick by hand, the bar stopping the game loop, a KILL) let
+    a move that went out count nowhere: four reviews found four such stops (cos20 #614, #492
+    c611ee5, af58853, e859803 B1)."""
+    import head
+    from cosmergon_agent.exceptions import AuthenticationError, SendRefusedError
+
+    home, limit = state_dir(), files.finite(params.get("max_cost")) or 0.0
+    held = head.budget_spend(home, limit, day) if limit > 0 else 0.0
+    try:
+        done = await _play(agent, action, params)
+    except (AuthenticationError, SendRefusedError):  # the world did not take it
+        head.budget_spend(home, -held, day)
+        raise
+    if not (done.get("ok") or done.get("unknown")):
+        head.budget_spend(home, -held, day)
+    elif held:
+        done["held"] = held
     return done
 
 
@@ -1016,7 +1033,7 @@ async def try_again(
         elif action == "wait":
             last = {"action": "wait", "ok": True, "why": "chose to wait"}
         else:
-            last = await play(agent, action, params)
+            last = await play(agent, action, params, chosen_day(decider))
     said = f"refused {REFUSALS_BEFORE_PAUSE} times, paused for {PAUSED_MOVES} moves"
     for action in paused_now:  # also a move paused before the last one of this tick
         text = said if action == last.get("action") else f"{action_words(action)}: {said}"
@@ -1062,44 +1079,7 @@ async def tick(
     with files.one_move(state_dir()) as mine:
         if not mine:
             return {"action": "", "ok": True, "why": "", "skipped": ANOTHER_MOVE}
-        UNDER_WAY.clear()
-        UNDER_WAY["decider"] = decider
-        try:
-            return await _tick(agent, decider, done_in, refusals)
-        finally:
-            UNDER_WAY.clear()
-
-
-# The move of this process that is under way (``tick``): who chose it, the move as it went out
-# (``play``: its outcome open until its answer is read), and how far ``write_down`` got with it.
-# The end on SIGTERM books and writes down what is still open (``book_the_move_under_way``): a
-# tick by hand past its deadline, the bar stopping the brain when "advise on moves" changes or
-# when it wakes. Until 0.1.16 such a move went out and stood neither in the journal nor against
-# the learning budget (cos20 #492, Betreuer-Durchgang e859803, B1).
-UNDER_WAY: dict[str, Any] = {}
-STOPPED_IN_MOVE = "the brain was stopped before this move was written down"
-
-
-def book_the_move_under_way() -> None:
-    """Book and write down the move under way, as ``write_down`` would with what is known: a move
-    whose answer was not read counts with its whole limit (``spend_budget``, cos20 #614). Called
-    when the brain is stopped; nothing under way, nothing done."""
-    from words import move_words
-
-    move = UNDER_WAY.get("move")
-    if move is None or UNDER_WAY.get("written"):
-        return
-    last = dict(move)
-    last["why"] = f"{last['why']} — {STOPPED_IN_MOVE}" if last.get("why") else STOPPED_IN_MOVE
-    last["words"] = move_words(last)
-    advice = getattr(UNDER_WAY.get("decider"), "last", None)
-    if advice:
-        last["advice"] = advice
-        if not UNDER_WAY.get("booked"):
-            spend_budget(advice, last)
-    UNDER_WAY["booked"] = True
-    journal({"at": int(time.time()), **last})
-    UNDER_WAY["written"] = True
+        return await _tick(agent, decider, done_in, refusals)
 
 
 async def _tick(
@@ -1123,7 +1103,7 @@ async def _tick(
     elif action == "wait":
         last = {"action": "wait", "ok": True, "why": "chose to wait"}
     else:
-        last = await play(agent, action, params)
+        last = await play(agent, action, params, chosen_day(decider))
     last = await try_again(agent, decider, state, last, refusals)  # counts it, once
     try:
         await write_down(agent, decider, state, last, seen_at)
@@ -1151,15 +1131,14 @@ async def write_down(
 
     last["words"] = move_words(last)  # what the panel and its advisor show (words.py)
     advice = getattr(decider, "last", None)  # what an advisor did on this move, if one was asked
-    spent = 0.0
     if advice:
         last["advice"] = advice
         if advice.get("speech") and last.get("ok"):  # it wrote: say what (speech.py, #526)
             last["words"] = speech.words(advice["speech"])
-        spent = spend_budget(advice, last)
-    UNDER_WAY["booked"] = True  # the end on SIGTERM books it no second time (B1)
-    # its energy and fields when it chose, what it learns from (lessons.py); ``total`` is the goal's
-    # measure (energy, offers, fields, items; cos20 #504): an offer leaves the balance, not it.
+    spent = spend_budget(advice or {}, last)  # also what ``play`` booked before it went out
+    # its energy and fields when it chose: what it learns from (lessons.py). ``total`` is the
+    # goal's measure (energy plus offers, fields, items; cos20 #504): an energy offer moves
+    # energy out of the balance but not out of the total.
     entry = {"at": int(time.time()), "tick": getattr(state, "tick", 0),
              "energy": round(float(getattr(state, "energy", 0.0)), 1),
              "fields": len(getattr(state, "fields", []) or []), **holdings(state), **last}
@@ -1167,7 +1146,6 @@ async def write_down(
     if total is not None:
         entry["total"] = round(float(total), 1)
     journal(entry)
-    UNDER_WAY["written"] = True
     await tournament_journal(agent, state)
     status = snapshot(state, last)
     if seen_at is not None:
@@ -1226,8 +1204,25 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> float:
 
     It counts on the UTC day the head chose it (``advice["day"]``). Until c611ee5 a move chosen
     before midnight and written down after it was counted on neither day (cos20 #492,
-    Betreuer-Durchgang c611ee5, B1)."""
+    Betreuer-Durchgang c611ee5, B1).
+
+    What ``play`` booked before the move went out (``held``) is set against it in the same step:
+    the move's loss stands booked, nothing more (B1 of e859803)."""
     import head
+
+    loss = head_loss(advice, last)
+    held = files.finite(last.get("held")) or 0.0
+    # On the day the head chose it, also where it went out after midnight or one move later, as
+    # the proposal it announced (``speech``, its ``last`` from the memo file; cos20 #492,
+    # Betreuer-Durchgang c611ee5, B1).
+    day = advice.get("day")
+    head.budget_spend(state_dir(), loss - held, day if isinstance(day, str) else None)
+    return loss
+
+
+def head_loss(advice: dict[str, Any], last: dict[str, Any]) -> float:
+    """What a move counts against the learning budget (``spend_budget``); 0 for a move that does
+    not count."""
     import lessons
 
     if not (advice.get("head") and (last.get("ok") or last.get("unknown"))):
@@ -1236,15 +1231,16 @@ def spend_budget(advice: dict[str, Any], last: dict[str, Any]) -> float:
         return 0.0  # what went out is not the move the head chose
     effect = lessons.own_effect(last) if advice.get("own") else None
     if effect is None:
-        loss = files.finite(advice.get("limit")) or 0.0
-    else:
-        loss = max(-effect, 0.0)
-    # On the day the head chose it, also where it went out after midnight or one move later, as
-    # the proposal it announced (``speech``, its ``last`` from the memo file; cos20 #492,
-    # Betreuer-Durchgang c611ee5, B1).
-    day = advice.get("day")
-    head.budget_spend(state_dir(), loss, day if isinstance(day, str) else None)
-    return loss
+        return files.finite(advice.get("limit")) or 0.0
+    return max(-effect, 0.0)
+
+
+def chosen_day(decider: Any) -> str | None:
+    """The UTC day the decider chose this move on (``decide``, cos20 #492 c611ee5); ``None`` for
+    one that names none (the rule tree): today."""
+    last = getattr(decider, "last", None)
+    day = last.get("day") if isinstance(last, dict) else None
+    return day if isinstance(day, str) else None
 
 
 async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[str, Any]:
@@ -2107,11 +2103,6 @@ def end_with_its_agents() -> None:
 
     def end(signum: int, _frame: Any) -> None:
         connections.end_groups()
-        try:  # the move under way still counts (B1); nothing here holds the end up
-            book_the_move_under_way()
-        except Exception as exc:  # noqa: BLE001 - the end comes in any case
-            print(f"the move under way could not be written down ({type(exc).__name__})",
-                  file=sys.stderr)
         raise SystemExit(128 + signum)
 
     for signum in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):

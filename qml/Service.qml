@@ -201,27 +201,16 @@ Item {
     }
   }
 
-  // A helper that ended without its result says so on the desktop, once, in fixed words. One
-  // that ends while a notice is on its way waits for it (Model.noticesAfter); until 0.1.16 it
-  // was dropped (Betreuer-Durchgang e859803, B4).
+  // A helper that ended without its result says so on the desktop, once, in fixed words.
   function failed(what, why) {
-    if (why === "") return
-    var body = Model.helperNotice(what, why)
-    if (notifier.running) { notifier.waiting = Model.noticesAfter(notifier.waiting, body); return }
-    notifier.body = body
+    if (why === "" || notifier.running) return
+    notifier.body = Model.helperNotice(what, why)
     notifier.running = true
   }
   Helper {
     id: notifier
     property string body: ""
-    property var waiting: []
     argv: Model.shell('notify-send -a Shikigon -- "Shikigon" "$1"', [body])
-    onSettled: {
-      if (waiting.length === 0) return
-      body = waiting[0]
-      waiting = waiting.slice(1)
-      running = true
-    }
   }
 
   Helper {
