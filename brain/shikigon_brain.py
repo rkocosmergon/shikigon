@@ -774,6 +774,16 @@ def fall_asleep(reason: str, why: str) -> dict[str, Any]:
 
 
 async def play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any]:
+    """``_play``, the move kept in ``UNDER_WAY`` from before it is sent until its answer is read:
+    stopped in between, it is booked as a move whose answer was lost (B1)."""
+    UNDER_WAY["move"] = {"action": action, "ok": False, "why": "the world did not answer",
+                         "unknown": True}
+    done = await _play(agent, action, params)
+    UNDER_WAY["move"] = done
+    return done
+
+
+async def _play(agent: Any, action: str, params: dict[str, Any]) -> dict[str, Any]:
     """Send one move: the one door every move goes through. A move the world does not take is
     said in words, never a crash.
 
@@ -1052,7 +1062,44 @@ async def tick(
     with files.one_move(state_dir()) as mine:
         if not mine:
             return {"action": "", "ok": True, "why": "", "skipped": ANOTHER_MOVE}
-        return await _tick(agent, decider, done_in, refusals)
+        UNDER_WAY.clear()
+        UNDER_WAY["decider"] = decider
+        try:
+            return await _tick(agent, decider, done_in, refusals)
+        finally:
+            UNDER_WAY.clear()
+
+
+# The move of this process that is under way (``tick``): who chose it, the move as it went out
+# (``play``: its outcome open until its answer is read), and how far ``write_down`` got with it.
+# The end on SIGTERM books and writes down what is still open (``book_the_move_under_way``): a
+# tick by hand past its deadline, the bar stopping the brain when "advise on moves" changes or
+# when it wakes. Until 0.1.16 such a move went out and stood neither in the journal nor against
+# the learning budget (cos20 #492, Betreuer-Durchgang e859803, B1).
+UNDER_WAY: dict[str, Any] = {}
+STOPPED_IN_MOVE = "the brain was stopped before this move was written down"
+
+
+def book_the_move_under_way() -> None:
+    """Book and write down the move under way, as ``write_down`` would with what is known: a move
+    whose answer was not read counts with its whole limit (``spend_budget``, cos20 #614). Called
+    when the brain is stopped; nothing under way, nothing done."""
+    from words import move_words
+
+    move = UNDER_WAY.get("move")
+    if move is None or UNDER_WAY.get("written"):
+        return
+    last = dict(move)
+    last["why"] = f"{last['why']} — {STOPPED_IN_MOVE}" if last.get("why") else STOPPED_IN_MOVE
+    last["words"] = move_words(last)
+    advice = getattr(UNDER_WAY.get("decider"), "last", None)
+    if advice:
+        last["advice"] = advice
+        if not UNDER_WAY.get("booked"):
+            spend_budget(advice, last)
+    UNDER_WAY["booked"] = True
+    journal({"at": int(time.time()), **last})
+    UNDER_WAY["written"] = True
 
 
 async def _tick(
@@ -1110,9 +1157,9 @@ async def write_down(
         if advice.get("speech") and last.get("ok"):  # it wrote: say what (speech.py, #526)
             last["words"] = speech.words(advice["speech"])
         spent = spend_budget(advice, last)
-    # its energy and fields when it chose: what it learns from (lessons.py). ``total`` is the
-    # goal's measure (energy plus offers, fields, items; cos20 #504): an energy offer moves
-    # energy out of the balance but not out of the total.
+    UNDER_WAY["booked"] = True  # the end on SIGTERM books it no second time (B1)
+    # its energy and fields when it chose, what it learns from (lessons.py); ``total`` is the goal's
+    # measure (energy, offers, fields, items; cos20 #504): an offer leaves the balance, not it.
     entry = {"at": int(time.time()), "tick": getattr(state, "tick", 0),
              "energy": round(float(getattr(state, "energy", 0.0)), 1),
              "fields": len(getattr(state, "fields", []) or []), **holdings(state), **last}
@@ -1120,6 +1167,7 @@ async def write_down(
     if total is not None:
         entry["total"] = round(float(total), 1)
     journal(entry)
+    UNDER_WAY["written"] = True
     await tournament_journal(agent, state)
     status = snapshot(state, last)
     if seen_at is not None:
@@ -2059,6 +2107,11 @@ def end_with_its_agents() -> None:
 
     def end(signum: int, _frame: Any) -> None:
         connections.end_groups()
+        try:  # the move under way still counts (B1); nothing here holds the end up
+            book_the_move_under_way()
+        except Exception as exc:  # noqa: BLE001 - the end comes in any case
+            print(f"the move under way could not be written down ({type(exc).__name__})",
+                  file=sys.stderr)
         raise SystemExit(128 + signum)
 
     for signum in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):

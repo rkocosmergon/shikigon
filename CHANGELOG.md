@@ -2,16 +2,25 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## 0.1.16 (unreleased)
+## Unreleased
 
 - **Nothing the bar starts hangs without an end** (marketplace review #14438). Setting up, looking
   for advisors or models, trying one, asking, passing on a word, keeping a key, a move by the
   `tick` shortcut: each such step
-  now ends with a reason within its time and leaves nothing of it running. Until now a step that
-  could not start at all, for example with the plugin's Python environment missing, left the
-  panel on "asking…" or "asking it once…" without end. Now the panel says "could not start" or
-  "took too long" where it waits for an answer, and a desktop notice says it for the others, with
-  "Try again". The game loop and the terminal are meant to go on and have no such end.
+  now ends with a reason within its time and leaves nothing of it running, also when the shell
+  stops while it runs. Until now a step that could not start at all, for example with the
+  plugin's Python environment missing, left the panel on "asking…" or "asking it once…" without
+  end. Now the panel says "could not start" or "took too long" where it waits for an answer, and a
+  desktop notice says it for the others, with "Try again"; a step that broke off says "did not
+  finish", and two notices at once both come. The game loop and the terminal are meant to go on
+  and have no such end.
+- **A move stopped on its way still counts.** When a move by the `tick` shortcut runs past its
+  time, or the panel restarts the game loop (changing "advise on moves", waking), the move may
+  already have reached the world. It now stands in the journal and counts against the learning
+  budget with its whole limit, as any move whose answer got lost.
+- **Setting up the brain anew never leaves you without one.** A rebuild that was cut off (past its
+  time, or the shell stopped) kept the old environment aside, and the next rebuild removed it
+  first. Now the old one comes back before anything else.
 - **A word or a move whose first try reached the world is never called "not taken" or
   "refused", whatever the retry is answered** (needs cosmergon-agent 0.31.10). When the first
   try went out, its answer got lost, and the last retry got an error page (for example an empty

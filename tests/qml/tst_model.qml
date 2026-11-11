@@ -868,7 +868,10 @@ TestCase {
   // and says why it ended without its result.
   function test_a_helper_runs_under_timeout_through_the_rule() {
     var argv = Model.bounded(30, ["/x/python", "-I", "b.py"])
-    compare(argv.slice(0, 4), Model.outside([]))
+    // `timeout` a child of the line, not in its place: it dies with it (e859803, B3)
+    compare(argv.slice(0, 4), Model.shell(Model.HELPER_BODY))
+    verify(Model.HELPER_BODY.indexOf("setpriv --pdeathsig TERM --") === 0)
+    verify(Model.HELPER_BODY.indexOf("exec") < 0)
     compare(argv.slice(4), ["timeout", "-k", "5", "30", "/x/python", "-I", "b.py"])
     verify(Model.HELPER_QUICK_S < Model.HELPER_ASKS_S && Model.HELPER_ASKS_S < Model.HELPER_SETUP_S)
     verify(Model.HELPER_ASKS_S > 270)  // the bar waits 270 s for an answer (BarWidget)
@@ -885,6 +888,18 @@ TestCase {
     compare(Model.helperWhy(139), "was stopped")       // another signal, e.g. a crash
     compare(Model.helperWhy(0), "")
     compare(Model.helperWhy(1), "")                     // its own answer: the caller reads it
+    compare(Model.helperWhy(1, true), "")               // a refusal of the brain, in JSON
+    compare(Model.helperWhy(1, false), "did not finish") // the brain broke off (e859803, B4)
+    compare(Model.helperWhy(0, false), "")
+    compare(Model.helperWhy(127, false), "could not start")
     compare(Model.helperNotice("Asking", "took too long"), "Asking: took too long. Try again.")
+  }
+
+  // e859803, B4: a notice while one is on its way waits, once, at most four.
+  function test_notices_wait_in_order_each_once() {
+    compare(Model.noticesAfter([], "a"), ["a"])
+    compare(Model.noticesAfter(["a", "b"], "a"), ["b", "a"])
+    compare(Model.noticesAfter(["a", "b", "c", "d"], "e"), ["b", "c", "d", "e"])
+    compare(Model.noticesAfter(undefined, "a"), ["a"])
   }
 }

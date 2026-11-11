@@ -44,20 +44,42 @@ var HELPER_ASKS_S = 300
 var HELPER_SETUP_S = 1800
 var HELPER_KILL_S = 5
 
+// `timeout` runs as a child of the shell line, not in its place, and ends with it: Quickshell
+// tears a running Process down with SIGKILL to the process it started (src/io/process.cpp,
+// ~Process), which nothing forwards. Until 0.1.16 that was `timeout` itself, and the helper's
+// program went on without its deadline (cos20 #492, Betreuer-Durchgang e859803, B3). Now the
+// kernel sends `timeout` TERM when the shell line dies (`setpriv --pdeathsig`), and it ends its
+// group as on its deadline: TERM, KILL `HELPER_KILL_S` later. Its status is the line's.
+var HELPER_BODY = 'setpriv --pdeathsig TERM -- "$@"; exit $?'
+
 function bounded(seconds, argv) {
-  return outside(["timeout", "-k", String(HELPER_KILL_S), String(seconds)].concat(argv))
+  return shell(HELPER_BODY,
+               ["timeout", "-k", String(HELPER_KILL_S), String(seconds)].concat(argv))
 }
 
 // Why a helper ended without its result; "" when it ran to its end (its own exit code says the
 // rest). `code` is null when it never started (Quickshell's FailedToStart sends no `exited`).
 // 124 is `timeout`'s deadline, 137 its KILL after it, 125 `timeout` itself failed, 126/127 a
-// program that cannot run.
-function helperWhy(code) {
+// program that cannot run. `answered` is given for a helper that always answers (the brain's
+// commands print one JSON line, a refusal too): false when nothing readable came, and an exit
+// other than 0 then is a brain that broke off, a traceback. Until 0.1.16 that ended without a
+// word (cos20 #492, Betreuer-Durchgang e859803, B4).
+function helperWhy(code, answered) {
   if (code === null || code === undefined) return "could not start"
   if (code === 124 || code === 137) return "took too long"
   if (code === 125 || code === 126 || code === 127) return "could not start"
   if (code > 128) return "was stopped"  // ended by another signal (Helper: 128 + its number)
+  if (code !== 0 && answered === false) return "did not finish"
   return ""
+}
+
+// The notices still to show while one is on its way: each once, the oldest dropped past
+// NOTICES_KEPT. Until 0.1.16 a second notice in that moment was dropped (B4).
+var NOTICES_KEPT = 4
+
+function noticesAfter(waiting, body) {
+  var kept = (Array.isArray(waiting) ? waiting : []).filter(function(b) { return b !== body })
+  return kept.concat([body]).slice(-NOTICES_KEPT)
 }
 
 // What the notice says when a helper ended without its result: fixed words only.
@@ -774,8 +796,10 @@ if (typeof module !== "undefined") {
     PATH_RULE: PATH_RULE,
     outside: outside,
     shell: shell,
+    HELPER_BODY: HELPER_BODY,
     bounded: bounded,
     helperWhy: helperWhy,
+    noticesAfter: noticesAfter,
     helperNotice: helperNotice
   }
 }

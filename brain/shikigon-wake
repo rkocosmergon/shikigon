@@ -67,6 +67,15 @@ install_brain() {
 
 [ -f "$lock" ] || fail "The plugin's requirements.lock is missing."
 want="$(sha256sum "$lock" | cut -d' ' -f1)"
+# A rebuild below that was cut off (the bar's deadline, a stopped shell) left the old brain in
+# "$venv.old": it is the last one that worked, so it comes back before anything is looked at, and
+# the rebuild starts again from there. Until 0.1.16 the next rebuild removed it first, and a second
+# cut-off left no brain at all (cos20 #492, Betreuer-Durchgang e859803, B2). Also after a KILL,
+# which no trap would see.
+if [ -d "$venv.old" ]; then
+    rm -rf "$venv"
+    mv "$venv.old" "$venv"
+fi
 # Rebuilt when the lock changed, or when the brain can no longer load its packages. The second
 # happens without any change here: the environment points at the system's python3, and when
 # the system moves to a new Python (3.14 to 3.15), its packages sit in the old version's folder.
@@ -75,8 +84,7 @@ if [ "$(cat "$venv/.lock-sha256" 2>/dev/null)" != "$want" ] || ! healthy; then
     say brain
     # An update that fails must not leave it without a brain: the old one steps aside and
     # comes back if the new one cannot be built. (An environment cannot be moved once it is
-    # built, so the new one is built in place.)
-    rm -rf "$venv.old"
+    # built, so the new one is built in place.) No "$venv.old" stands here any more (above).
     [ -d "$venv" ] && mv "$venv" "$venv.old"
     if install_brain; then
         echo "$want" > "$venv/.lock-sha256"

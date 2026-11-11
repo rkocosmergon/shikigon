@@ -137,9 +137,10 @@ def test_the_bars_ways_put_the_rule_first() -> None:
     text = MODEL.read_text(encoding="utf-8")
     assert '["/bin/sh", "-c", PATH_RULE + \'exec "$@"\', "sh"].concat(argv)' in text
     assert '["/bin/sh", "-c", PATH_RULE + body, "sh"].concat(args || [])' in text
-    # A finite helper (marketplace review #14438) runs `timeout` through the rule as well.
-    bounded = 'outside(["timeout", "-k", String(HELPER_KILL_S), String(seconds)].concat(argv))'
-    assert "return " + bounded in text
+    # A finite helper (marketplace review #14438) runs `timeout` through the rule as well, as a
+    # child of the line (Betreuer-Durchgang e859803, B3).
+    assert "return shell(HELPER_BODY," in text
+    assert '["timeout", "-k", String(HELPER_KILL_S), String(seconds)].concat(argv))' in text
 
 
 def test_what_the_brain_starts_inherits_the_rule(tmp_path: Path) -> None:

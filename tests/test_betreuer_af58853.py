@@ -165,7 +165,10 @@ def held_outside(sources: dict[str, str]) -> list[str]:
 BUDGET_CALLS = {
     "budget_left": {("head.py", "decide")},
     "budget_spend": {("shikigon_brain.py", "spend_budget")},
-    "spend_budget": {("shikigon_brain.py", "write_down")},
+    # and the end on SIGTERM, for the move under way: only inside this process's move (``UNDER_WAY``
+    # is filled under ``tick``'s lock), where nothing waits (Betreuer-Durchgang e859803, B1)
+    "spend_budget": {("shikigon_brain.py", "write_down"),
+                     ("shikigon_brain.py", "book_the_move_under_way")},
 }
 
 

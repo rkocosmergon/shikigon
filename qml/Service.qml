@@ -169,6 +169,9 @@ Item {
     property bool exitSeen: false
     // What it printed, read through the bar's door (K47); null when nothing readable came.
     property var answer: null
+    // A command of the brain: it always prints one JSON line, so none is a brain that broke off
+    // (Model.helperWhy, Betreuer-Durchgang e859803, B4).
+    property bool answers: false
     signal settled(int exitCode, string why, var answer)
     command: Model.bounded(seconds, argv)
     // `exitSeen` is let go of only by the `runningChanged` that follows every `exited`: once
@@ -176,7 +179,7 @@ Item {
     function settle(code) {
       var said = answer
       answer = null
-      settled(code, Model.helperWhy(code), said)
+      settled(code, Model.helperWhy(code, answers ? said !== null : undefined), said)
     }
     onRunningChanged: {
       if (running) { exitSeen = false; answer = null }
@@ -198,20 +201,32 @@ Item {
     }
   }
 
-  // A helper that ended without its result says so on the desktop, once, in fixed words.
+  // A helper that ended without its result says so on the desktop, once, in fixed words. One
+  // that ends while a notice is on its way waits for it (Model.noticesAfter); until 0.1.16 it
+  // was dropped (Betreuer-Durchgang e859803, B4).
   function failed(what, why) {
-    if (why === "" || notifier.running) return
-    notifier.body = Model.helperNotice(what, why)
+    if (why === "") return
+    var body = Model.helperNotice(what, why)
+    if (notifier.running) { notifier.waiting = Model.noticesAfter(notifier.waiting, body); return }
+    notifier.body = body
     notifier.running = true
   }
   Helper {
     id: notifier
     property string body: ""
+    property var waiting: []
     argv: Model.shell('notify-send -a Shikigon -- "Shikigon" "$1"', [body])
+    onSettled: {
+      if (waiting.length === 0) return
+      body = waiting[0]
+      waiting = waiting.slice(1)
+      running = true
+    }
   }
 
   Helper {
     id: ticker
+    answers: true
     seconds: Model.HELPER_ASKS_S
     argv: root.brainCommand(["tick"])
     onSettled: (exitCode, why) => root.failed("Moving now", why)
@@ -426,6 +441,7 @@ Item {
 
   Helper {
     id: advisorLister
+    answers: true
     seconds: Model.HELPER_ASKS_S
     argv: root.brainCommand(["advisor", "list"])
     onSettled: (exitCode, why, answer) => {
@@ -438,6 +454,7 @@ Item {
   // (https://me:pw@…), and arguments stand in every local user's process list (cos20 #492 F3).
   Helper {
     id: modelLister
+    answers: true
     property string where: ""
     property string next: ""
     seconds: Model.HELPER_ASKS_S
@@ -459,6 +476,7 @@ Item {
   }
   Helper {
     id: prober
+    answers: true
     property string connection: ""
     property string model: ""
     seconds: Model.HELPER_ASKS_S
@@ -473,6 +491,7 @@ Item {
   // A question and an instruction: over stdin like the key below (see oneLine).
   Helper {
     id: asker
+    answers: true
     property string said: ""
     seconds: Model.HELPER_ASKS_S
     argv: root.brainCommand(["ask"])
@@ -485,6 +504,7 @@ Item {
   }
   Helper {
     id: instructor
+    answers: true
     property string said: ""
     property string next: ""
     seconds: Model.HELPER_ASKS_S
@@ -506,6 +526,7 @@ Item {
   // for: the brain sends it there and nowhere else (cos20 #492 F4).
   Helper {
     id: keyKeeper
+    answers: true
     property string secret: ""
     argv: root.brainCommand(["advisor", "key"])
     stdinEnabled: true
@@ -520,6 +541,7 @@ Item {
   }
   Helper {
     id: adviser
+    answers: true
     property string value: "off"
     argv: root.brainCommand(["advisor", "advise", value])
     onSettled: (exitCode, why) => {

@@ -67,7 +67,7 @@ omarchy plugin add https://github.com/rkocosmergon/shikigon.git --enable
 Omarchy warns you that plugins run as unsandboxed code and lets you read it first. Please do.
 
 It needs nothing beyond Omarchy itself: Python 3.11 or newer with its `venv` module,
-`notify-send` and `wl-paste`, all part of every Omarchy install.
+`notify-send`, `wl-paste`, `timeout` and `setpriv`, all part of every Omarchy install.
 
 Its eyes appear in the bar, closed. Click them and press **wake**. That one click:
 
