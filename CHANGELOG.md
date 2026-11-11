@@ -5,7 +5,8 @@ What changed for someone who uses Shikigon. Newest first.
 ## 0.1.16 (unreleased)
 
 - **Nothing the bar starts hangs without an end** (marketplace review #14438). Setting up, looking
-  for advisors or models, trying one, asking, passing on a word, keeping a key: each such step
+  for advisors or models, trying one, asking, passing on a word, keeping a key, a move by the
+  `tick` shortcut: each such step
   now ends with a reason within its time and leaves nothing of it running. Until now a step that
   could not start at all, for example with the plugin's Python environment missing, left the
   panel on "asking…" or "asking it once…" without end. Now the panel says "could not start" or

@@ -79,9 +79,12 @@ Item {
     restartLater.restart()
   }
 
+  // One move now, a finite helper like the others (`ticker`): until 0.1.16 it went out detached,
+  // with no end and no word when it could not start (marketplace review #14438).
   function tickNow() {
     if (!awake) return "asleep"
-    Quickshell.execDetached(brainCommand(["tick"]))
+    if (ticker.running) return "busy"
+    ticker.running = true
     return "ok"
   }
 
@@ -205,6 +208,13 @@ Item {
     id: notifier
     property string body: ""
     argv: Model.shell('notify-send -a Shikigon -- "Shikigon" "$1"', [body])
+  }
+
+  Helper {
+    id: ticker
+    seconds: Model.HELPER_ASKS_S
+    argv: root.brainCommand(["tick"])
+    onSettled: (exitCode, why) => root.failed("Moving now", why)
   }
 
   Helper {

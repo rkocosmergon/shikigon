@@ -132,6 +132,9 @@ def unsettled_processes(source: str) -> list[str]:
     for block in _blocks(source, "Helper"):
         if re.search(r"^\s*(onExited|command):", block, re.MULTILINE):
             bad.append(block)
+    # A brain command started detached has neither an end nor a word (the tick until 0.1.16).
+    # A terminal the player keeps open starts it inside `omarchy-launch-tui`, through outside().
+    bad += [m.group(0) for m in re.finditer(r"execDetached\(\s*(?:root\.)?brainCommand\(", source)]
     return bad
 
 
@@ -335,7 +338,10 @@ def test_the_guards_see_what_they_guard() -> None:
     assert unsettled_processes("Process {\n  id: lister\n}")
     assert unsettled_processes("Helper {\n  id: x\n  onExited: root.f()\n}")
     assert not unsettled_processes("Helper {\n  id: x\n  onSettled: root.f()\n}")
-    assert len(_blocks(service, "Helper")) >= 12  # the notifier and eleven helpers
+    assert unsettled_processes('Quickshell.execDetached(brainCommand(["tick"]))')
+    assert not unsettled_processes(
+        'Quickshell.execDetached(Model.outside(["omarchy-launch-tui"].concat(brainCommand(["x"]))))')
+    assert len(_blocks(service, "Helper")) >= 13  # the notifier and twelve helpers
     assert [b for b in _blocks(service, "Process") if "id: runner" in b]
     helper = next(b for b in _blocks(service, "Process") if "signal settled(" in b)
     assert "command: Model.bounded(seconds, argv)" in helper
