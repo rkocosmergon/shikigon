@@ -11,6 +11,12 @@ What changed for someone who uses Shikigon. Newest first.
   panel on "asking…" or "asking it once…" without end. Now the panel says "could not start" or
   "took too long" where it waits for an answer, and a desktop notice says it for the others, with
   "Try again". The game loop and the terminal are meant to go on and have no such end.
+- **A word or a move whose first try reached the world is never called "not taken" or
+  "refused", whatever the retry is answered** (needs cosmergon-agent 0.31.10). When the first
+  try went out, its answer got lost, and the last retry got an error page (for example an empty
+  502 while the world restarts), the journal said "not taken, try again later" for a word and
+  counted a move as refused, though the world may have taken them. Now both say "no answer from
+  the world", and the move counts against the learning budget with its whole limit.
 
 ## 0.1.15 (2026-11-10)
 
