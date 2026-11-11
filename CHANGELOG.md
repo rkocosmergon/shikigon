@@ -2,7 +2,7 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## Unreleased
+## 0.1.16 (2026-11-11)
 
 - **Nothing the bar starts hangs without an end** (marketplace review #14438). Setting up, looking
   for advisors or models, trying one, asking, passing on a word, keeping a key, a move by the
