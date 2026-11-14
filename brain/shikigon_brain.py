@@ -1188,7 +1188,8 @@ async def earn_now(agent: Any) -> dict[str, Any] | None:
         EARN["figures"] = {
             "revenue": round(files.finite(z["revenue"]) or 0.0, 2),
             "commission": round(files.finite(z["commission"]) or 0.0, 2),
-            "currency": currency if len(currency) == 3 and currency.isalpha() else "EUR",
+            # The bar's rule (^[A-Z]{3}$), not isalpha(): Greek or Cyrillic letters pass that.
+            "currency": currency if re.fullmatch(r"[A-Z]{3}", currency) else "EUR",
         }
     except Exception as exc:  # noqa: BLE001 - figures for the bar; a move never waits on them
         print(f"earn figures not available ({type(exc).__name__})", file=sys.stderr)

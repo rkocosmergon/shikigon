@@ -8,7 +8,6 @@ cells out. The bar shows them beside the other figures; ``ShikigonModel.money`` 
 from __future__ import annotations
 
 import sys
-import types
 from pathlib import Path
 from typing import Any
 
@@ -34,53 +33,54 @@ class _Agent:
 
 
 @pytest.fixture
-def sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """The SDK's ``earn`` and ``display_currency`` as small stand-ins: the tests fix the numbers."""
-    chosen = {"currency": "USD"}
-    earn = types.ModuleType("cosmergon_agent.earn")
+def sdk(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
+    """The real ``cosmergon_agent.earn`` and ``config`` of the pinned SDK (0.32.1), with the
+    currency set the way the player sets it (``[display] currency`` in a config.toml of its own).
 
-    def figures(partner: dict, currency: str, rates: dict | None) -> dict[str, Any]:
-        cents = partner["umsatz"]["direkt_gesamt_cents"]
-        rate = (rates or {}).get("rates", {}).get(currency, 1.0) if currency != "EUR" else 1.0
-        return {"revenue": cents / 100 * rate, "commission": 39.6 * rate, "currency": currency}
+    Stand-ins stood here while the lock pinned 0.31.10, which had neither; a test on a stand-in
+    does not follow the real dependency (threat model K40).
+    """
+    from cosmergon_agent import config
 
-    earn.figures = figures  # type: ignore[attr-defined]
-    config = types.ModuleType("cosmergon_agent.config")
-    config.display_currency = lambda: chosen["currency"]  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "cosmergon_agent.earn", earn)
-    monkeypatch.setitem(sys.modules, "cosmergon_agent.config", config)
-    import cosmergon_agent
-
-    monkeypatch.setattr(cosmergon_agent, "earn", earn, raising=False)
+    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.toml")
+    assert config.set_display_currency("USD") is True
     monkeypatch.setattr(brain, "EARN", {"at": 0.0, "figures": None})
-    return chosen
+    return config
 
 
-async def test_numbers_only_in_the_chosen_currency(sdk: dict[str, Any]) -> None:
+async def test_numbers_only_in_the_chosen_currency(sdk: Any) -> None:
     figures = await brain.earn_now(_Agent())
     assert figures == {"revenue": pytest.approx(134.57), "commission": pytest.approx(44.41),
                        "currency": "USD"}
 
 
-async def test_asked_at_most_every_quarter_hour(sdk: dict[str, Any]) -> None:
+async def test_asked_at_most_every_quarter_hour(sdk: Any) -> None:
     agent = _Agent()
     await brain.earn_now(agent)
     await brain.earn_now(agent)
     assert agent.asked == 1
 
 
-async def test_a_refusal_keeps_what_was_there(sdk: dict[str, Any]) -> None:
+async def test_a_refusal_keeps_what_was_there(sdk: Any) -> None:
     first = await brain.earn_now(_Agent())
     brain.EARN["at"] = 0.0
     assert await brain.earn_now(_Agent(fails=True)) == first
 
 
-async def test_program_off_shows_nothing(sdk: dict[str, Any]) -> None:
+async def test_program_off_shows_nothing(sdk: Any) -> None:
     assert await brain.earn_now(_Agent(partner=None)) is None
 
 
-async def test_a_currency_that_is_no_code_falls_back(sdk: dict[str, Any]) -> None:
-    sdk["currency"] = "<b>"
+@pytest.mark.parametrize("bad", ["<b>", "ΑΒΓ", "us"])
+async def test_a_currency_that_is_no_code_falls_back(
+    sdk: Any, monkeypatch: pytest.MonkeyPatch, bad: str
+) -> None:
+    """Only three Latin capitals pass, the bar's own rule (``^[A-Z]{3}$``): Greek letters are
+    letters to ``isalpha`` but no code the bar shows (threat model K46, one reading)."""
+    from cosmergon_agent import earn
+
+    real = earn.figures
+    monkeypatch.setattr(earn, "figures", lambda p, c, r: {**real(p, "EUR", r), "currency": bad})
     figures = await brain.earn_now(_Agent())
     assert figures is not None and figures["currency"] == "EUR"
 
