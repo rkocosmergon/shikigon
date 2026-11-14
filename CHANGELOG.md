@@ -9,7 +9,7 @@ What changed for someone who uses Shikigon. Newest first.
   currency` in the SDK's `config.toml`, also set with C in the terminal's A). The brain asks the
   server at most every quarter of an hour and writes numbers only; with the program off, or an
   older SDK, the two cells stay away.
-- The SDK is pinned at 0.32.0 (`requirements.lock`), which brings the terminal's Earn window
+- The SDK is pinned at 0.32.1 (`requirements.lock`), which brings the terminal's Earn window
   (A) and the figures the panel shows.
 
 ## 0.1.16 (2026-11-11)
