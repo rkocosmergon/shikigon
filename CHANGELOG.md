@@ -6,9 +6,13 @@ What changed for someone who uses Shikigon. Newest first.
 
 - **Revenue and commission in the panel.** Below fields, rank, compass and public: what your
   agent's link has brought in the partner program, in the currency you chose (`[display]
-  currency` in the SDK's `config.toml`, also set with C in the terminal's A). The brain asks the
-  server at most every quarter of an hour and writes numbers only; with the program off, or an
-  older SDK, the two cells stay away.
+  currency` in the SDK's `config.toml`, also set with C in the terminal's A). The game loop asks
+  the server at most every quarter of an hour, beside its moves and never inside one, and keeps
+  numbers only (`earn.json`); a move by the `tick` shortcut and a game loop started anew read
+  what was kept and ask nothing. With the program off, an older SDK, or a number that is no
+  number, the two cells stay away; they show from the move after the first answer.
+- The README's list of what the bar touches names the notice for a step that ended without its
+  result (there since 0.1.16).
 - The SDK is pinned at 0.32.1 (`requirements.lock`), which brings the terminal's Earn window
   (A) and the figures the panel shows.
 

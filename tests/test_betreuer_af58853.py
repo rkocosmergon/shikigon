@@ -129,6 +129,10 @@ HELD_PLACES = {
     ("shikigon_brain.py", "advisor_command"): (
         "forget and a key typed in the panel: the advisor's files, beside change_choice, never in "
         "a move (Betreuer-Durchgang b964644, B2)"),
+    ("shikigon_brain.py", "_earn_due"): (
+        "the partner figures: looked up and noted in one hold, by the game loop beside its moves, "
+        "never in a move (Betreuer-Durchgang 3b6fff1, B1)"),
+    ("shikigon_brain.py", "earn_refresh"): "the figures that came, beside _earn_due",
 }
 
 

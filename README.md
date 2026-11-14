@@ -167,8 +167,11 @@ On your desktop, the bar runs inside the shell and touches only this:
   change elsewhere reaches nothing of Shikigon's, open panel or not. They take your keys
   directly, so input methods (compose, dead keys) do not reach them; keys that type a
   character themselves do.
-- **Notifications:** a few, through `notify-send`: once when it moves in, and a hint the first
-  time something new happens. A hint holds fixed words only, in its title too: not its name,
+- **Notifications:** a few, through `notify-send`: once when it moves in, a hint the first
+  time something new happens, and one when a step the bar started ended without its result
+  (waking, a move by the `tick` shortcut, looking for advisors, asking, passing on a word,
+  keeping a key, changing the advice: "could not start", "took too long", "was stopped" or "did
+  not finish", with "Try again"). Each holds fixed words only, in its title too: not its name,
   which the world gives it, and never a sentence of the server. A notifier offers a link it
   finds in a notification as a click.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your
@@ -533,6 +536,7 @@ Everything lives in plain files:
 | `~/.local/state/shikigon/speech.json` | when it last wrote to another agent, the messages it has answered, and a contract proposal it announced |
 | `~/.local/state/shikigon/unusable_answers.jsonl` | what your agent answered when its answer could not be played, for looking into why: why it was turned down, how long it was, its first and last 200 characters. Readable by you only, cut to its last 64 KiB once it passes 128 KiB. Nothing in Shikigon reads it, so no model, status or bar gets it |
 | `~/.local/state/shikigon/budget.json` | today's learning budget while your agent has taken over: its total energy at its first move of the UTC day and what its own moves lost since |
+| `~/.local/state/shikigon/earn.json` | what its link brought in the partner program, for the panel: revenue and commission as numbers with the currency code of your `config.toml`, and when the game loop last asked the world for them (at most every quarter of an hour) |
 | `~/.local/state/shikigon/move.lock` | empty; locked while a move plays, so the running brain and a `tick` by hand never play at once |
 | `~/.local/state/shikigon/review/` | what your agent may read while it looks back: its moves, their numbers, the world's rules |
 | `~/.local/state/shikigon/setup.json` | how far **wake** got, for the panel |

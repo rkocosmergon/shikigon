@@ -1,8 +1,9 @@
 """cos20 #757: revenue and commission of the partner program in the bar.
 
-The brain asks at most every quarter of an hour, writes numbers only (and the currency code of
-the player's own config), stays quiet on any refusal, and an SDK without ``earn`` leaves the
-cells out. The bar shows them beside the other figures; ``ShikigonModel.money`` formats them.
+The game loop asks at most every quarter of an hour (``earn_refresh``), keeps numbers only (and
+the currency code of the player's own config) in a file a move reads (``earn_kept``), stays quiet
+on any refusal, and an SDK without ``earn`` leaves the cells out. The bar shows them beside the
+other figures; ``ShikigonModel.money`` formats them.
 """
 
 from __future__ import annotations
@@ -44,31 +45,50 @@ def sdk(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
 
     monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "config.toml")
     assert config.set_display_currency("USD") is True
-    monkeypatch.setattr(brain, "EARN", {"at": 0.0, "figures": None})
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     return config
 
 
+async def asked(agent: Any) -> Any:
+    """What the bar gets after the game loop asked ``agent`` once."""
+    await brain.earn_refresh(agent)
+    return brain.earn_kept()
+
+
+def a_quarter_later() -> None:
+    """The file says the last question is a quarter of an hour old."""
+    path = brain.state_dir() / brain.EARN_FILE
+    kept = brain.files.read_object(path)
+    brain.files.write_json(path, {**kept, "at": kept["at"] - brain.EARN_EVERY_S})
+
+
 async def test_numbers_only_in_the_chosen_currency(sdk: Any) -> None:
-    figures = await brain.earn_now(_Agent())
+    figures = await asked(_Agent())
     assert figures == {"revenue": pytest.approx(134.57), "commission": pytest.approx(44.41),
                        "currency": "USD"}
 
 
 async def test_asked_at_most_every_quarter_hour(sdk: Any) -> None:
     agent = _Agent()
-    await brain.earn_now(agent)
-    await brain.earn_now(agent)
+    await brain.earn_refresh(agent)
+    await brain.earn_refresh(agent)
     assert agent.asked == 1
+    a_quarter_later()
+    await brain.earn_refresh(agent)
+    assert agent.asked == 2
 
 
 async def test_a_refusal_keeps_what_was_there(sdk: Any) -> None:
-    first = await brain.earn_now(_Agent())
-    brain.EARN["at"] = 0.0
-    assert await brain.earn_now(_Agent(fails=True)) == first
+    first = await asked(_Agent())
+    a_quarter_later()
+    down = _Agent(fails=True)
+    assert await asked(down) == first and first is not None and down.asked == 1
 
 
 async def test_program_off_shows_nothing(sdk: Any) -> None:
-    assert await brain.earn_now(_Agent(partner=None)) is None
+    assert await asked(_Agent()) is not None
+    a_quarter_later()
+    assert await asked(_Agent(partner=None)) is None
 
 
 @pytest.mark.parametrize("bad", ["<b>", "ΑΒΓ", "us"])
@@ -81,14 +101,17 @@ async def test_a_currency_that_is_no_code_falls_back(
 
     real = earn.figures
     monkeypatch.setattr(earn, "figures", lambda p, c, r: {**real(p, "EUR", r), "currency": bad})
-    figures = await brain.earn_now(_Agent())
+    figures = await asked(_Agent())
     assert figures is not None and figures["currency"] == "EUR"
 
 
-async def test_an_sdk_without_earn_leaves_the_cells_out(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_an_sdk_without_earn_leaves_the_cells_out(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setitem(sys.modules, "cosmergon_agent.earn", None)  # import fails
-    monkeypatch.setattr(brain, "EARN", {"at": 0.0, "figures": None})
-    assert await brain.earn_now(_Agent()) is None
+    agent = _Agent()
+    assert await asked(agent) is None and agent.asked == 0
 
 
 def test_the_bar_has_the_two_cells_and_the_format() -> None:

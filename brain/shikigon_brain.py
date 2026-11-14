@@ -355,7 +355,7 @@ def agent_paths(home: Path) -> list[Path]:
     """What belongs to the agent that lives here, not to the player: its moves, what it learned
     from them, the day its learning budget is measured against, its words, the missions it saw,
     its snapshot, the moves the world kept refusing it, the answers of its head that could not be
-    played. The talk with the advisor is the
+    played, what its link brought in the partner program. The talk with the advisor is the
     player's (cos20 #468), as are the choice of advisor, its counter of calls and the bar's
     hints."""
     import head
@@ -365,7 +365,7 @@ def agent_paths(home: Path) -> list[Path]:
     return [home / lessons.JOURNAL_FILE, home / BAR_JOURNAL, home / lessons.LESSONS_FILE,
             home / lessons.REVIEW_FOLDER, home / head.BUDGET_FILE, speech.memo_path(home),
             home / seen_path().name, home / "status.json", home / REFUSALS_FILE,
-            home / head.UNUSABLE_FILE]  # fmt: skip
+            home / head.UNUSABLE_FILE, home / EARN_FILE]  # fmt: skip
 
 
 def leave_the_old_one(home: Path) -> None:
@@ -1150,7 +1150,7 @@ async def write_down(
     status = snapshot(state, last)
     if seen_at is not None:
         status["seen_at"] = seen_at
-    figures = await earn_now(agent)
+    figures = earn_kept()  # read only: nothing of a move waits for these (``earn_refresh``)
     if figures is not None:
         status["earn"] = figures
     left = getattr(decider, "budget_left", None)  # measured when the head chose
@@ -1162,39 +1162,80 @@ async def write_down(
 # cos20 #757: revenue and commission of the partner program for the bar, in the currency set in
 # the SDK's config.toml ([display] currency). Asked at most every EARN_EVERY_S (finance rate
 # limit), quiet on any refusal; an SDK without ``earn`` (before 0.32.0) leaves it out.
+#
+# When they were last asked for, and what came, stands in a file of the state folder. Only the
+# game loop asks (``run``), beside its moves; a move reads the file. Until 3b6fff1 the time stood
+# in the memory of each process and a move asked inside itself: every ``tick`` by hand and every
+# start of the game loop asked at once, whatever the quarter of an hour said, and a world that
+# was slow to answer held the move's lock and the bar's status for minutes (cos20 #492,
+# Betreuer-Durchgang 3b6fff1, B1, K3).
 EARN_EVERY_S = 15 * 60
-EARN: dict[str, Any] = {"at": 0.0, "figures": None}
+EARN_WAIT_S = 30.0  # for both answers together; past it the figures kept stay
+EARN_FILE = "earn.json"
+_CURRENCY = re.compile(r"[A-Z]{3}")  # the bar's rule (``Model.money``), not ``isalpha()``
 
 
-async def earn_now(agent: Any) -> dict[str, Any] | None:
-    """Numbers only for the bar: ``revenue``, ``commission`` and the currency code (from the
-    player's own config, never the server's text — threat model §1b)."""
-    cached: dict[str, Any] | None = EARN["figures"]
-    if time.time() - EARN["at"] < EARN_EVERY_S:
-        return cached
-    EARN["at"] = time.time()
+def _earn_figures(value: Any) -> dict[str, Any] | None:
+    """``value`` as the figures the bar gets, each by its type, or ``None``: two finite numbers
+    and a currency code. A number that is not finite is no figure, and then none is shown: until
+    3b6fff1 it stood there as 0 (Betreuer-Durchgang 3b6fff1, K5)."""
+    if not isinstance(value, dict):
+        return None
+    revenue, commission = files.finite(value.get("revenue")), files.finite(value.get("commission"))
+    if revenue is None or commission is None:
+        return None
+    currency = value.get("currency")
+    # Greek or Cyrillic letters pass ``isalpha()``; the bar shows three Latin capitals only.
+    code = currency if isinstance(currency, str) and _CURRENCY.fullmatch(currency) else "EUR"
+    return {"revenue": round(revenue, 2), "commission": round(commission, 2), "currency": code}
+
+
+def earn_kept() -> dict[str, Any] | None:
+    """The figures last kept (``earn_refresh``), or ``None``: numbers only for the bar,
+    ``revenue``, ``commission`` and the currency code (from the player's own config, never the
+    server's text — threat model §1b). Reads a file, asks nobody."""
+    return _earn_figures(files.read_object(state_dir() / EARN_FILE).get("figures"))
+
+
+def _earn_due(now: float) -> bool:
+    """True once in ``EARN_EVERY_S``, for whichever process asks first: looked up and noted in one
+    hold of the state folder, before anything is sent. A time that lies ahead (the clock was set
+    back) counts from now: the next question comes a quarter of an hour later, not at once."""
+    path = state_dir() / EARN_FILE
+    with files.held(path.parent):
+        kept = files.read_object(path)
+        at = files.finite(kept.get("at"))
+        ahead = at is not None and at > now
+        if at is not None and not ahead and now - at < EARN_EVERY_S:
+            return False
+        files.write_json(path, {"at": now, "figures": _earn_figures(kept.get("figures"))})
+    return not ahead
+
+
+async def earn_refresh(agent: Any) -> None:
+    """Ask the world for the partner figures if a quarter of an hour has passed, and keep them
+    for the bar (``earn_kept``). Beside the moves, never inside one, within ``EARN_WAIT_S``.
+    Quiet on any refusal: what was kept stays. With the server's program off nothing is kept."""
     try:
+        now = time.time()
+        if not _earn_due(now):
+            return
         import importlib
 
         # Read at run time: the SDK pinned before 0.32.0 has neither (then nothing is shown).
         earn = importlib.import_module("cosmergon_agent.earn")
         display_currency = importlib.import_module("cosmergon_agent.config").display_currency
-        partner = await agent.partner()
-        if partner is None:  # the server's program is off
-            EARN["figures"] = None
-            return None
-        z = earn.figures(partner, display_currency(), await agent.exchange_rates())
-        currency = str(z["currency"])
-        EARN["figures"] = {
-            "revenue": round(files.finite(z["revenue"]) or 0.0, 2),
-            "commission": round(files.finite(z["commission"]) or 0.0, 2),
-            # The bar's rule (^[A-Z]{3}$), not isalpha(): Greek or Cyrillic letters pass that.
-            "currency": currency if re.fullmatch(r"[A-Z]{3}", currency) else "EUR",
-        }
-    except Exception as exc:  # noqa: BLE001 - figures for the bar; a move never waits on them
+        async with asyncio.timeout(EARN_WAIT_S):
+            partner = await agent.partner()
+            rates = None if partner is None else await agent.exchange_rates()
+        figures = None  # the server's program is off
+        if partner is not None:
+            figures = _earn_figures(earn.figures(partner, display_currency(), rates))
+        path = state_dir() / EARN_FILE
+        with files.held(path.parent):
+            files.write_json(path, {"at": now, "figures": figures})
+    except Exception as exc:  # noqa: BLE001 - figures for the bar; no move depends on them
         print(f"earn figures not available ({type(exc).__name__})", file=sys.stderr)
-    figures: dict[str, Any] | None = EARN["figures"]
-    return figures
 
 
 def write_status(status: dict[str, Any]) -> None:
@@ -1884,6 +1925,7 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
             await asyncio.sleep(LATE_TICK_S)
             continue
         waiting = False
+        await earn_refresh(agent)  # after the move, outside its lock (cos20 #757)
         state = getattr(agent, "state", None)
         done_in = getattr(state, "tick", None)
         learning = learning_next(cfg, state, learning, agent)
