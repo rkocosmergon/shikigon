@@ -163,14 +163,14 @@ async def test_without_a_total_a_move_that_gives_nothing_still_goes_out() -> Non
 # --- 4: only the versions read -------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("says", ["1.4.1", "1.2.9", "v1.3.12", "1.4.10"])
+@pytest.mark.parametrize("says", ["1.4.1", "1.2.9", "v1.3.12", "1.4.10", "1.5.1"])
 def test_a_release_never_read_is_not_asked(says: str) -> None:
     def run(argv: list[str], **kw: Any) -> Any:
         assert is_command(argv, connections.AGENTS["pi"]["version"]), "nothing but its version"
         return SimpleNamespace(returncode=0, stdout=says + "\n", stderr="")
 
     why = connections.untried("pi", run)
-    assert why.startswith("pi is not asked") and "1.2.0, 1.3.0, 1.4.0, 1.5.0" in why, why
+    assert why.startswith("pi is not asked") and "1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.5.2" in why, why
 
 
 # --- 5: every call of a model is counted ----------------------------------------------------------

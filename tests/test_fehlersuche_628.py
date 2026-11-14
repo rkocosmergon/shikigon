@@ -199,7 +199,8 @@ def _two_moves(
     """The real ``run``: two moves, the player's word between them. Each move asks the model."""
     moves: list[int] = []
 
-    async def move(agent: Any, chosen: Any, done_in: Any, refusals: Any) -> dict[str, Any]:
+    async def move(agent: Any, chosen: Any, done_in: Any, refusals: Any,
+                   until_gone: bool = False) -> dict[str, Any]:
         if hasattr(chosen, "tree"):
             chosen.tree = _TwoProposals()
         await chosen.decide(_world(**RICH))

@@ -226,10 +226,11 @@ def test_6_a_refusals_file_of_another_form_pauses_nothing(tmp_path: Path) -> Non
 # --- the class: every file the brain keeps is read through files.read_object/read_list ------
 
 # Reads of a file that is not one the brain keeps: what stands in a program's place, the
-# system's tables, the plugin's own notes.
+# system's tables, the plugin's own notes, the SDK's ``config.toml`` (TOML, read only for its
+# ``[display] currency``; 6080b8b K5).
 NOT_KEPT = {("connections", "is_placeholder"), ("connections", "system_accounts_below"),
             ("connections", "proc_tables"), ("connections", "own_addresses"),
-            ("shikigon_brain", "ask")}
+            ("shikigon_brain", "ask"), ("shikigon_brain", "display_currency")}
 
 
 def test_no_file_the_brain_keeps_is_read_past_files() -> None:

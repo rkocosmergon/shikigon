@@ -125,12 +125,16 @@ AGENTS: dict[str, dict[str, Any]] = {
                  "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve",
                  "--offline", "--thinking", "off", "--system-prompt", PI_SYSTEM,
                  "--append-system-prompt", NO_TOOLS],
-        # 1.2.0 to 1.5.0: the options above read the same in all four (``cli/args.ts``),
+        # 1.2.0 to 1.5.2: the options above read the same in all five (``cli/args.ts``),
         # and ``--version`` answers before any session, extension or network (``main.ts``).
+        # 1.5.2 (read 14.11.2026 against 1.5.0, cos20 #492): ``resource-loader.ts`` and
+        # ``system-prompt.ts`` unchanged; ``main.ts`` adds ``auth login/logout`` and a choice for a
+        # session whose folder is gone (no session here); the cache warming it now keeps ``idle``
+        # is cancelled when the session ends, as print mode does after its answer.
         # Each read at its tag; a later release, a patch one too, is asked only once it is
         # read and named here (cos20 #492, eighth review, finding 4).
         "version": ["pi", "--offline", "--version"],
-        "versions": ("1.2.0", "1.3.0", "1.4.0", "1.5.0"),
+        "versions": ("1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.5.2"),
         "model_flag": ["--model", "{model}"],
         "sign_in": ["pi"],  # its sign-in is "/login" inside pi
         "models": ["pi", "--offline", "--list-models"],

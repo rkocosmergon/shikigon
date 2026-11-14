@@ -37,6 +37,11 @@ TestCase {
     compare(Model.grouped(999), "999")
     compare(Model.grouped(1000), "1,000")
     compare(Model.grouped(1234567), "1,234,567")
+    // from 1e21 on String() writes an exponent: no number, never "1e,+21" (6080b8b, K4)
+    compare(Model.grouped(1e21), "")
+    compare(Model.grouped(-1e21), "")
+    compare(Model.grouped(1e20), "100,000,000,000,000,000,000")
+    compare(Model.money(1e21, "EUR"), "–")
     compare(Model.grouped(-12000), "-12,000")
     compare(Model.grouped("x"), "")
   }

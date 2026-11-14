@@ -601,7 +601,7 @@ BarWidget {
             font.pixelSize: Style.font.display
             font.bold: true
             text: root.view.full && root.status.energy !== undefined
-              ? Model.grouped(root.status.energy) + " E" : ""
+              ? (Model.grouped(root.status.energy) || "–") + " E" : ""
           }
         }
 

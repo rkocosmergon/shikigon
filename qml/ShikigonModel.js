@@ -117,9 +117,12 @@ function money(number, currency) {
   return text + " " + code
 }
 
+// A number from 1e21 on is written with an exponent ("1e+21"), and its digits are no digits: it is
+// shown as no number ("–" in `money`), never as "1e,+21" (cos20 #492, Betreuer-Durchgang 6080b8b,
+// K4).
 function grouped(number) {
   var value = Math.round(Number(number))
-  if (!isFinite(value)) return ""
+  if (!isFinite(value) || Math.abs(value) >= 1e21) return ""
   var digits = String(Math.abs(value))
   var out = ""
   for (var i = 0; i < digits.length; i++) {

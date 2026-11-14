@@ -2,6 +2,23 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## Unreleased
+
+- **pi 1.5.2 is asked.** Read at its source against 1.5.0: its options, the files it puts into
+  its prompt and the start before any session are the same; the cache warming it keeps between
+  runs ends with its answer here. Shikigon asks pi 1.2.0, 1.3.0, 1.4.0, 1.5.0 and 1.5.2.
+- **`forget` and the game loop take turns.** `forget` waits for no move: while one is under way
+  it says so and sends nothing. Once the agent is gone, the game loop ends and writes nothing
+  more, so the state folder stays removed.
+- **A new Shikigon keeps its key first.** `register --new` writes the new key before it clears
+  what the old agent left; a key that could not be written no longer takes the journal and the
+  lessons with it.
+- **The currency of the partner figures is only read.** The brain reads `[display] currency`
+  from the SDK's `config.toml` itself, changes nothing in that file, and a `display` that is no
+  table means EUR.
+- **No number shown as "1e,+21".** An amount from 1e21 on is shown as "–" in the panel.
+- The README's list of what `status.json` holds names the last move and the partner figures.
+
 ## 0.1.17 (2026-11-14)
 
 - **Revenue and commission in the panel.** Below fields, rank, compass and public: what your

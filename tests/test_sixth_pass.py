@@ -510,7 +510,7 @@ def test_an_agent_at_a_version_never_tried_is_not_asked(
     assert [row["text"] for row in rows] == [said], "the list says the same"
 
 
-@pytest.mark.parametrize("says", ["1.2.0", "1.3.0", "1.4.0", "1.5.0", "v1.4.0"])
+@pytest.mark.parametrize("says", ["1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.5.2", "v1.4.0"])
 def test_an_agent_at_a_version_it_was_tried_with_is_asked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, says: str,
 ) -> None:

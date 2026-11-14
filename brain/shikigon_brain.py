@@ -308,6 +308,11 @@ def register(
     An existing Shikigon is never overwritten by accident: its key is its life.
     A world that is away or refuses is said in one sentence, not in a traceback.
     ``post`` is ``connections.bounded_post`` in use and a stub in tests.
+
+    The new key is written first, then what the old agent left goes: until 0.1.17 the old files
+    went first, and a key that could not be written (a full disk) took the journal and the
+    lessons with it while the new agent lived on the server without its key here (cos20 #492,
+    Betreuer-Durchgang 6080b8b, K1).
     """
     import advisor
     import connections
@@ -336,7 +341,6 @@ def register(
         raise SystemExit("The world's answer to the registration could not be read.") from None
     if not (isinstance(agent_id, str) and agent_id and isinstance(api_key, str) and api_key):
         raise SystemExit("The world's answer to the registration named no agent and no key.")
-    leave_the_old_one(state_dir())
     creds = {
         "agent_id": agent_id,
         "api_key": api_key,
@@ -344,6 +348,7 @@ def register(
         "world": connections.origin(url),  # the key goes to this world only (H3)
     }
     write_private(credentials_path(), creds)
+    leave_the_old_one(state_dir())
     born = {"agent_id": creds["agent_id"], "expires_at": creds["expires_at"]}
     if invite_code(cfg):  # the world says whether it knew the code; the agent lives either way
         counted = data.get("referral_accepted") is True
@@ -388,13 +393,28 @@ def forget(cfg: dict[str, Any], delete: Callable[..., Any]) -> dict[str, Any]:
     If the server does not answer or refuses, nothing here is removed, so you can try again.
     A key file it cannot read (``key_lost``) has no key to send: only the files here go, as after
     an ended key. Your configuration stays. ``delete`` is ``connections.bounded_delete`` in use
-    and a stub in tests.
+    and a stub in tests. While a move is under way it sends nothing and says so.
     """
-    import advisor
-
     creds = load_credentials()
     if creds is None:
         raise SystemExit("No Shikigon lives here.")
+    # Under the move's lock: no move of the running game loop or of a ``tick`` by hand is under
+    # way while the agent and its files go, and none starts until they are gone; then the game
+    # loop finds no key file and ends (``gone``). Until 0.1.17 a move under way wrote its status
+    # and journal into a folder ``forget`` had just removed (cos20 #492, Betreuer-Durchgang
+    # 6080b8b, K2).
+    with files.one_move(state_dir()) as mine:
+        if not mine:
+            return {"ok": False, "why": f"{ANOTHER_MOVE}: try again in a minute; nothing was sent"}
+        return _forget(cfg, creds, delete)
+
+
+def _forget(
+    cfg: dict[str, Any], creds: dict[str, str], delete: Callable[..., Any]
+) -> dict[str, Any]:
+    """``forget`` under the move's lock."""
+    import advisor
+
     if key_lost(creds):  # nothing to send the server: the files here go, as after a 401
         shutil.rmtree(state_dir())
         lost = "its key file could not be read; the world keeps the agent as a Vagant"
@@ -1062,7 +1082,8 @@ def note_another_move() -> None:
 
 
 async def tick(
-    agent: Any, decider: Any, done_in: int | None = None, refusals: Refusals | None = None
+    agent: Any, decider: Any, done_in: int | None = None, refusals: Refusals | None = None,
+    until_gone: bool = False,
 ) -> dict[str, Any]:
     """One move: look, choose, act, write it down.
 
@@ -1076,10 +1097,31 @@ async def tick(
     both chose from the same learning budget's rest, the same words' spacing and the same paused
     moves, and both went out (cos20 #492, Betreuer-Durchgang 1d81304, B1–B3).
     """
+    if until_gone and gone():  # before the lock, which would make the folder anew
+        return dict(GONE_MOVE)
     with files.one_move(state_dir()) as mine:
         if not mine:
             return {"action": "", "ok": True, "why": "", "skipped": ANOTHER_MOVE}
-        return await _tick(agent, decider, done_in, refusals)
+        if not (until_gone and gone()):
+            return await _tick(agent, decider, done_in, refusals)
+    # ``forget`` removed it between the look above and the lock, which made the folder anew: what
+    # stands there is the lock file this move made, nothing else (``rmdir`` takes no other)
+    with contextlib.suppress(OSError):
+        (state_dir() / files.MOVE_LOCK).unlink()
+        state_dir().rmdir()
+    return dict(GONE_MOVE)
+
+
+GONE = "no Shikigon lives here any more"
+GONE_MOVE: dict[str, Any] = {"action": "", "ok": True, "why": GONE, "gone": True}
+
+
+def gone() -> bool:
+    """True once the key file is gone: ``forget`` removed this Shikigon. The game loop plays and
+    writes nothing more, so its folder is not made anew (``until_gone``; cos20 #492,
+    Betreuer-Durchgang 6080b8b, K2). A ``tick`` by hand cannot start without the key file
+    (``make_agent``), and ``forget`` waits for none under way (``files.one_move``)."""
+    return not credentials_path().exists()
 
 
 async def _tick(
@@ -1250,6 +1292,28 @@ def _earn_due(now: float) -> bool:
     return not ahead
 
 
+def display_currency() -> str:
+    """``[display] currency`` of the SDK's ``config.toml`` (``cosmergon_agent.config.CONFIG_PATH``),
+    read only and by its form; ``EUR`` without one in that form.
+
+    The SDK's own reader (``config.display_currency``) set the file to mode 0600 on every read,
+    and a ``display`` that was no table ended it with ``AttributeError``: the game loop changed a
+    file outside Shikigon's folders every quarter of an hour, and such a config kept the figures
+    from ever being renewed (cos20 #492, Betreuer-Durchgang 6080b8b, K5). The rule for the code is
+    the SDK's (three letters, in capitals); ``_earn_figures`` then keeps Latin ones only."""
+    from cosmergon_agent.config import CONFIG_PATH
+
+    try:
+        data = tomllib.loads(Path(CONFIG_PATH).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return "EUR"
+    display = data.get("display")
+    value = display.get("currency") if isinstance(display, dict) else None
+    if isinstance(value, str) and len(value) == 3 and value.isalpha():
+        return value.upper()
+    return "EUR"
+
+
 async def earn_refresh(agent: Any) -> None:
     """Ask the world for the partner figures if a quarter of an hour has passed, and keep them
     for the bar (``earn_kept``). Beside the moves, never inside one, within ``EARN_WAIT_S``.
@@ -1263,7 +1327,6 @@ async def earn_refresh(agent: Any) -> None:
 
         # Read at run time: the SDK pinned before 0.32.0 has neither (then nothing is shown).
         earn = importlib.import_module("cosmergon_agent.earn")
-        display_currency = importlib.import_module("cosmergon_agent.config").display_currency
         currency = display_currency()
         async with asyncio.timeout(EARN_WAIT_S):
             partner = await agent.partner()
@@ -1896,7 +1959,8 @@ NOT_PLAYED_COUNT = {"since_start": 0}  # how many, in the sentence of each (stat
 
 
 async def guarded_tick(
-    agent: Any, decider: Any, done_in: int | None = None, refusals: Refusals | None = None
+    agent: Any, decider: Any, done_in: int | None = None, refusals: Refusals | None = None,
+    until_gone: bool = False,
 ) -> dict[str, Any]:
     """``tick`` behind the boundary of every move: whatever one move raises ends that move,
     never the brain (cos20 #492, sixth review, finding 3).
@@ -1911,7 +1975,7 @@ async def guarded_tick(
     from cosmergon_agent.exceptions import AuthenticationError, SendRefusedError
 
     try:
-        return await tick(agent, decider, done_in, refusals)
+        return await tick(agent, decider, done_in, refusals, until_gone)
     except (AuthenticationError, SendRefusedError):
         raise
     except Exception as exc:  # noqa: BLE001 - the boundary of a move
@@ -1951,12 +2015,17 @@ async def run(cfg: dict[str, Any], agent: Any, decider: Any) -> None:
     refusals = Refusals(refusals_path())
     chosen = advisor_settings(cfg)
     waiting = False  # for another move: said once, not every few seconds
+    lived = not gone()  # its key file: once it goes (``forget``), nothing more is played (K2)
     while True:
+        if lived and gone():  # ``forget`` removed it: nothing more is played or written
+            return
         if why := world_refusal(cfg):  # the world's port can change hands while it runs (H9)
             fall_asleep(CONFIG, why)
             return
         decider, chosen = decider_for_now(cfg, decider, chosen)
-        last = await guarded_tick(agent, decider, done_in, refusals)
+        last = await guarded_tick(agent, decider, done_in, refusals, lived)
+        if last.get("gone") or (lived and gone()):  # also while ``forget`` held the move's lock
+            return
         if last.get("skipped"):  # the world's tick is late, or a move by hand is under way
             if last["skipped"] == ANOTHER_MOVE and not waiting:
                 note_another_move()

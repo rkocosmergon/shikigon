@@ -282,8 +282,8 @@ shows **WHO ANSWERS?**, one list:
   the agent resolves names over it. The kernel sees the port, not the encryption: an address your
   agent's own setup writes as `http://…:443` would still go in plain text. A model server on
   this machine or in your home is not reached through your agent; pick it here directly (the
-  next two points). Shikigon asks only the versions of pi it was tried with (1.2.0, 1.3.0, 1.4.0
-  and 1.5.0; a later release, a patch release too, only once it is read), read from pi before each
+  next two points). Shikigon asks only the versions of pi it was tried with (1.2.0, 1.3.0, 1.4.0,
+  1.5.0 and 1.5.2; a later release, a patch release too, only once it is read), read from pi before each
   question, from the very file the question then goes to: after an update to another version this list and the panel say so, and the rule
   tree plays on. OpenCode is not asked from here (since 0.1.13): it puts your
   own instruction files (`~/.config/opencode/AGENTS.md`, else `~/.claude/CLAUDE.md`, and the
@@ -523,7 +523,7 @@ Everything lives in plain files:
 |---|---|
 | `~/.config/shikigon/shikigon.toml` | your configuration (copied from `config/shikigon.toml` on first start): server, character, name, move interval, which words mean what, and the advisor |
 | `~/.local/state/shikigon/credentials.json` | its key, readable by you only (0600). Shown only when you press `K` in the terminal, there in full; never logged |
-| `~/.local/state/shikigon/status.json` | the snapshot the bar reads: its own numbers (energy, fields, rank and how many are ranked, whether it is shown publicly as a yes or no), its name, character and compass and the server's sentences on its situation, each cut short, and, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`). Asleep, it says why in one word (`reason`: `key_ended`, `key_lost`, `world_silent`, `config`) |
+| `~/.local/state/shikigon/status.json` | the snapshot the bar reads: its own numbers (energy, fields, rank and how many are ranked, whether it is shown publicly as a yes or no), its name, character and compass and the server's sentences on its situation, each cut short, and, as the server sends them, each up to 8 KiB: the tournament block (`tournament`), the server's advice while something is still missing (`next_step`), and when the key ends (`key_expiry`); the last move (`last`, with its advisor's reason when a model advises it) and the partner figures (`earn`: revenue and commission as numbers, a currency code). Asleep, it says why in one word (`reason`: `key_ended`, `key_lost`, `world_silent`, `config`) |
 | `~/.local/state/shikigon/journal.jsonl` | every move with its energy and fields at the time, every word from you, how each tournament mission ended that the world still listed at its next look, and its lessons. When a tournament ends the world removes its missions, so one that ends in the last moments gets no line. Past 256 KiB it keeps its last 128 KiB (about a thousand entries) |
 | `~/.local/state/shikigon/journal_recent.json` | the journal's last twelve lines, for the bar |
 | `~/.local/state/shikigon/lessons.json` | its last three lessons |
