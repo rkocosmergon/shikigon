@@ -227,7 +227,9 @@ panel says when one is open, and **open terminal**, then `T`, takes it.
 
 - **Left click** opens the panel. On top: its name, mood and energy, and one sentence on what
   is going on (while it is awake, the server's own word on what comes next). Below: fields,
-  rank, compass, whether it is shown publicly (you change that in the terminal with O), the
+  rank, compass, whether it is shown publicly (you change that in the terminal with O), and the
+  revenue and commission your agent's link has brought in the partner program (in the currency
+  of `[display] currency` in the SDK's `config.toml`; the terminal's A says how it works), the
   last move (with its advisor's reason, if a model advises it), what it
   learned last, the journal, and buttons for the compass, **open terminal** and **ask**.
   In a tournament, its score against the leader, the tournament's compass and its Marauders

@@ -1150,10 +1150,50 @@ async def write_down(
     status = snapshot(state, last)
     if seen_at is not None:
         status["seen_at"] = seen_at
+    figures = await earn_now(agent)
+    if figures is not None:
+        status["earn"] = figures
     left = getattr(decider, "budget_left", None)  # measured when the head chose
     if left is not None:  # a number only, for the bar (threat model §1b); after this move
         status["learning_budget_left"] = round(max(0.0, float(left) - spent))
     write_status(status)
+
+
+# cos20 #757: revenue and commission of the partner program for the bar, in the currency set in
+# the SDK's config.toml ([display] currency). Asked at most every EARN_EVERY_S (finance rate
+# limit), quiet on any refusal; an SDK without ``earn`` (before 0.32.0) leaves it out.
+EARN_EVERY_S = 15 * 60
+EARN: dict[str, Any] = {"at": 0.0, "figures": None}
+
+
+async def earn_now(agent: Any) -> dict[str, Any] | None:
+    """Numbers only for the bar: ``revenue``, ``commission`` and the currency code (from the
+    player's own config, never the server's text — threat model §1b)."""
+    cached: dict[str, Any] | None = EARN["figures"]
+    if time.time() - EARN["at"] < EARN_EVERY_S:
+        return cached
+    EARN["at"] = time.time()
+    try:
+        import importlib
+
+        # Read at run time: the SDK pinned before 0.32.0 has neither (then nothing is shown).
+        earn = importlib.import_module("cosmergon_agent.earn")
+        display_currency = importlib.import_module("cosmergon_agent.config").display_currency
+        partner = await agent.partner()
+        if partner is None:  # the server's program is off
+            EARN["figures"] = None
+            return None
+        z = earn.figures(partner, display_currency(), await agent.exchange_rates())
+        currency = str(z["currency"])
+        EARN["figures"] = {
+            "revenue": round(files.finite(z["revenue"]) or 0.0, 2),
+            "commission": round(files.finite(z["commission"]) or 0.0, 2),
+            "currency": currency if len(currency) == 3 and currency.isalpha() else "EUR",
+        }
+    except Exception as exc:  # noqa: BLE001 - figures for the bar; a move never waits on them
+        print(f"earn figures not available ({type(exc).__name__})", file=sys.stderr)
+    figures: dict[str, Any] | None = EARN["figures"]
+    return figures
 
 
 def write_status(status: dict[str, Any]) -> None:

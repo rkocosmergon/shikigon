@@ -105,6 +105,18 @@ function moveCursor(cursor, dx, dy, count, columns) {
 }
 
 // 420668.4 -> "420,668": whole units with thousands separators, like the dashboard.
+// cos20 #757: revenue and commission in the player's currency (a code from its own config).
+function money(number, currency) {
+  var code = /^[A-Z]{3}$/.test(String(currency)) ? String(currency) : "EUR"
+  var text = grouped(number)
+  if (text === "") return "–"
+  if (code === "EUR") return text + " €"
+  if (code === "USD") return "$" + text
+  if (code === "GBP") return "£" + text
+  if (code === "JPY") return "¥" + text
+  return text + " " + code
+}
+
 function grouped(number) {
   var value = Math.round(Number(number))
   if (!isFinite(value)) return ""

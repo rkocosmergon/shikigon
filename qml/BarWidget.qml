@@ -647,6 +647,22 @@ BarWidget {
           }
         }
 
+        // cos20 #757: the partner program's revenue and commission, in the currency of the
+        // player's config ([display] currency); [A] in the terminal says more.
+        Row {
+          id: earnStats
+          visible: stats.visible && root.status.earn !== undefined && root.status.earn !== null
+          width: parent.width
+          Stat {
+            width: stats.cell; label: "revenue"
+            value: root.status.earn ? Model.money(root.status.earn.revenue, root.status.earn.currency) : "–"
+          }
+          Stat {
+            width: stats.cell; label: "commission"
+            value: root.status.earn ? Model.money(root.status.earn.commission, root.status.earn.currency) : "–"
+          }
+        }
+
         // The talk with its advisor (the model named in [brain.advisor]): who answers here,
         // the last two exchanges in the middle, the question line in the foot. Without a
         // model the answer says what is missing. The answers are the model's, not the

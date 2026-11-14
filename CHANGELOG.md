@@ -2,6 +2,14 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## Unreleased
+
+- **Revenue and commission in the panel.** Below fields, rank, compass and public: what your
+  agent's link has brought in the partner program, in the currency you chose (`[display]
+  currency` in the SDK's `config.toml`, also set with C in the terminal's A). The brain asks the
+  server at most every quarter of an hour and writes numbers only; with the program off, or an
+  older SDK, the two cells stay away.
+
 ## 0.1.16 (2026-11-11)
 
 - **Nothing the bar starts hangs without an end** (marketplace review #14438). Setting up, looking
