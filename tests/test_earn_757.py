@@ -35,7 +35,7 @@ class _Agent:
 
 @pytest.fixture
 def sdk(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """The SDK's ``earn`` and ``display_currency`` as small stand-ins (the lock pins 0.31.10)."""
+    """The SDK's ``earn`` and ``display_currency`` as small stand-ins: the tests fix the numbers."""
     chosen = {"currency": "USD"}
     earn = types.ModuleType("cosmergon_agent.earn")
 
