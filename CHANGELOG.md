@@ -2,7 +2,7 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## Unreleased
+## 0.1.17 (2026-11-14)
 
 - **Revenue and commission in the panel.** Below fields, rank, compass and public: what your
   agent's link has brought in the partner program, in the currency you chose (`[display]
