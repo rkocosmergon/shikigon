@@ -9,8 +9,15 @@ What changed for someone who uses Shikigon. Newest first.
   currency` in the SDK's `config.toml`, also set with C in the terminal's A). The game loop asks
   the server at most every quarter of an hour, beside its moves and never inside one, and keeps
   numbers only (`earn.json`); a move by the `tick` shortcut and a game loop started anew read
-  what was kept and ask nothing. With the program off, an older SDK, or a number that is no
-  number, the two cells stay away; they show from the move after the first answer.
+  what was kept and ask nothing. With the program off, an older SDK, or an answer of the world
+  that is not in its form (no JSON, a number that is no number or not finite, a word or a yes
+  where an amount belongs), the two cells stay away, also where figures stood before; they show
+  from the move after the first answer in its form. While the world does not answer at all, the
+  figures last kept stay.
+- The README's "What it sends" names where the total energy lies (account, offers, contracts,
+  fields, items, cubes and rooms) in the list every picked model receives: it goes along with
+  every advice, question, word and lesson, not only when your agent has taken over, as the list
+  said until now (cos20 #492).
 - The README's list of what the bar touches names the notice for a step that ended without its
   result (there since 0.1.16).
 - The SDK is pinned at 0.32.1 (`requirements.lock`), which brings the terminal's Earn window

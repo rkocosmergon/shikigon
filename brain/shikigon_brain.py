@@ -1190,6 +1190,44 @@ def _earn_figures(value: Any) -> dict[str, Any] | None:
     return {"revenue": round(revenue, 2), "commission": round(commission, 2), "currency": code}
 
 
+# The amounts of the partner overview the figures are made of, in euro cents (cos20
+# ``schemas/partner_uebersicht.py``: each a required whole number).
+EARN_REVENUE = "direkt_gesamt_cents"
+EARN_COMMISSION = ("wartezeit_cents", "auszahlbar_cents", "ausgezahlt_cents",
+                   "ohne_auszahlung_cents")  # fmt: skip
+
+
+def _amount(value: Any) -> bool:
+    """True for a finite number as JSON carries one: no word, no digits as text, no yes or no."""
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def partner_figures(partner: Any, currency: str, rates: Any, figures: Any) -> dict[str, Any] | None:
+    """The figures for the bar from the world's partner overview, or ``None`` where the answer is
+    not in its form: then no figure is shown. ``figures`` is the SDK's ``earn.figures``.
+
+    The SDK hands back ``{}`` for an answer of 200 that is no JSON object or holds a number that
+    is not finite (``agent._json_body``), and ``earn.figures`` reads what is missing as 0. Until
+    6080b8b that stood in the panel as revenue 0 and commission 0, over the figures kept before;
+    a word where a number belongs kept the old figures instead (cos20 #492, Betreuer-Durchgang
+    6080b8b, B1). The revenue must be there as a number; of the commission's parts each that is
+    there must be one."""
+    if not isinstance(partner, dict):
+        return None
+    revenue, commission = partner.get("umsatz"), partner.get("provision")
+    if not isinstance(revenue, dict) or not isinstance(commission, dict):
+        return None
+    if not _amount(revenue.get(EARN_REVENUE)):
+        return None
+    if not all(commission.get(part) is None or _amount(commission[part])
+               for part in EARN_COMMISSION):  # fmt: skip
+        return None
+    try:
+        return _earn_figures(figures(partner, currency, rates))
+    except (ValueError, TypeError, AttributeError, LookupError, OverflowError):
+        return None  # a value of another form elsewhere in the answer (a channel's energy)
+
+
 def earn_kept() -> dict[str, Any] | None:
     """The figures last kept (``earn_refresh``), or ``None``: numbers only for the bar,
     ``revenue``, ``commission`` and the currency code (from the player's own config, never the
@@ -1215,7 +1253,8 @@ def _earn_due(now: float) -> bool:
 async def earn_refresh(agent: Any) -> None:
     """Ask the world for the partner figures if a quarter of an hour has passed, and keep them
     for the bar (``earn_kept``). Beside the moves, never inside one, within ``EARN_WAIT_S``.
-    Quiet on any refusal: what was kept stays. With the server's program off nothing is kept."""
+    Quiet on any refusal: what was kept stays. With the server's program off, or an answer
+    that is not in its form (``partner_figures``), nothing is kept."""
     try:
         now = time.time()
         if not _earn_due(now):
@@ -1225,12 +1264,12 @@ async def earn_refresh(agent: Any) -> None:
         # Read at run time: the SDK pinned before 0.32.0 has neither (then nothing is shown).
         earn = importlib.import_module("cosmergon_agent.earn")
         display_currency = importlib.import_module("cosmergon_agent.config").display_currency
+        currency = display_currency()
         async with asyncio.timeout(EARN_WAIT_S):
             partner = await agent.partner()
             rates = None if partner is None else await agent.exchange_rates()
-        figures = None  # the server's program is off
-        if partner is not None:
-            figures = _earn_figures(earn.figures(partner, display_currency(), rates))
+        # ``None``: the server's program is off, or its answer is not in its form
+        figures = partner_figures(partner, currency, rates, earn.figures)
         path = state_dir() / EARN_FILE
         with files.held(path.parent):
             files.write_json(path, {"at": now, "figures": figures})
