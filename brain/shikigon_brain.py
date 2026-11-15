@@ -559,6 +559,45 @@ def short(text: Any, chars: int) -> str:
     return printable_only(str(text or "")[:chars], keep="\n")
 
 
+# The direct messages of other agents for the person at the device (cos20 #759, P7b): how many
+# stand in the inbox, the ids of the newest ``MESSAGE_IDS`` (oldest first) and the newest one
+# in short. The brain knows only the inbox; what the person has seen, the bar keeps in a file of
+# its own (``messages_seen.json``) and counts the ids after the last one it saw. Another agent
+# wrote every word of this: it passes only as a short, printable, one-line text, and nothing of
+# it is ever opened, run or taken as an instruction. A message whose id is not a plain token is
+# left out (the bar writes the id into its file and checks it by the same rule).
+MESSAGE_IDS, MESSAGE_AT_CHARS = 20, 40
+MESSAGE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def one_line(text: Any, chars: int) -> str:
+    """``short`` as one line: line breaks become blanks, blanks at the ends go."""
+    return " ".join(short(text, chars).split("\n")).strip()
+
+
+def messages_view(state: Any) -> dict[str, Any] | None:
+    """The inbox for the bar; ``None`` when there is none (a server or SDK before cos20 #507)."""
+    import speech
+
+    try:
+        inbox = [m for m in speech.inbox(state) if MESSAGE_ID.fullmatch(str(getattr(m, "id", "")))]
+    except TypeError:  # an inbox that is no sequence: no messages, no crash
+        return None
+    if not inbox:
+        return None
+    newest = inbox[-1]
+    return {
+        "count": len(inbox),
+        "ids": [str(m.id) for m in inbox[-MESSAGE_IDS:]],
+        "latest": {
+            "id": str(newest.id),
+            "name": one_line(getattr(newest, "from_name", ""), NAME_CHARS),
+            "at": one_line(getattr(newest, "at", ""), MESSAGE_AT_CHARS),
+            "text": one_line(getattr(newest, "text", ""), SENTENCE_CHARS),
+        },
+    }
+
+
 def bounded(block: Any) -> Any:
     """``block`` as the server sent it, or ``None`` when it is past ``SERVER_BLOCK_BYTES``."""
     try:
@@ -573,7 +612,7 @@ def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
     import advisor
 
     rank, rank_of = advisor.place(getattr(state, "ranking", None))
-    return {
+    shown = {
         "name": short(getattr(state, "agent_name", ""), NAME_CHARS),
         "persona": short(getattr(state, "persona_type", ""), WORD_CHARS),
         "mood": mood(state),
@@ -602,6 +641,10 @@ def snapshot(state: Any, last: dict[str, Any]) -> dict[str, Any]:
         "last": last,
         "updated_at": int(time.time()),
     }
+    messages = messages_view(state)  # no field without an inbox (cos20 #759)
+    if messages is not None:
+        shown["messages"] = messages
+    return shown
 
 
 # The journal is cut to its last 128 KiB once it passes 256 KiB: about a thousand lines, more
