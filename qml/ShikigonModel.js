@@ -424,7 +424,7 @@ function nextTip(status, seen, lastAt, now, advisorPicked) {
 // status.json.messages: { count, ids: [oldest ... newest], latest: { id, name, at, text } }, written
 // by the brain (messages_view), the texts of another agent cut and one line. What the person has
 // seen the bar keeps itself in messages_seen.json: { "seen": "<id of the newest it showed>" }.
-// An id goes into that file and into a shell argument only after MESSAGE_ID has passed it (the
+// An id goes into that file (over stdin, never as an argument) only after MESSAGE_ID has passed it (the
 // brain keeps no other); never any text of a message.
 var MESSAGE_ID = /^[A-Za-z0-9_-]{1,64}$/
 // The hint promises only what holds: the terminal shows the message whole (chat tab, read only).

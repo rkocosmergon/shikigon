@@ -368,8 +368,9 @@ Item {
   // ---------- Messages of other agents (cos20 #759) ----------
   // The brain writes the inbox into status.json; what the person has seen is the bar's own
   // (messages_seen.json, the id of the newest message it showed), read once and written when the
-  // panel shows a newer one. Only an id that Model.messageId passed goes into the file or into a
-  // shell argument: no text of any message, and never a desktop notice (fixed words only there).
+  // panel shows a newer one. Only an id that Model.messageId passed goes into the file, over
+  // stdin and never as a shell argument: no text of any message, and never a desktop notice
+  // (fixed words only there).
   property string messagesSeen: ""
   property bool messagesSeenRead: false
 
@@ -396,10 +397,15 @@ Item {
   Helper {
     id: seenWriter
     property string saved: ""
+    // The text goes over stdin, one line (read -r), not as an argument: it holds the id of the
+    // newest message and arguments stand in every local user's process list.
     argv: Model.shell(
-      'umask 077; mkdir -p "$2" && printf %s "$1" > "$2/messages_seen.json.tmp" '
-      + '&& mv "$2/messages_seen.json.tmp" "$2/messages_seen.json"',
-      [saved, root.stateDir])
+      'umask 077; mkdir -p "$1" && IFS= read -r text '
+      + '&& printf %s "$text" > "$1/messages_seen.json.tmp" '
+      + '&& mv "$1/messages_seen.json.tmp" "$1/messages_seen.json"',
+      [root.stateDir])
+    stdinEnabled: true
+    onStarted: write(saved + "\n")
   }
 
   Process {

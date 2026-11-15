@@ -404,7 +404,10 @@ def test_a_message_of_another_agent_never_reaches_a_shell_or_a_notice() -> None:
     service = (QML / "Service.qml").read_text(encoding="utf-8")
     bar = (QML / "BarWidget.qml").read_text(encoding="utf-8")
     writer = next(b for b in _blocks(service, "Helper") if "id: seenWriter" in b)
-    assert "[saved, root.stateDir]" in writer and "notify-send" not in writer
+    assert "notify-send" not in writer
+    # the text of the file goes over stdin, one line; the argument list holds the folder only
+    assert "[root.stateDir]" in writer and "stdinEnabled: true" in writer
+    assert "write(saved" in writer and "read -r" in writer
     start = service.index("function markMessagesSeen")
     marking = service[start:service.index("FileView {\n    id: seenFile")]
     assert "Model.seenFileText(id)" in marking and "seenWriter.saved = text" in marking
@@ -414,6 +417,23 @@ def test_a_message_of_another_agent_never_reaches_a_shell_or_a_notice() -> None:
     shown = [b for b in _blocks(bar, "Line") if "root.messageText" in b]
     assert len(shown) == 1 and "textFormat: Text.RichText" not in shown[0]
     assert "text: Model.messageBadge(root.unseen)" in bar  # the mark carries a number only
+
+
+def test_no_shell_command_of_the_bar_carries_a_message_id_as_an_argument() -> None:
+    """cos20 #759 (H1/K1): arguments stand in every local user's process list. The id of the
+    newest message (``seenWriter.saved``, ``messagesSeen``) is never a shell argument."""
+    service = (QML / "Service.qml").read_text(encoding="utf-8")
+    bar = (QML / "BarWidget.qml").read_text(encoding="utf-8")
+    writer = next(b for b in _blocks(service, "Helper") if "id: seenWriter" in b)
+    args = writer[writer.index("argv:"):writer.index("stdinEnabled")]
+    assert "saved" not in args.replace("messages_seen", "") and "$2" not in args, args
+    # every other use of the text: the one assignment and the one write on stdin
+    assert (service + bar).count("seenWriter.saved") == 1
+    assert service.count("write(saved") == 1
+    # no argument list of any shell command names the id, the text or the unseen count
+    for lst in re.findall(r"\n\s*\[([^\]\n]*)\]\)", service + bar):
+        assert not re.search(r"messagesSeen|seenFileText|messageId|unseen|latest", lst), lst
+    assert "shell argument" not in service.replace("never as a shell argument", "")
 
 
 def test_the_mark_and_the_hint_use_the_shells_urgent_as_it_does() -> None:
