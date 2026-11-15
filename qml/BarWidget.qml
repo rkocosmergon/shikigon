@@ -34,6 +34,15 @@ BarWidget {
   readonly property color ink: bar ? bar.foreground : Commons.Color.foreground
   readonly property color eyeInk: bar ? bar.barForeground : Commons.Color.foreground
   readonly property color dim: Qt.darker(ink, 1.4)
+  // The shell's urgent color is made to stand out from the background: it is used as TEXT on
+  // the background (agents Panel, WidgetButton), never as a surface with text on it, and the
+  // palette has no "text on urgent". So the mark below is a surface in urgent with the number
+  // in the background color, and the fixed hint is urgent text (cos20 #759: ink on urgent was
+  // two light tones, too little contrast). The bar's own colors first; the API default of a
+  // color the bar does not carry is "transparent", then the palette.
+  readonly property color urgentInk: bar && bar.urgent.a > 0 ? bar.urgent : Commons.Color.urgent
+  readonly property color backgroundInk: bar && bar.background.a > 0
+    ? bar.background : Commons.Color.background
   readonly property string font: bar ? bar.fontFamily : "monospace"
 
   property var status: ({ mood: "asleep" })
@@ -528,7 +537,8 @@ BarWidget {
   }
 
   // The red mark with the number of unseen messages of other agents (cos20 #759): the shell's
-  // own urgent color, a number only, never a text of a message.
+  // own urgent color as the surface, the number in the background color, a number only, never
+  // a text of a message.
   Rectangle {
     id: badge
     visible: root.unseen > 0
@@ -540,14 +550,14 @@ BarWidget {
     width: Math.max(size, badgeText.implicitWidth + Style.space(6))
     height: size
     radius: size / 2
-    color: Commons.Color.urgent
+    color: root.urgentInk
 
     Text {
       id: badgeText
       anchors.centerIn: parent
       textFormat: Text.PlainText
       maximumLineCount: 1
-      color: root.ink
+      color: root.backgroundInk
       font.family: root.font
       font.pixelSize: Math.round(badge.size * 0.7)
       font.bold: true
@@ -672,7 +682,9 @@ BarWidget {
           spacing: Style.space(4)
 
           Line { maximumLineCount: 4; elide: Text.ElideRight; text: root.messageText }
-          Line { color: root.dim; maximumLineCount: 2; text: Model.MESSAGE_HINT }
+          // urgent as text on the background, as the shell does it; the message line above
+          // stays plain: text of others is not highlighted (cos20 #759)
+          Line { color: root.urgentInk; maximumLineCount: 2; text: Model.MESSAGE_HINT }
         }
 
         Row {

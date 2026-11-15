@@ -414,3 +414,21 @@ def test_a_message_of_another_agent_never_reaches_a_shell_or_a_notice() -> None:
     shown = [b for b in _blocks(bar, "Line") if "root.messageText" in b]
     assert len(shown) == 1 and "textFormat: Text.RichText" not in shown[0]
     assert "text: Model.messageBadge(root.unseen)" in bar  # the mark carries a number only
+
+
+def test_the_mark_and_the_hint_use_the_shells_urgent_as_it_does() -> None:
+    """cos20 #759: the number sits in the background color on the urgent surface (ink on urgent
+    were two light tones); the fixed hint is urgent text; the message line is not highlighted."""
+    bar = (QML / "BarWidget.qml").read_text(encoding="utf-8")
+    badge = next(b for b in _blocks(bar, "Rectangle") if "id: badge" in b)
+    assert "color: root.urgentInk" in badge
+    number = next(b for b in _blocks(badge, "Text") if "id: badgeText" in b)
+    assert "color: root.backgroundInk" in number and "root.ink" not in number
+    hint = [b for b in _blocks(bar, "Line") if "Model.MESSAGE_HINT" in b]
+    assert len(hint) == 1 and "color: root.urgentInk" in hint[0]
+    shown = [b for b in _blocks(bar, "Line") if "root.messageText" in b]
+    assert len(shown) == 1 and "color:" not in shown[0]
+    # the colors come from the bar first, with the palette as the fallback, no hex value
+    assert "bar && bar.urgent.a > 0 ? bar.urgent : Commons.Color.urgent" in bar
+    assert "bar.background : Commons.Color.background" in bar
+    assert not re.search(r"Ink:[^\n]*#[0-9a-fA-F]{3,8}", bar)
