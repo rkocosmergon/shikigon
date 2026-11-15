@@ -349,8 +349,9 @@ def test_a_line_written_while_the_file_is_renewed_goes_into_the_new_file() -> No
 
 
 def test_every_writer_makes_its_files_for_the_player_alone() -> None:
-    """Guards the form (red at ``b0ac2f7``): the running brain, the wake script and the bar's two
-    shell commands each set the mode of what they make."""
+    """Guards the form (red at ``b0ac2f7``): the running brain, the wake script and the bar's
+    shell commands each set the mode of what they make (three since cos20 #759: the greeter, the
+    tips and the file of the messages the person has seen)."""
     source = (BRAIN / "shikigon_brain.py").read_text(encoding="utf-8")
     main = source[source.index('if __name__ == "__main__":'):]
     assert main.index("os.umask(0o077)") < main.index("sys.exit(main())")
@@ -358,7 +359,7 @@ def test_every_writer_makes_its_files_for_the_player_alone() -> None:
     assert wake.index("\numask 077\n") < wake.index('mkdir -p "$state"')
     service = (ROOT / "qml" / "Service.qml").read_text(encoding="utf-8")
     shells = re.findall(r'(?:command|argv): Model\.shell\(\s*\n\s*\'([^\']*)', service)
-    assert len(shells) == 2 and all(s.startswith("umask 077;") for s in shells), shells
+    assert len(shells) == 3 and all(s.startswith("umask 077;") for s in shells), shells
 
 
 # --- 9: the echo check compares no more than a message -------------------------------------------
