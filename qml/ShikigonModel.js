@@ -420,6 +420,75 @@ function nextTip(status, seen, lastAt, now, advisorPicked) {
   return null
 }
 
+// ---------- Messages of other agents (cos20 #759, P7c) ----------
+// status.json.messages: { count, ids: [oldest ... newest], latest: { id, name, at, text } }, written
+// by the brain (messages_view), the texts of another agent cut and one line. What the person has
+// seen the bar keeps itself in messages_seen.json: { "seen": "<id of the newest it showed>" }.
+// An id goes into that file and into a shell argument only after MESSAGE_ID has passed it (the
+// brain keeps no other); never any text of a message.
+var MESSAGE_ID = /^[A-Za-z0-9_-]{1,64}$/
+var MESSAGE_HINT = "Open the terminal to read it in full and to answer."
+var MESSAGE_NAME_CHARS = 64
+var MESSAGE_TEXT_CHARS = 200
+
+function messageId(value) {
+  return typeof value === "string" && MESSAGE_ID.test(value) ? value : ""
+}
+
+// The id the person saw last, from the parsed messages_seen.json; "" when there is none or it is
+// not a plain id.
+function seenMessageId(parsed) {
+  return parsed && typeof parsed === "object" ? messageId(parsed.seen) : ""
+}
+
+// The newest id of the inbox, "" when there is none.
+function latestMessageId(messages) {
+  return messages && typeof messages === "object" && messages.latest
+    ? messageId(messages.latest.id) : ""
+}
+
+// How many messages the person has not seen: those after the last id it saw. An id that is no
+// longer among the brain's last ones (or none seen) counts them all.
+function unseenMessages(messages, seenId) {
+  if (!messages || typeof messages !== "object" || !Array.isArray(messages.ids)) return 0
+  var ids = []
+  for (var i = 0; i < messages.ids.length; i++) {
+    var id = messageId(messages.ids[i])
+    if (id !== "") ids.push(id)
+  }
+  if (ids.length === 0) return 0
+  var at = seenId === "" ? -1 : ids.lastIndexOf(seenId)
+  if (at >= 0) return ids.length - 1 - at
+  var count = Number(messages.count)
+  return isFinite(count) && count > ids.length ? Math.floor(count) : ids.length
+}
+
+// The mark on the symbol: "" for none, the number up to 9, then "9+".
+function messageBadge(unseen) {
+  var n = Number(unseen)
+  if (!isFinite(n) || n < 1) return ""
+  return n > 9 ? "9+" : String(Math.floor(n))
+}
+
+// The line of the panel: one line of text of another agent, cut again, "" without a message.
+function messageLine(messages) {
+  var latest = messages && typeof messages === "object" ? messages.latest : null
+  if (!latest || typeof latest !== "object") return ""
+  function one(value, chars) {
+    return String(value === undefined || value === null ? "" : value)
+      .replace(/[\n\r\u2028\u2029]+/g, " ").slice(0, chars).trim()
+  }
+  var text = one(latest.text, MESSAGE_TEXT_CHARS)
+  if (text === "") return ""
+  return "A message from " + (one(latest.name, MESSAGE_NAME_CHARS) || "an agent") + ": " + text
+}
+
+// What messages_seen.json holds once `id` has been shown; "" for an id that is not a plain one.
+function seenFileText(id) {
+  var plain = messageId(id)
+  return plain === "" ? "" : JSON.stringify({ seen: plain })
+}
+
 // ---------- The tournament (cos20 #475), in the terminal's words ----------
 
 // Python's rounding (half to even): the terminal formats with f"{x:.0f}", which shows 12500 as
@@ -796,6 +865,15 @@ if (typeof module !== "undefined") {
     journalLines: journalLines,
     moveWords: moveWords,
     nextTip: nextTip,
+    MESSAGE_ID: MESSAGE_ID,
+    MESSAGE_HINT: MESSAGE_HINT,
+    messageId: messageId,
+    seenMessageId: seenMessageId,
+    latestMessageId: latestMessageId,
+    unseenMessages: unseenMessages,
+    messageBadge: messageBadge,
+    messageLine: messageLine,
+    seenFileText: seenFileText,
     typedText: typedText,
     hostText: hostText,
     addressHost: addressHost,

@@ -146,7 +146,10 @@ PANEL_FILES = ("journal_recent.json", "talk.json", "lessons.json")
 # shows, each cut (``bar_line``, cos20 #492 fourteenth review); talk: 3 exchanges, cut;
 # lessons: 3, in the server's lengths; setup: one cut sentence; tips, advisor: its own small
 # facts). journal.jsonl and chat.jsonl grow and are never read here.
-BAR_FILES = PANEL_FILES + ("status.json", "setup.json", "tips.json", "advisor.json")
+# messages_seen.json (cos20 #759): the one file the bar writes besides tips.json, one id.
+BAR_FILES = PANEL_FILES + (
+    "status.json", "setup.json", "tips.json", "advisor.json", "messages_seen.json",
+)
 
 
 def unbounded_reads(source: str) -> list[str]:
@@ -387,9 +390,27 @@ def test_the_guards_see_what_they_guard() -> None:
     assert not unfiltered_reads(collected)
     assert not unfiltered_reads("onRead: data => root.e = Model.readLine(data).slice(0, 200)")
     both = service + bar
-    # setup, tips, status twice, talk, lessons, journal
-    assert both.count("Model.readJson(text())") == 7
+    # setup, tips, status twice, talk, lessons, journal, the seen file of the messages
+    assert both.count("Model.readJson(text())") == 8
     # advisor list, models, try: since #14438 one collector in the Helper component reads them
     assert both.count("helper.answer = Model.readJson(text)") == 1
     assert both.count("Model.readLine(data)") == 1
     assert len(_blocks(both, "StdioCollector")) == 2  # the Helper's and the paste
+
+
+def test_a_message_of_another_agent_never_reaches_a_shell_or_a_notice() -> None:
+    """cos20 #759: the bar writes only a checked id into messages_seen.json, shows the newest
+    message as plain text through its own line component, and has no notice for it."""
+    service = (QML / "Service.qml").read_text(encoding="utf-8")
+    bar = (QML / "BarWidget.qml").read_text(encoding="utf-8")
+    writer = next(b for b in _blocks(service, "Helper") if "id: seenWriter" in b)
+    assert "[saved, root.stateDir]" in writer and "notify-send" not in writer
+    start = service.index("function markMessagesSeen")
+    marking = service[start:service.index("FileView {\n    id: seenFile")]
+    assert "Model.seenFileText(id)" in marking and "seenWriter.saved = text" in marking
+    # the one notice with a body (the tips) and the greeter carry fixed words; no message text
+    assert not re.search(r"notify-send[^\n]*(messages|latest)", service + bar)
+    assert "messages" not in "".join(b for b in _blocks(service, "Helper") if "notify-send" in b)
+    shown = [b for b in _blocks(bar, "Line") if "root.messageText" in b]
+    assert len(shown) == 1 and "textFormat: Text.RichText" not in shown[0]
+    assert "text: Model.messageBadge(root.unseen)" in bar  # the mark carries a number only

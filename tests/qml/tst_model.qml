@@ -908,4 +908,62 @@ TestCase {
     compare(Model.shell("true").slice(0, 5), Model.TIE.concat(["/bin/sh"]))
     compare(Model.outside(["omarchy-menu"])[0], "/bin/sh")
   }
+
+  // cos20 #759 (P7b/P7c): the messages of other agents. The bar counts what is after the last id
+  // the person saw, and an id goes into a file and a shell argument only as a plain token.
+  function test_the_unseen_messages_are_those_after_the_last_seen_id() {
+    var m = { count: 3, ids: ["a", "b", "c"], latest: { id: "c", name: "N", text: "t" } }
+    compare(Model.unseenMessages(m, ""), 3, "nothing seen: all")
+    compare(Model.unseenMessages(m, "a"), 2)
+    compare(Model.unseenMessages(m, "b"), 1)
+    compare(Model.unseenMessages(m, "c"), 0, "the newest seen: none")
+    compare(Model.unseenMessages(m, "gone"), 3, "a seen id the brain no longer lists: all")
+    compare(Model.unseenMessages({ count: 50, ids: ["x", "y"] }, "none"), 50, "more than listed")
+    compare(Model.unseenMessages(null, ""), 0)
+    compare(Model.unseenMessages({}, ""), 0)
+    compare(Model.unseenMessages({ count: 2, ids: "ab" }, ""), 0, "not a list")
+    compare(Model.unseenMessages({ count: 2, ids: ["../x", "a b", 7] }, ""), 0,
+            "ids that are no plain token count for nothing")
+    compare(Model.unseenMessages({ count: "many", ids: ["a"] }, ""), 1)
+  }
+
+  function test_the_mark_shows_a_number_up_to_nine() {
+    compare(Model.messageBadge(0), "")
+    compare(Model.messageBadge(-1), "")
+    compare(Model.messageBadge(NaN), "")
+    compare(Model.messageBadge(1), "1")
+    compare(Model.messageBadge(9), "9")
+    compare(Model.messageBadge(10), "9+")
+    compare(Model.messageBadge(4000), "9+")
+  }
+
+  function test_the_line_of_the_panel_is_one_cut_line() {
+    var m = { latest: { id: "a", name: "Agni", at: "x", text: "Pact?" } }
+    compare(Model.messageLine(m), "A message from Agni: Pact?")
+    compare(Model.messageLine({ latest: { name: "", text: "Hi" } }), "A message from an agent: Hi")
+    compare(Model.messageLine({ latest: { name: "A", text: "a\nb\r\nc\u2028d" } }),
+            "A message from A: a b c d")
+    var cut = Model.messageLine({ latest: { name: "n".repeat(500), text: "t".repeat(5000) } })
+    compare(cut.length, "A message from ".length + 64 + 2 + 200, "name and text are cut again")
+    compare(Model.messageLine({ latest: { name: "A", text: "  " } }), "", "no text, no line")
+    compare(Model.messageLine(null), "")
+    compare(Model.messageLine({}), "")
+    verify(Model.MESSAGE_HINT.indexOf("terminal") >= 0)
+  }
+
+  function test_only_a_plain_id_is_taken_for_the_seen_file_and_a_shell_argument() {
+    compare(Model.messageId("3f2a-9B_c"), "3f2a-9B_c")
+    var bad = ["", "../x", "a b", "a\nb", 'a"b', "a;b", "$(x)", "x".repeat(65), "\u00e4", 5, null]
+    for (var i = 0; i < bad.length; i++) compare(Model.messageId(bad[i]), "", String(bad[i]))
+    compare(Model.messageId("x".repeat(64)), "x".repeat(64))
+    compare(Model.seenFileText("m-1"), '{"seen":"m-1"}')
+    compare(Model.seenFileText("m 1"), "", "no file text for an id that is no token")
+    compare(Model.seenMessageId({ seen: "m-1" }), "m-1")
+    compare(Model.seenMessageId({ seen: "'; rm -rf ~; '" }), "")
+    compare(Model.seenMessageId(null), "")
+    compare(Model.seenMessageId("m-1"), "")
+    compare(Model.latestMessageId({ latest: { id: "z9" } }), "z9")
+    compare(Model.latestMessageId({ latest: { id: "z 9" } }), "")
+    compare(Model.latestMessageId(null), "")
+  }
 }

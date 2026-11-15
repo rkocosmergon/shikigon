@@ -365,6 +365,43 @@ Item {
       [title, body, saved, root.stateDir])
   }
 
+  // ---------- Messages of other agents (cos20 #759) ----------
+  // The brain writes the inbox into status.json; what the person has seen is the bar's own
+  // (messages_seen.json, the id of the newest message it showed), read once and written when the
+  // panel shows a newer one. Only an id that Model.messageId passed goes into the file or into a
+  // shell argument: no text of any message, and never a desktop notice (fixed words only there).
+  property string messagesSeen: ""
+  property bool messagesSeenRead: false
+
+  function markMessagesSeen(id) {
+    var text = Model.seenFileText(id)
+    if (!root.messagesSeenRead || text === "" || id === root.messagesSeen
+        || seenWriter.running) return  // a busy writer is asked again with the next status
+    root.messagesSeen = id
+    seenWriter.saved = text
+    seenWriter.running = true
+  }
+
+  FileView {
+    id: seenFile
+    path: root.stateDir + "/messages_seen.json"
+    printErrors: false
+    onLoaded: {
+      try { root.messagesSeen = Model.seenMessageId(Model.readJson(text())) } catch (e) {}
+      root.messagesSeenRead = true
+    }
+    onLoadFailed: root.messagesSeenRead = true
+  }
+
+  Helper {
+    id: seenWriter
+    property string saved: ""
+    argv: Model.shell(
+      'umask 077; mkdir -p "$2" && printf %s "$1" > "$2/messages_seen.json.tmp" '
+      + '&& mv "$2/messages_seen.json.tmp" "$2/messages_seen.json"',
+      [saved, root.stateDir])
+  }
+
   Process {
     id: runner
     // Tied to the shell's life (Model.tied): a shell that ended without tearing it down left it

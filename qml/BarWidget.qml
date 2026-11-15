@@ -43,6 +43,16 @@ BarWidget {
 
   readonly property string mood: status && status.mood ? status.mood : "asleep"
   readonly property bool awake: service ? service.awake : false
+  // Messages of other agents (cos20 #759): the brain's inbox in status.json, what the person has
+  // seen in the service (messages_seen.json). The mark on the symbol counts the unseen ones; the
+  // panel shows the newest in one line of plain text, and opening it counts as seeing it.
+  readonly property var messages: status && status.messages ? status.messages : null
+  readonly property int unseen: service && service.messagesSeenRead
+    ? Model.unseenMessages(messages, service.messagesSeen) : 0
+  readonly property string messageText: Model.messageLine(messages)
+  function seeMessages() {
+    if (service && popupOpen) service.markMessagesSeen(Model.latestMessageId(messages))
+  }
   // The compass just clicked until its word is done, then the one from status.json or a newer
   // one set from the panel (Model.shownCompass, Model.currentCompass).
   property string pendingCompass: ""
@@ -78,6 +88,7 @@ BarWidget {
   readonly property bool opened: popupOpen
   function open() {
     popupOpen = true
+    seeMessages()
     readPanelFiles()
     scroll.contentY = 0
     // Who could answer is looked for when the talk opens (startTalking), not here: the look
@@ -445,6 +456,7 @@ BarWidget {
     eyes.requestPaint()
   }
   onStatusChanged: {
+    seeMessages()  // a message that comes while the panel is open is seen at once
     var last = status ? status.last : null
     var at = status && status.updated_at ? status.updated_at : 0
     if (last && last.ok === false && at > lastFailureAt) {
@@ -512,6 +524,34 @@ BarWidget {
         }
         ctx.fill()
       }
+    }
+  }
+
+  // The red mark with the number of unseen messages of other agents (cos20 #759): the shell's
+  // own urgent color, a number only, never a text of a message.
+  Rectangle {
+    id: badge
+    visible: root.unseen > 0
+    readonly property int size: Style.space(14)
+    anchors.top: eyes.top
+    anchors.right: eyes.right
+    anchors.rightMargin: -Math.round(size * 0.3)
+    anchors.topMargin: -Math.round(size * 0.3)
+    width: Math.max(size, badgeText.implicitWidth + Style.space(6))
+    height: size
+    radius: size / 2
+    color: Commons.Color.urgent
+
+    Text {
+      id: badgeText
+      anchors.centerIn: parent
+      textFormat: Text.PlainText
+      maximumLineCount: 1
+      color: root.ink
+      font.family: root.font
+      font.pixelSize: Math.round(badge.size * 0.7)
+      font.bold: true
+      text: Model.messageBadge(root.unseen)
     }
   }
 
@@ -622,6 +662,17 @@ BarWidget {
             Line { required property var modelData; color: root.dim
                    maximumLineCount: 5; elide: Text.ElideRight; text: String(modelData) }
           }
+        }
+
+        // The newest message of another agent (cos20 #759): one line of its text as plain text,
+        // behind who wrote it, and a fixed hint where to read it in full and answer.
+        Column {
+          visible: root.messageText !== ""
+          width: parent.width
+          spacing: Style.space(4)
+
+          Line { maximumLineCount: 4; elide: Text.ElideRight; text: root.messageText }
+          Line { color: root.dim; maximumLineCount: 2; text: Model.MESSAGE_HINT }
         }
 
         Row {
