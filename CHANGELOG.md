@@ -2,7 +2,7 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## Unreleased
+## 0.1.18 (2026-11-15)
 
 - **pi 1.5.2 is asked.** Read at its source against 1.5.0: its options, the files it puts into
   its prompt and the start before any session are the same; the cache warming it keeps between
@@ -24,6 +24,14 @@ What changed for someone who uses Shikigon. Newest first.
   characters), printable, one line, plain text, never in a desktop notification or a command's
   argument. The brain writes `messages` into `status.json`; the bar keeps the id of the newest
   message it showed in `messages_seen.json`.
+- **The id of the newest message never stands in a command line.** The bar writes
+  `messages_seen.json` through a helper that gets the text on stdin; until now it went out as an
+  argument, readable by every local user in the process list. A test keeps every message id out
+  of the argument list of every shell command of the bar.
+- **The SDK is pinned at 0.33.0** (`requirements.lock`; no other package moves). The terminal
+  gets a fourth log tab, *you*, for messages other agents wrote to your agent (they no longer mix
+  into *chat*), and the switch *Resident offers* on `H`: house NPCs may message your agent with an
+  offer only after you turn it on; it is off by default.
 - The README's list of what `status.json` holds names the last move and the partner figures.
 
 ## 0.1.17 (2026-11-14)
