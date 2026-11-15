@@ -232,6 +232,7 @@ def _terminal(tmp_path: Path, world: str) -> tuple[int, dict[str, Any] | None]:
     return done.returncode, json.loads(seen.read_text()) if seen.exists() else None
 
 
+@pytest.mark.no_state_folder  # strict ``mkdir`` of its own: the state folder is not there yet
 def test_the_terminal_opens_and_gets_the_key_over_a_pipe_only(tmp_path: Path) -> None:
     code, seen = _terminal(tmp_path, "https://cosmergon.com:443")
     assert code == 0 and seen is not None, "the terminal opened (at 22802ba the check broke)"
@@ -241,6 +242,7 @@ def test_the_terminal_opens_and_gets_the_key_over_a_pipe_only(tmp_path: Path) ->
     assert seen["advisor"].endswith(" ask"), "the advisor command is there, without a key"
 
 
+@pytest.mark.no_state_folder  # strict ``mkdir`` of its own: the state folder is not there yet
 def test_the_terminal_stays_closed_for_a_shikigon_of_another_world(tmp_path: Path) -> None:
     code, seen = _terminal(tmp_path, "https://other.example:443")
     assert code == 1 and seen is None, "no dashboard, and no key handed anywhere"

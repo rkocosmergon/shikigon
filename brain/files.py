@@ -47,7 +47,13 @@ def state_dir() -> Path:
 
 
 def private_folder(path: Path) -> Path:
-    """``path`` as a folder for the owner only (0700), also if it was made with another mode."""
+    """``path`` as a folder for the owner only (0700), also if it was made with another mode.
+
+    The one place that makes the state folder: ``private_state`` at the start of every command.
+    No writer makes it (``one_move``, ``held``, ``write_json``, ``append``, ``lines_held``,
+    ``lessons.keep``): once ``forget`` has removed it, a lesson, the partner figures or a command
+    of another process that was under way ends with ``FileNotFoundError`` and the folder stays
+    removed (cos20 #492, Betreuer-Durchgang c6f552f, B1–B3)."""
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(path, 0o700)
     return path
@@ -113,6 +119,10 @@ def _lock_within(fd: int, wait_s: float) -> None:
             time.sleep(_HELD_RETRY_S)
 
 
+class StateGone(FileNotFoundError):
+    """The state folder is not there: ``forget`` removed it (``one_move``)."""
+
+
 @contextlib.contextmanager
 def one_move(folder: Path) -> Iterator[bool]:
     """``True`` while this process plays a move, ``False`` when another process is in one.
@@ -121,9 +131,15 @@ def one_move(folder: Path) -> Iterator[bool]:
     reads when it chooses (the learning budget's rest, the words' spacing, the paused moves) is
     what holds when it goes out and is written down; ``held`` covers one read, change and write
     only. It never waits: a move that finds another under way is left out. Its own file, not the
-    folder ``held`` locks (cos20 #492, Betreuer-Durchgang 1d81304, B1–B3)."""
-    folder.mkdir(parents=True, exist_ok=True)
-    fd = os.open(folder / MOVE_LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    folder ``held`` locks (cos20 #492, Betreuer-Durchgang 1d81304, B1–B3).
+
+    It does not make the folder: one that ``forget`` removed is ``StateGone``, and stays removed
+    (``private_folder``; Betreuer-Durchgang c6f552f, B1–B3)."""
+    try:
+        fd = os.open(folder / MOVE_LOCK,
+                     os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    except FileNotFoundError as exc:
+        raise StateGone(f"the state folder is gone: {folder}") from exc
     mine = False
     try:
         with contextlib.suppress(BlockingIOError):  # another process is in a move
@@ -172,12 +188,13 @@ def held(folder: Path) -> Iterator[None]:
     the first. Calls a day went past ``max_per_day``, a booking of the learning budget was lost
     (Fehlersuche Stück 24, Fund #2). An exclusive ``flock`` on the folder itself, no file of its
     own; held again in this process it passes through. Never across an ``await``: the other
-    process waits for it (a guard in the tests), and at most ``HELD_WAIT_S``."""
+    process waits for it (a guard in the tests), and at most ``HELD_WAIT_S``. The folder is not
+    made here: one that ``forget`` removed is a ``FileNotFoundError`` (``private_folder``; cos20
+    #492, Betreuer-Durchgang c6f552f, B1–B3)."""
     key = os.path.abspath(folder)
     with _HELD_HERE:
         entry = _HELD.get(key)
         if entry is None:
-            folder.mkdir(parents=True, exist_ok=True)
             fd = os.open(key, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
             try:
                 _lock_within(fd, HELD_WAIT_S)
@@ -200,8 +217,9 @@ def write_json(path: Path, data: Any) -> None:
 
     The temporary file is new and the brain's alone (``mkstemp``: created with ``O_EXCL`` and
     mode 0600). A fixed name like ``<name>.tmp`` kept the mode of a file already there and
-    followed a link standing in its place (cos20 #492 S12)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    followed a link standing in its place (cos20 #492 S12). The folder is not made here: one that
+    ``forget`` removed is a ``FileNotFoundError`` (``private_folder``; Betreuer-Durchgang
+    c6f552f, B1–B3)."""
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -342,8 +360,9 @@ def json_in(text: str) -> Any:
 def append(path: Path, entry: dict[str, Any], keep_bytes: int | None = None) -> None:
     """Add one line. With ``keep_bytes``, a file past twice that keeps only its last whole
     lines within ``keep_bytes``; without it, the file keeps everything. Waits for another writer
-    ``HELD_WAIT_S`` at most, then ``TimeoutError`` (an ``OSError``)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ``HELD_WAIT_S`` at most, then ``TimeoutError`` (an ``OSError``). The folder is not made
+    here: one that ``forget`` removed is a ``FileNotFoundError`` (``private_folder``; cos20 #492,
+    Betreuer-Durchgang c6f552f, B1–B3)."""
     line = (json.dumps(entry) + "\n").encode("utf-8")
     while True:
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
@@ -373,8 +392,7 @@ def lines_held(path: Path) -> Iterator[None]:
     opened as ``append`` opens it, made empty (0600) if it is not there yet: until 5d315a0 a file
     not there yet took no lock, and an empty view could land after the view of its first line
     (Betreuer-Durchgang 5d315a0, K1). At most ``HELD_WAIT_S``, then ``TimeoutError`` (an
-    ``OSError``), as ``append``."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ``OSError``), as ``append``; the folder is not made here either (c6f552f, B1–B3)."""
     while True:
         fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_CLOEXEC, 0o600)
         try:

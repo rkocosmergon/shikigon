@@ -1139,19 +1139,22 @@ async def tick(
     brain, or a ``tick`` by hand), this one plays none and says so (``skipped``). Until 1d81304
     both chose from the same learning budget's rest, the same words' spacing and the same paused
     moves, and both went out (cos20 #492, Betreuer-Durchgang 1d81304, B1–B3).
+
+    The lock does not make the state folder: ``forget`` removed it before the lock, and this move,
+    in the game loop or by hand, says so in one sentence (``GONE_MOVE``) and leaves no folder
+    (``files.StateGone``; Betreuer-Durchgang c6f552f, B1–B3). Until then ``tick`` took the lock
+    file and the folder away again by hand.
     """
-    if until_gone and gone():  # before the lock, which would make the folder anew
+    if until_gone and gone():  # before the lock
         return dict(GONE_MOVE)
-    with files.one_move(state_dir()) as mine:
-        if not mine:
-            return {"action": "", "ok": True, "why": "", "skipped": ANOTHER_MOVE}
-        if not (until_gone and gone()):
-            return await _tick(agent, decider, done_in, refusals)
-    # ``forget`` removed it between the look above and the lock, which made the folder anew: what
-    # stands there is the lock file this move made, nothing else (``rmdir`` takes no other)
-    with contextlib.suppress(OSError):
-        (state_dir() / files.MOVE_LOCK).unlink()
-        state_dir().rmdir()
+    try:
+        with files.one_move(state_dir()) as mine:
+            if not mine:
+                return {"action": "", "ok": True, "why": "", "skipped": ANOTHER_MOVE}
+            if not (until_gone and gone()):
+                return await _tick(agent, decider, done_in, refusals)
+    except files.StateGone:  # ``forget`` removed the folder: nothing is made anew
+        pass
     return dict(GONE_MOVE)
 
 
@@ -1161,8 +1164,11 @@ GONE_MOVE: dict[str, Any] = {"action": "", "ok": True, "why": GONE, "gone": True
 
 def gone() -> bool:
     """True once the key file is gone: ``forget`` removed this Shikigon. The game loop plays and
-    writes nothing more, so its folder is not made anew (``until_gone``; cos20 #492,
-    Betreuer-Durchgang 6080b8b, K2). A ``tick`` by hand cannot start without the key file
+    writes nothing more (``until_gone``; cos20 #492, Betreuer-Durchgang 6080b8b, K2). Its folder
+    stays removed because no writer makes it, not because this is asked before each one: a lesson
+    or the partner figures under way when ``forget`` ran, and a command of another process, end
+    with ``FileNotFoundError`` (``files.private_folder`` is the one place that makes it;
+    Betreuer-Durchgang c6f552f, B1–B3). A ``tick`` by hand cannot start without the key file
     (``make_agent``), and ``forget`` waits for none under way (``files.one_move``)."""
     return not credentials_path().exists()
 
@@ -1343,7 +1349,8 @@ def display_currency() -> str:
     and a ``display`` that was no table ended it with ``AttributeError``: the game loop changed a
     file outside Shikigon's folders every quarter of an hour, and such a config kept the figures
     from ever being renewed (cos20 #492, Betreuer-Durchgang 6080b8b, K5). The rule for the code is
-    the SDK's (three letters, in capitals); ``_earn_figures`` then keeps Latin ones only."""
+    the form of ``_CURRENCY`` (three Latin capitals after ``upper()``, so ``ßßß`` and Greek letters
+    are no code; cos20 #492, Betreuer-Durchgang c6f552f, B7)."""
     from cosmergon_agent.config import CONFIG_PATH
 
     try:
@@ -1352,7 +1359,7 @@ def display_currency() -> str:
         return "EUR"
     display = data.get("display")
     value = display.get("currency") if isinstance(display, dict) else None
-    if isinstance(value, str) and len(value) == 3 and value.isalpha():
+    if isinstance(value, str) and _CURRENCY.fullmatch(value.upper()):  # ``ßßß`` is six letters
         return value.upper()
     return "EUR"
 
@@ -1484,7 +1491,7 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
         # it says at 30 s (``_MAX_BACKOFF``); "in a minute" was not true (cos20 #621, K27).
         why = ("the compass was changed too often: the world allows a few changes an hour, "
                "try again later")
-        journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False})
+        note_word({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False})
         return {"heard": text, "preset": preset, "ok": False, "why": why}
     except SendRefusedError:
         # Refused before its first try left (the world's port is not the player's, or its key
@@ -1493,7 +1500,7 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
         # answer" (cos20 #492, Betreuer-Durchgang b964644, B1). A retry refused after a try that
         # left is a ``ConnectionError`` (cosmergon-agent >= 0.31.8): "no answer" below, since the
         # world may have taken it (Betreuer-Durchgang 5d315a0, B1).
-        journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False,
+        note_word({"at": int(time.time()), "instruction": text, "preset": preset, "ok": False,
                  "sent": False})
         raise
     except Exception as exc:
@@ -1510,11 +1517,21 @@ async def instruct(agent: Any, text: str, table: dict[str, list[str]]) -> dict[s
         # the compass (``retry_refused``, a key; Betreuer-Durchgang 15472e8, B2).
         if isinstance(exc.__cause__, SendRefusedError):
             entry["retry_refused"] = True
-        journal(entry)
+        note_word(entry)
         raise
     ok = not (isinstance(answer, dict) and answer.get("error"))
-    journal({"at": int(time.time()), "instruction": text, "preset": preset, "ok": ok})
+    note_word({"at": int(time.time()), "instruction": text, "preset": preset, "ok": ok})
     return {"heard": text, "preset": preset, "ok": ok}
+
+
+def note_word(entry: dict[str, Any]) -> None:
+    """A line of the journal about a word from the player; a journal that cannot be written (the
+    state folder is gone after ``forget``) says so on stderr and changes neither the answer nor
+    the error of the word (cos20 #492, Betreuer-Durchgang c6f552f, B3)."""
+    try:
+        journal(entry)
+    except OSError as exc:
+        print(f"its journal could not be written ({type(exc).__name__})", file=sys.stderr)
 
 
 def make_agent(cfg: dict[str, Any]) -> Any:
@@ -1903,13 +1920,20 @@ LEDGER_EVENTS, LEDGER_BOOKINGS = 72, 500  # rows of the world: a day of hours, h
 async def read_bookings(agent: Any) -> tuple[Any, Any]:
     """The world's rows of what it booked on its energy, for its look back (cos20 #533);
     ``(None, None)`` with an SDK that cannot read them. The SDK's own calls say ``None`` when the
-    world does not answer."""
+    world does not answer.
+
+    The rows are asked for by number and held to it: a world that sends more rows than asked made
+    each look back walk all of them and write a ``review/ledger.txt`` of megabytes. Only lists
+    count, each cut to its number; anything else is ``None`` (cos20 #492, Betreuer-Durchgang
+    c6f552f, B8)."""
     events = getattr(agent, "get_energy_events", None)
     bookings = getattr(agent, "get_energy_transactions", None)
     if events is None or bookings is None:
         return None, None
-    return (await events(tier="hourly", limit=LEDGER_EVENTS),
+    rows = (await events(tier="hourly", limit=LEDGER_EVENTS),
             await bookings(limit=LEDGER_BOOKINGS))  # fmt: skip
+    return (rows[0][:LEDGER_EVENTS] if isinstance(rows[0], list) else None,
+            rows[1][:LEDGER_BOOKINGS] if isinstance(rows[1], list) else None)
 
 
 def while_chosen(
@@ -1958,12 +1982,19 @@ async def learn(cfg: dict[str, Any], state: Any, force: bool = False,
         # it reads through the brain, never with a tool of its own (cos20 #492, K28)
         reader = functools.partial(reading.mediated, send)
     bookings = await read_bookings(agent) if head else (None, None)
-    entry = await lessons.learn(home, conf, advisor.facts(state), send, force=force, head=head,
-                                world=world, reader=reader, secret=secret,
-                                ledger="\n".join(lessons.ledger_lines(*bookings)),
-                                bookings=bookings)  # fmt: skip
-    if entry is not None:
-        journal(entry)
+    try:
+        entry = await lessons.learn(home, conf, advisor.facts(state), send, force=force,
+                                    head=head, world=world, reader=reader, secret=secret,
+                                    ledger="\n".join(lessons.ledger_lines(*bookings)),
+                                    bookings=bookings)  # fmt: skip
+        if entry is not None:
+            journal(entry)
+    except OSError as exc:
+        # The state folder is gone (``forget`` ran while the model was asked): no writer makes it
+        # anew, so the lesson is not kept; the game loop ends on its own (cos20 #492,
+        # Betreuer-Durchgang c6f552f, B1). It says so on stderr and in the answer.
+        print(f"the lesson could not be kept ({type(exc).__name__})", file=sys.stderr)
+        return {"ok": False, "why": f"the lesson could not be kept ({type(exc).__name__})"}
     return entry
 
 
@@ -2199,7 +2230,11 @@ def _local(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
             print(why)
         return 1 if why else 0
     if args.command == "advisor":
-        result = advisor_command(cfg, args.what, args.rest)
+        try:
+            result = advisor_command(cfg, args.what, args.rest)
+        except OSError as exc:  # its folder is gone (``forget``) or locked: nothing was kept
+            result = {"ok": False, "why": f"nothing was kept ({type(exc).__name__}): "
+                                          "its state folder is gone or locked"}
         print(json.dumps(result))
         return 0 if result.get("ok", True) else 1
     print(json.dumps(files.read_object(state_dir() / "status.json") or {"mood": ASLEEP}))
@@ -2256,14 +2291,20 @@ def _moves(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
 
 def keep_unasked(question: str, said: Any) -> None:
     """A question that never reached ``ask`` still stands in the talk, with why. The bar shows
-    only the talk: it waited for an answer and then showed nothing (cos20 #628, F7)."""
+    only the talk: it waited for an answer and then showed nothing (cos20 #628, F7). A state
+    folder that ``forget`` removed meanwhile stays removed: one sentence on stderr instead (cos20
+    #492, Betreuer-Durchgang c6f552f, B3)."""
     import advisor
 
     if isinstance(said, dict) and "q" not in said:
         why = advisor.cut(str(said.get("why") or "it could not finish this"), 220)
-        files.append(chat_path(), {"at": int(time.time()), "q": question[:QUESTION_CHARS],
-                                   "a": "", "ok": False, "why": why})  # fmt: skip
-        show_talk()
+        try:
+            files.append(chat_path(), {"at": int(time.time()), "q": question[:QUESTION_CHARS],
+                                       "a": "", "ok": False, "why": why})  # fmt: skip
+            show_talk()
+        except OSError as exc:  # the state folder is gone (``forget``): nothing makes it anew
+            print(f"the question could not be kept in the talk ({type(exc).__name__})",
+                  file=sys.stderr)
 
 
 def _words(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
@@ -2349,8 +2390,8 @@ def config_kind(value: Any) -> str:
         return "a section"
     if isinstance(value, bool):
         return "yes or no"
-    if isinstance(value, int | float):
-        return "a number" if math.isfinite(value) else "no number"
+    if isinstance(value, int | float):  # a whole number too large for a float is no number
+        return "a number" if files.finite(value) is not None else "no number"
     if isinstance(value, list):
         return "a list"
     return "text" if isinstance(value, str) else "something else"

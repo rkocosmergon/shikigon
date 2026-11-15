@@ -286,6 +286,7 @@ def test_b2_control_a_line_is_written_once_the_other_lets_go(tmp_path: Path) -> 
     assert json.loads(path.read_text()) == {"at": 1}
 
 
+@pytest.mark.no_state_folder  # strict ``mkdir`` of its own: the state folder is not there yet
 def test_b2_making_a_file_private_waits_its_deadline_at_most(tmp_path: Path) -> None:
     folder = tmp_path / "state"
     folder.mkdir()

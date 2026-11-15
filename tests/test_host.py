@@ -248,6 +248,7 @@ def test_at_a_terminal_the_words_are_asked_for_on_stderr(
 # --- F8: the state folder is the player's alone, whoever makes it -------------------------------
 
 
+@pytest.mark.no_state_folder  # a command makes the folder; before it there is none
 def test_a_command_by_hand_before_the_first_wake_makes_the_folder_private(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

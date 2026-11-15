@@ -24,6 +24,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "brain"))
 
+import files
 import shikigon_brain as brain
 from cosmergon_agent.agent import _MAX_POLL_S
 
@@ -61,6 +62,7 @@ def _pause_after_one_move(ahead: float, interval: float, tmp_path: Path,
                           monkeypatch: pytest.MonkeyPatch) -> float:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    files.private_folder(brain.state_dir())  # a command's start makes it; no writer does
     slept: list[float] = []
 
     async def sleep(seconds: float) -> None:
@@ -242,6 +244,7 @@ class _TooOften(_Compass):
 def test_a_compass_changed_too_often_promises_no_wait_the_world_does_not_keep(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))  # the journal stays here
+    files.private_folder(brain.state_dir())
     said = asyncio.run(brain.instruct(_TooOften(), "explore", TABLE))
     assert said["ok"] is False and said["preset"] == "explore"
     assert "minute" not in said["why"] and "later" in said["why"]

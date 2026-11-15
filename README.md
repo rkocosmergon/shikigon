@@ -189,7 +189,10 @@ On your desktop, the bar runs inside the shell and touches only this:
 - **Files:** its folder above, and only small files there: the status, the last twelve journal
   lines, the last three exchanges of the talk and its lessons, which the brain keeps small for
   it; how far **wake** got (`setup.json`, one sentence) and which hints were shown
-  (`tips.json`); and whether someone is picked to answer (`advisor.json`, read every 30
+  (`tips.json`); the id of the newest message of another agent it showed you (`messages_seen.json`:
+  read once when the bar starts, written when it shows a newer message); the empty file `greeted`
+  (tested, and made once, when the bar welcomes you; it is made again, with the welcome, if the
+  folder was removed by `forget`); and whether someone is picked to answer (`advisor.json`, read every 30
   seconds while a Shikigon lives here). Journal, talk and lessons only while the panel is open
   (the talk also while an answer to your question is on its way). A list of models is read with
   a limit: from a model server 256 KiB within 8 seconds, from your agent 1 MiB within 40 seconds

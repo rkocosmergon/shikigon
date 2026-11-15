@@ -171,6 +171,7 @@ pathlib.Path(os.environ["SEEN"]).write_text(line.split()[1])
 """
 
 
+@pytest.mark.no_state_folder  # strict ``mkdir`` of its own: the state folder is not there yet
 def test_the_terminal_runs_with_umask_077(tmp_path: Path) -> None:
     home = tmp_path / "home"
     bin_ = home / ".local" / "share" / "shikigon" / "venv" / "bin"

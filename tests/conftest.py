@@ -95,6 +95,33 @@ def _pi_is_installed(tmp_path_factory: pytest.TempPathFactory,
     return pi.resolve()
 
 
+@pytest.fixture(autouse=True)
+def _own_state_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """A place of its own for the state folder in every test: where a test names none, the brain
+    would write into the real home (``~/.local/state``). A test that names its own sets it again."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path_factory.mktemp("xdg-state")))
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers", "no_state_folder: the test starts without the state folder (after ``forget``)")
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_call(item: pytest.Item) -> None:
+    """The state folder is there when the test body starts, as ``private_state`` makes it at the
+    start of every command: no writer makes it (cos20 #492, Betreuer-Durchgang c6f552f, B1–B3).
+    Only where a test names its own place (``XDG_STATE_HOME``, absolute); never in the real home.
+    A test of the state after ``forget`` marks ``no_state_folder``."""
+    import files
+
+    given = os.environ.get("XDG_STATE_HOME") or ""
+    if os.path.isabs(given) and item.get_closest_marker("no_state_folder") is None:
+        files.private_folder(files.state_dir())
+
+
 @pytest.fixture
 def real_ours(monkeypatch: pytest.MonkeyPatch) -> Callable[..., bool] | None:
     monkeypatch.setattr(connections, "ours", REAL_OURS, raising=False)

@@ -206,11 +206,13 @@ async def test_k2_the_game_loop_ends_once_the_key_file_is_gone(
     assert ticks == [1] and not brain.state_dir().exists()
 
 
+@pytest.mark.no_state_folder  # forget has run: no folder (c6f552f: ``one_move`` makes none)
 async def test_k2_a_move_of_the_loop_after_forget_makes_no_folder() -> None:
     last = await brain.tick(None, None, until_gone=True)
     assert last["gone"] is True and not brain.state_dir().exists()
 
 
+@pytest.mark.no_state_folder  # the lock finds no folder (``files.StateGone``) and makes none
 async def test_k2_forget_between_the_look_and_the_lock_leaves_no_folder(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -146,6 +146,7 @@ async def test_the_reason_a_move_was_not_usable_is_one_bounded_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    files.private_folder(brain.state_dir())  # a command's start makes it; no writer does
     state = _with_schema({HUGE_FIELD: "x", EVIL: "y", "field_id": "uuid"})
     wrong = _move("start_mission", {"mission_type": "gather_spores", "params": {"spot": "f"}})
     model = Replies(wrong, _move("wait", {}))
@@ -163,6 +164,7 @@ async def test_a_refused_moves_name_is_told_as_one_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    files.private_folder(brain.state_dir())  # a command's start makes it; no writer does
     mission = _move("start_mission", {"mission_type": "gather_spores",
                                       "params": {"field_id": "f1"}})
     model = Replies(mission, _move("wait", {}))

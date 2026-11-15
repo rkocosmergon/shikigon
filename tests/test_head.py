@@ -406,11 +406,11 @@ async def test_a_move_waits_long_enough_for_the_head_and_says_why_it_fell_back(
     import advisor
 
     seen: dict[str, Any] = {}
-    monkeypatch.setattr(advisor, "sender", lambda conf, home=None, patience=1: seen.update(conf))
-    head.HeadDecider(_tree(), {**CONF, "via": "agent", "agent": "pi", "timeout_s": 20},
-                     brain.state_dir())
+    with monkeypatch.context() as patch:  # only the sender; the state folder stays the test's
+        patch.setattr(advisor, "sender", lambda conf, home=None, patience=1: seen.update(conf))
+        head.HeadDecider(_tree(), {**CONF, "via": "agent", "agent": "pi", "timeout_s": 20},
+                         brain.state_dir())
     assert seen["timeout_s"] == head.HEAD_WAIT_S
-    monkeypatch.undo()
     failing = _head(Replies(connections.AgentError("pi did not answer within 45 s")))
     await failing.decide(_state())
     assert failing.last is not None and failing.last["fallback"] == "pi did not answer within 45 s"

@@ -9,7 +9,10 @@ What changed for someone who uses Shikigon. Newest first.
   runs ends with its answer here. Shikigon asks pi 1.2.0, 1.3.0, 1.4.0, 1.5.0 and 1.5.2.
 - **`forget` and the game loop take turns.** `forget` waits for no move: while one is under way
   it says so and sends nothing. Once the agent is gone, the game loop ends and writes nothing
-  more, so the state folder stays removed.
+  more, so the state folder stays removed. That holds for every writer, not for the game loop
+  alone: only the start of a command makes the folder, so a lesson, the partner figures, a
+  question or a command in another process that was under way when `forget` ran end with a
+  sentence and make no folder anew.
 - **A new Shikigon keeps its key first.** `register --new` writes the new key before it clears
   what the old agent left; a key that could not be written no longer takes the journal and the
   lessons with it.
@@ -28,6 +31,15 @@ What changed for someone who uses Shikigon. Newest first.
   `messages_seen.json` through a helper that gets the text on stdin; until now it went out as an
   argument, readable by every local user in the process list. A test keeps every message id out
   of the argument list of every shell command of the bar.
+- **A number too large for a config value is a sentence, not a traceback.** `interval_s = 1`
+  followed by 400 zeros is "no number": the brain names the key and the file, as for any other
+  value of the wrong kind.
+- **A currency in `[display]` is three Latin letters.** `ßßß` and Greek letters are no code and
+  mean EUR, so the figures are never converted with one rate and labelled with another.
+- **A look back reads the rows it asked for.** The brain keeps the rows of the world's bookings
+  to the number it asked for (72 hourly rows, 500 bookings) and only lists count; a world that
+  sends more no longer makes a look back write a ledger of megabytes.
+- The README's list of what the bar touches names `messages_seen.json` and `greeted`.
 - **The SDK is pinned at 0.33.0** (`requirements.lock`; no other package moves). The terminal
   gets a fourth log tab, *you*, for messages other agents wrote to your agent (they no longer mix
   into *chat*), and the switch *Resident offers* on `H`: house NPCs may message your agent with an

@@ -294,11 +294,14 @@ def review_folder(home: Path, moves: list[dict[str, Any]], numbers: str, world: 
                   ledger: str = "") -> Path:  # fmt: skip
     """Write what the head may read while it looks back; the folder is inside the state
     folder (0700). Its moves one per line, as a model may read them (``advisor.move_for_model``:
-    no names of other agents, the world's reason quoted), the numbers, the rules of the world."""
+    no names of other agents, the world's reason quoted), the numbers, the rules of the world.
+
+    Makes its own folder only, never ``home``: a state folder that ``forget`` removed while the
+    look back ran is a ``FileNotFoundError`` (cos20 #492, Betreuer-Durchgang c6f552f, B1)."""
     import advisor
 
     folder = home / REVIEW_FOLDER
-    folder.mkdir(parents=True, exist_ok=True)
+    folder.mkdir(exist_ok=True)
     lines = [json.dumps(advisor.move_for_model(move), ensure_ascii=False)[:LINE_CHARS]
              for move in moves]  # fmt: skip
     def put(name: str, text: str) -> None:  # the world's words: a lone surrogate ends no look back
@@ -532,7 +535,9 @@ def kept(home: Path) -> list[dict[str, Any]]:
 
 
 def keep(home: Path, lesson: dict[str, Any]) -> None:
-    home.mkdir(parents=True, exist_ok=True)
+    """Add a lesson. The state folder is not made here: one that ``forget`` removed while the
+    lesson was being written is a ``FileNotFoundError`` (cos20 #492, Betreuer-Durchgang c6f552f,
+    B1)."""
     with files.held(home):  # a lesson kept by another process at the same moment stays
         files.write_json(home / LESSONS_FILE, (kept(home) + [lesson])[-KEPT:])
 

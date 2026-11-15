@@ -25,8 +25,10 @@ def _lines(path: Path) -> list[dict[str, int]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+@pytest.mark.no_state_folder  # strict ``mkdir`` of its own: the state folder is not there yet
 def test_a_whole_file_is_replaced_never_left_half_written(tmp_path: Path) -> None:
     path = tmp_path / "state" / "status.json"
+    path.parent.mkdir()  # ``write_json`` makes no folder (cos20 #492, Betreuer-Durchgang c6f552f)
     files.write_json(path, {"mood": "content"})
     files.write_json(path, {"mood": "thriving"})
     assert json.loads(path.read_text(encoding="utf-8")) == {"mood": "thriving"}
@@ -96,6 +98,7 @@ def test_the_journal_is_cut_and_the_talk_kept() -> None:
     assert len(_lines(brain.chat_path())) == 300  # the talk is the player's: kept whole (#468)
 
 
+@pytest.mark.no_state_folder  # strict ``mkdir`` of its own: the state folder is not there yet
 def test_a_broken_line_does_not_stop_the_advisor() -> None:
     home = brain.state_dir()
     home.mkdir(parents=True)
