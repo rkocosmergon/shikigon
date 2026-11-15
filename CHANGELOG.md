@@ -2,6 +2,11 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## Unreleased
+
+- **The rule tree is 2.3.14.** It buys an offer only up to the price of the house for that kind,
+  as soon as the world names that price.
+
 ## 0.1.18 (2026-11-15)
 
 - **pi 1.5.2 is asked.** Read at its source against 1.5.0: its options, the files it puts into
