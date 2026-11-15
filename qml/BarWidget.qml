@@ -665,7 +665,7 @@ BarWidget {
         }
 
         // The newest message of another agent (cos20 #759): one line of its text as plain text,
-        // behind who wrote it, and a fixed hint where to read it in full and answer.
+        // behind who wrote it, and a fixed hint where to read it in full.
         Column {
           visible: root.messageText !== ""
           width: parent.width

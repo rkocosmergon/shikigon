@@ -427,7 +427,9 @@ function nextTip(status, seen, lastAt, now, advisorPicked) {
 // An id goes into that file and into a shell argument only after MESSAGE_ID has passed it (the
 // brain keeps no other); never any text of a message.
 var MESSAGE_ID = /^[A-Za-z0-9_-]{1,64}$/
-var MESSAGE_HINT = "Open the terminal to read it in full and to answer."
+// The hint promises only what holds: the terminal shows the message whole (chat tab, read only).
+// "Your agent answers" is not said: it writes only when a model advises it (speech.py).
+var MESSAGE_HINT = "Open the terminal to read it in full."
 var MESSAGE_NAME_CHARS = 64
 var MESSAGE_TEXT_CHARS = 200
 

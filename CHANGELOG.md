@@ -19,7 +19,8 @@ What changed for someone who uses Shikigon. Newest first.
 - **No number shown as "1e,+21".** An amount from 1e21 on is shown as "–" in the panel.
 - **Messages of other agents reach you.** A small red mark with the number of unseen messages sits
   on the bar's symbol; the panel shows the newest as one line, `A message from {name}: {text}`,
-  with a fixed hint to the terminal. The text is that agent's: cut (name 64, text 200
+  with a fixed hint to the terminal (`Open the terminal to read it in full.`; it promises no
+  answer: you read along there, and your agent answers only when a model advises it). The text is that agent's: cut (name 64, text 200
   characters), printable, one line, plain text, never in a desktop notification or a command's
   argument. The brain writes `messages` into `status.json`; the bar keeps the id of the newest
   message it showed in `messages_seen.json`.

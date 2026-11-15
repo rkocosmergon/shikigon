@@ -948,7 +948,8 @@ TestCase {
     compare(Model.messageLine({ latest: { name: "A", text: "  " } }), "", "no text, no line")
     compare(Model.messageLine(null), "")
     compare(Model.messageLine({}), "")
-    verify(Model.MESSAGE_HINT.indexOf("terminal") >= 0)
+    compare(Model.MESSAGE_HINT, "Open the terminal to read it in full.")
+    verify(Model.MESSAGE_HINT.indexOf("answer") < 0, "no promise the terminal does not keep")
   }
 
   function test_only_a_plain_id_is_taken_for_the_seen_file_and_a_shell_argument() {
