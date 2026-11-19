@@ -435,6 +435,49 @@ TestCase {
     verify(unborn.lines[2].indexOf("cosmergon.com/datenschutz.html") > 0, "where the data goes")
   }
 
+  // ---------- The 3D view in the terminal: a question, off until it is answered (0.1.19) ----------
+
+  function test_the_3d_view_is_asked_before_the_wake_and_is_no_until_chosen() {
+    var asked = Model.panelState({ agent: false, pov: false })
+    compare(asked.name, "unborn")
+    compare(asked.actions, ["wake", "3D view: no"], "the question, answered no")
+    compare(asked.lines.length, 4)
+    verify(asked.lines[3].indexOf("websockets") > 0 && asked.lines[3].indexOf("sends nothing") > 0)
+    compare(Model.panelState({ agent: false, pov: true }).actions, ["wake", "3D view: yes"])
+    // the bar does not know the choice yet: no question, the panel as before
+    compare(Model.panelState({ agent: false }).actions, ["wake"])
+    compare(Model.panelState({ agent: false, pov: null }).actions, ["wake"])
+  }
+
+  function test_the_3d_view_can_be_changed_later_and_only_where_it_makes_sense() {
+    compare(Model.panelState({ agent: true, pov: false, status: { mood: "content" } }).actions,
+            ["open terminal", "ask", "3D view: no"])
+    compare(Model.panelState({ agent: true, pov: true, status: { mood: "content" } }).actions,
+            ["open terminal", "ask", "3D view: yes"])
+    compare(Model.panelState({ agent: false, pov: false, setup: "failed" }).actions,
+            ["try again", "3D view: no"], "a wake that failed may change it")
+    compare(Model.panelState({ agent: true, pov: false, status: { mood: "asleep",
+                                                                reason: "world_silent" } }).actions.length, 3)
+    // nothing to choose while it is at work, and not with a key that ended
+    compare(Model.panelState({ agent: false, pov: false, setup: "brain" }).actions, [])
+    compare(Model.panelState({ agent: false, pov: false, setup: "waking" }).actions, [])
+    compare(Model.panelState({ agent: true, pov: false, status: { mood: "asleep",
+                                                                reason: "key_ended" } }).actions,
+            ["wake a new one"])
+  }
+
+  function test_the_choice_of_the_3d_view_is_read_and_handed_on_in_fixed_words() {
+    verify(Model.isPovAction("3D view: no") && Model.isPovAction("3D view: yes"))
+    verify(!Model.isPovAction("wake") && !Model.isPovAction("ask"))
+    compare(Model.povFlag(true), "--pov")
+    compare(Model.povFlag(false), "--no-pov")
+    compare(Model.povFileText(true), '{"pov": true}')
+    compare(Model.povFileText(false), '{"pov": false}')
+    verify(Model.povChosen({ pov: true }))
+    verify(!Model.povChosen({ pov: false }) && !Model.povChosen({ pov: "yes" }))
+    verify(!Model.povChosen({ pov: 1 }) && !Model.povChosen(null) && !Model.povChosen({}))
+  }
+
   function test_waking_shows_where_it_stands_and_a_failure_offers_try_again() {
     compare(Model.panelState({ agent: false, setup: "brain" }).sentence, "setting up its brain…")
     compare(Model.panelState({ agent: false, setup: "brain" }).actions, [])

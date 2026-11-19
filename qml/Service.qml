@@ -159,6 +159,22 @@ Item {
     return "ok"
   }
 
+  // The 3D view in the terminal: a choice, off until made (Model.povAction). Kept in pov.json by the
+  // wake script, which a click on "wake" gives the choice as a flag; read here once. Before the
+  // first wake nothing is kept: the choice only stands in the panel until the wake script is told.
+  // Awake, the choice is written at once; the wake script, which every start of the shell runs once
+  // as a look, builds the environment anew when its packages no longer fit the choice.
+  property bool pov: false
+  function setPov(on) {
+    if (povWriter.running || settingUp) return "busy"
+    pov = !!on
+    if (awake) {
+      povWriter.value = !!on
+      povWriter.running = true
+    }
+    return "ok"
+  }
+
   // The one way the wake script starts: at once, or once the brain's commands still running are
   // done (`brainBusy`, K1).
   function startWaker(fresh, look) {
@@ -254,10 +270,14 @@ Item {
     // Started here without a click: it looks after the brain and registers nothing (cos20 #630).
     property bool look: false
     seconds: Model.HELPER_SETUP_S
+    // A click gives the 3D view's choice (kept by the script); the look of the bar does not, it
+    // follows the kept one: the file may not be read yet when the shell starts.
     argv: [root.wakeScript].concat(fresh ? ["--new"] : (look ? ["--look"] : []))
+      .concat(look ? [] : [Model.povFlag(root.pov)])
     onSettled: (exitCode, why) => {
       root.brainChecked = true
       setupFile.reload()
+      povFile.reload()
       root.recheck()
       root.failed("Waking", why)
     }
@@ -273,6 +293,28 @@ Item {
       try { root.setup = Model.readJson(text()) } catch (e) { root.setup = ({}) }
     }
     onLoadFailed: root.setup = ({})
+  }
+
+  FileView {
+    id: povFile
+    path: root.stateDir + "/pov.json"
+    printErrors: false
+    onLoaded: root.pov = Model.povChosen(Model.readJson(text()))
+  }
+
+  // The choice of the 3D view, written while a Shikigon lives here (the folder is there; none is
+  // made, `forget` removed it). The text is fixed (Model.povFileText), nothing typed.
+  Helper {
+    id: povWriter
+    property bool value: false
+    argv: Model.shell(
+      'umask 077; test -d "$1" || exit 1; printf "%s\\n" "$2" > "$1/pov.json.tmp" '
+      + '&& mv "$1/pov.json.tmp" "$1/pov.json"',
+      [root.stateDir, Model.povFileText(value)])
+    onSettled: (exitCode, why) => {
+      root.failed("Saving the 3D view", why)
+      povFile.reload()
+    }
   }
 
   // setup.json may not exist when the script starts, and a file that does not exist cannot

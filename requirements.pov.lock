@@ -1,0 +1,11 @@
+#
+# The one package of the 3D view in the terminal (the view through a marauder's eyes, key y).
+# Installed by brain/shikigon-wake only when the view is chosen, with --require-hashes and
+# --only-binary=:all:, next to requirements.lock. Written by hand, not by pip-compile: the
+# hash is the sha256 of the wheel file on PyPI (https://pypi.org/pypi/websockets/17.4/json,
+# released 2026-10-30, older than 7 days). websockets 17.4 is pure Python (py3-none-any), needs
+# Python >= 3.11 and has no dependencies, so this one wheel serves every platform.
+#
+websockets==17.4 \
+    --hash=sha256:c6bd2c9781915592b209160d0f017d4c7c82ad53075e6b0c24d2a89299e7f9e9
+    # via cosmergon-agent[pov]

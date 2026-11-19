@@ -80,6 +80,7 @@ BarWidget {
     setup: Model.setupStage(service ? service.setup : null,
                             service ? service.settingUp : false, awake),
     said: Model.setupSaid(service ? service.setup : null),
+    pov: service ? service.pov : false,
     stuck: service ? service.stuck : "",
     status: status
   })
@@ -152,6 +153,7 @@ BarWidget {
     else if (action === "ask") startTalking()
     else if (action === "wake" || action === "try again") service.wake(false)
     else if (action === "wake a new one") service.wake(true)
+    else if (Model.isPovAction(action)) service.setPov(!service.pov)
   }
 
   // ---------- The talk, and who answers (Model: whoRows, whoNext, adviseNext) ----------

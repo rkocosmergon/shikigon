@@ -147,8 +147,10 @@ PANEL_FILES = ("journal_recent.json", "talk.json", "lessons.json")
 # lessons: 3, in the server's lengths; setup: one cut sentence; tips, advisor: its own small
 # facts). journal.jsonl and chat.jsonl grow and are never read here.
 # messages_seen.json (cos20 #759): the one file the bar writes besides tips.json, one id.
+# pov.json (0.1.19): the choice of the 3D view, {"pov": true|false}; the wake script writes it, and
+# the bar writes it too (fixed text, Model.povFileText).
 BAR_FILES = PANEL_FILES + (
-    "status.json", "setup.json", "tips.json", "advisor.json", "messages_seen.json",
+    "status.json", "setup.json", "tips.json", "advisor.json", "messages_seen.json", "pov.json",
 )
 
 
@@ -390,8 +392,8 @@ def test_the_guards_see_what_they_guard() -> None:
     assert not unfiltered_reads(collected)
     assert not unfiltered_reads("onRead: data => root.e = Model.readLine(data).slice(0, 200)")
     both = service + bar
-    # setup, tips, status twice, talk, lessons, journal, the seen file of the messages
-    assert both.count("Model.readJson(text())") == 8
+    # setup, tips, status twice, talk, lessons, journal, the seen file of the messages, pov.json
+    assert both.count("Model.readJson(text())") == 9
     # advisor list, models, try: since #14438 one collector in the Helper component reads them
     assert both.count("helper.answer = Model.readJson(text)") == 1
     assert both.count("Model.readLine(data)") == 1

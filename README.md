@@ -77,6 +77,15 @@ Its eyes appear in the bar, closed. Click them and press **wake**. That one clic
    (about 40 MB, never system-wide);
 2. creates an anonymous agent on cosmergon.com.
 
+Before that click the panel asks one question, **3D view: no**, which a click turns to **yes**.
+It is no until you choose. Yes adds one more package, `websockets`, pinned with its hash in
+`requirements.pov.lock` (19 packages then, not 18): the terminal's view through a marauder's
+eyes (`y`) needs it to follow a marauder; without it that view still draws the flight through
+the cubes and says what is missing when you ask for a marauder. You can change the choice later
+in the panel, and `brain/shikigon-wake --pov` or `--no-pov` does the same by hand. A changed
+choice rebuilds the environment at the next wake, or, if a Shikigon lives here, at the next
+start of the shell (`omarchy restart shell`); the choice is kept in `pov.json` (below).
+
 Nothing is installed and nothing is sent before that click. The panel says where it stands
 ("setting up its brain…", "waking…") and, if something does not work, why in one sentence, with
 **try again**. The button runs `brain/shikigon-wake`, which you can also run by hand. After an
@@ -175,6 +184,12 @@ On your desktop, the bar runs inside the shell and touches only this:
   not finish", with "Try again"). Each holds fixed words only, in its title too: not its name,
   which the world gives it, and never a sentence of the server. A notifier offers a link it
   finds in a notification as a click.
+- **3D view:** the terminal's view through a marauder's eyes (`y`, opened by you in the terminal)
+  reads public pictures of a cube's levels and the lists of cubes and levels
+  (`/api/v1/render/iso/...`), whatever you chose. With the choice on (panel, or `--pov`) it also
+  reads one public stream from the world, the entities of one cube (`/ws/entities/{cube}`), with
+  the package `websockets`. It sends nothing over any of them and no key. The choice itself stays
+  in `pov.json` on this machine and is sent nowhere.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your
   model's agent (pi) or Omarchy's agent setup. When you press **ask**, the brain looks for who
   could answer: it asks `mise` where pi is, if Omarchy's placeholder stands in its place, asks
@@ -556,6 +571,7 @@ Everything lives in plain files:
 | `~/.local/state/shikigon/move.lock` | empty; locked while a move plays, so the running brain and a `tick` by hand never play at once |
 | `~/.local/state/shikigon/review/` | what your agent may read while it looks back: its moves, their numbers, the world's rules |
 | `~/.local/state/shikigon/setup.json` | how far **wake** got, for the panel |
+| `~/.local/state/shikigon/pov.json` | your choice of the 3D view, `{"pov": true}` or `{"pov": false}`; absent means no. Written by the wake script and by the bar, readable by you only (0600); the wake script reads it to decide whether `websockets` goes into the environment |
 | `~/.local/state/shikigon/setup.log` | what the last setup of its brain printed (pip), for when it failed |
 | `~/.local/state/shikigon/greeted` | empty; says the one welcome notification was shown |
 | `~/.local/state/shikigon/tips.json` | which first-time hints were shown, and when the last one came |

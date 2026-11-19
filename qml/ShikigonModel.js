@@ -626,7 +626,7 @@ var WAKE_LINES = [
 //   facts.status  status.json as the brain wrote it
 // Returns `name`, the `sentence`, `lines` that explain it, the `actions` (the first one is
 // the next step) and `full`: whether the numbers and the compass are shown.
-function panelState(facts) {
+function panelBase(facts) {
   var status = facts.status || {}
   var asleep = status.mood === "asleep" ? status.reason || "" : ""
   function is(name, sentence, lines, actions, full) {
@@ -658,6 +658,33 @@ function panelState(facts) {
     return is("world_silent", "The world did not answer. It tries again by itself.", [],
               actions, true)
   return is("awake", serverSentence(status.next_step), [], actions, true)
+}
+
+// The 3D view in the terminal (the view through a marauder's eyes, cosmergon-agent 0.34.0) is a
+// choice, off until made: it adds the package websockets to the brain's environment
+// (requirements.pov.lock). The choice is kept in pov.json by the wake script; `facts.pov` is true or
+// false when the bar knows it, and the panel then asks the question as one more action.
+var POV_ACTION = "3D view: "
+var POV_LINE = "3D view in the terminal (off unless you choose it): following a marauder's eyes "
+  + "needs the package websockets. The terminal then reads one public stream from the world and "
+  + "sends nothing over it, no key either."
+
+function povAction(on) { return POV_ACTION + (on ? "yes" : "no") }
+function isPovAction(action) { return String(action).indexOf(POV_ACTION) === 0 }
+// The flag the wake script is given; its file the bar reads: only a true is a yes.
+function povFlag(on) { return on ? "--pov" : "--no-pov" }
+function povFileText(on) { return on ? '{"pov": true}' : '{"pov": false}' }
+function povChosen(file) { return !!file && file.pov === true }
+
+// The panel's state with the question of the 3D view added to the states that have one: before
+// the first wake, after a wake that failed, and awake.
+function panelState(facts) {
+  var view = panelBase(facts)
+  if (facts.pov === undefined || facts.pov === null) return view
+  if (["unborn", "failed", "awake", "world_silent"].indexOf(view.name) < 0) return view
+  view.actions = view.actions.concat([povAction(!!facts.pov)])
+  if (view.name === "unborn") view.lines = view.lines.concat([POV_LINE])
+  return view
 }
 
 // What a brain that stopped costs when it comes back at once: a look, and if it cannot load its

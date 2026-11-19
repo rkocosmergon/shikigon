@@ -2,8 +2,19 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
-## Unreleased
+## 0.1.19 (2026-11-19)
 
+- **The terminal's view through a marauder's eyes, as a choice.** The Cosmergon terminal 0.34.0
+  (`cosmergon-agent` 0.34.0 is now the one the lock holds) has a new view, `y`: the world seen
+  from a marauder's head, or a flight through the cubes. Following a marauder needs the package
+  `websockets`, which Shikigon installs only if you choose it. The panel asks once, before the
+  first wake: **3D view: no** (the default), and a click turns it to **yes**; you can change it
+  in the panel later, and `brain/shikigon-wake --pov` or `--no-pov` does the same. The choice is
+  kept in `pov.json` in the state folder, and a changed choice rebuilds the brain's environment
+  at the next wake or the next start of the shell. The package is pinned in
+  `requirements.pov.lock` (`websockets` 17.4, with its hash, wheels only, like the other lock).
+  With the view on, the terminal reads one public stream from the world and sends nothing over
+  it, no key either. No other package moves.
 - **The rule tree is 2.3.14.** It buys an offer only up to the price of the house for that kind,
   as soon as the world names that price.
 

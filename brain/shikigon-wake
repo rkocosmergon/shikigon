@@ -4,12 +4,17 @@
 # Wakes a Shikigon. The one thing the bar's "wake" runs:
 #   1. sets up its brain, if it is not there, cannot load its packages, or the plugin was
 #      updated since
-#      (a Python environment of its own, filled from requirements.lock: every package is
-#      named there with its version and hashes, and nothing else is fetched);
+#      (a Python environment of its own, filled from requirements.lock, and requirements.pov.lock
+#      if the 3D view is chosen: every package is named there with its version and hashes, and
+#      nothing else is fetched);
 #   2. registers an agent of its own on the Cosmergon server, if none lives here
 #      (`--new` replaces the one that does, e.g. after its key ended).
 # `--look` is the bar on its own, without a click: step 1 only. It never registers: a key file
 # that went missing does not bring a new agent (cos20 #630).
+# `--pov` / `--no-pov`: the 3D view in the terminal (the view through a marauder's eyes), on or
+# off. The choice is kept in the state folder (`pov.json`); without either flag the kept one
+# stands, and without one it is off. On, the environment also gets requirements.pov.lock (the
+# package websockets); changing the choice rebuilds the environment (its stamp covers both).
 # Where it stands is written to setup.json for the bar: "brain", "waking", "done", or
 # "failed" with one sentence. The same goes to the terminal when you run it by hand.
 # Not guarded against running twice at once, and an update rebuilds the environment under a
@@ -25,6 +30,7 @@ given="${PATH:-}:"; PATH=""; while [ -n "$given" ]; do case "${given%%:*}" in /*
 
 here="$(dirname "$(readlink -f "$0")")"
 lock="$here/../requirements.lock"
+povlock="$here/../requirements.pov.lock"
 venv="$HOME/.local/share/shikigon/venv"
 # The state folder: $XDG_STATE_HOME only if it is an absolute path, as in the brain
 # (files.xdg_home) and the bar (Model.stateHome); a relative one would put the talk and the
@@ -39,6 +45,29 @@ mkdir -p "$state" "$(dirname "$venv")"
 # 0700 and in a folder an earlier version made with the default mode (#11550). A file an
 # earlier version left readable for others the brain renews at its start (files.keep_private).
 chmod 700 "$state"
+
+# The arguments, in any order: --new and --look as before, --pov and --no-pov the 3D view.
+new=(); look=0; flag=""
+for arg in "$@"; do
+    case "$arg" in
+        --new) new=(--new) ;;
+        --look) look=1 ;;
+        --pov) flag=yes ;;
+        --no-pov) flag=no ;;
+    esac
+done
+# The choice: the flag if there is one (and it is kept), else the kept one, else off. pov.json is
+# JSON for the bar, which reads every file through one door; here only these two exact texts count,
+# anything else in it is "no".
+if [ -n "$flag" ]; then
+    pov="$flag"
+    if [ "$pov" = yes ]; then json='{"pov": true}'; else json='{"pov": false}'; fi
+    printf '%s\n' "$json" > "$state/pov.json.tmp" && mv "$state/pov.json.tmp" "$state/pov.json"
+elif [ "$(head -c 32 "$state/pov.json" 2>/dev/null)" = '{"pov": true}' ]; then
+    pov=yes
+else
+    pov=no
+fi
 
 say() {  # stage [sentence]
     # Without python3 the panel still gets a sentence: an empty file showed it nothing (#628, F10).
@@ -62,7 +91,7 @@ install_brain() {
     # -I as everywhere: an empty entry of PYTHONPATH is the folder this was started in, and it
     # stands before the standard library. The console script `pip` starts Python without it.
     "$venv/bin/python" -I -m pip install --quiet --disable-pip-version-check --no-cache-dir --require-hashes \
-        --only-binary=:all: -r "$lock" >> "$log" 2>&1
+        --only-binary=:all: "${requirements[@]}" >> "$log" 2>&1
 }
 
 # A folder goes by a new name first and only then away: an `rm` cut off (the bar's deadline, a
@@ -76,7 +105,15 @@ discard() {
 }
 
 [ -f "$lock" ] || fail "The plugin's requirements.lock is missing."
+requirements=(-r "$lock")
 want="$(sha256sum "$lock" | cut -d' ' -f1)"
+if [ "$pov" = yes ]; then
+    [ -f "$povlock" ] || fail "The plugin's requirements.pov.lock is missing."
+    # The stamp covers both files and the choice: a changed choice, or a changed pov lock, builds
+    # the environment anew at the next wake. Off, it is the hash of requirements.lock alone.
+    requirements+=(-r "$povlock")
+    want="$({ cat "$lock" "$povlock"; echo pov; } | sha256sum | cut -d' ' -f1)"
+fi
 # Rebuilt when the lock changed, or when the brain can no longer load its packages. The second
 # happens without any change here: the environment points at the system's python3, and when
 # the system moves to a new Python (3.14 to 3.15), its packages sit in the old version's folder.
@@ -111,9 +148,7 @@ if ! current; then
     fi
 fi
 
-new=()
-[ "${1:-}" = "--new" ] && new=(--new)
-if [ "${1:-}" != "--look" ] && { [ ! -f "$state/credentials.json" ] || [ "${#new[@]}" -gt 0 ]; }; then
+if [ "$look" -eq 0 ] && { [ ! -f "$state/credentials.json" ] || [ "${#new[@]}" -gt 0 ]; }; then
     say waking
     # The brain says a refusal in one sentence on stderr (the server's own, if it has one).
     if ! said="$("$venv/bin/python" -I "$here/shikigon_brain.py" register "${new[@]}" 2>&1 > /dev/null)"; then
