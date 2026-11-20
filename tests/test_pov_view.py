@@ -146,7 +146,7 @@ def test_the_lock_holds_the_sdk_with_the_view_and_the_versions_agree() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert "cosmergon-agent[dashboard]>=0.34.0" in project["dependencies"]
     locked = LOCK.read_text(encoding="utf-8")
-    assert re.search(r"^cosmergon-agent==0\.34\.1 ", locked, re.MULTILINE)
+    assert re.search(r"^cosmergon-agent==0\.34\.2 ", locked, re.MULTILINE)
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["version"] == project["version"] == "0.1.19"
 

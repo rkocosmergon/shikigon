@@ -5,7 +5,8 @@ What changed for someone who uses Shikigon. Newest first.
 ## 0.1.19 (2026-11-19)
 
 - **The terminal's view through a marauder's eyes, as a choice.** The Cosmergon terminal 0.34.0
-  (the lock holds `cosmergon-agent` 0.34.1, which mends a crash of this view) has a new view, `y`: the world seen
+  (the lock holds `cosmergon-agent` 0.34.2, which mends a crash of this view and gives its stream
+  bounds of its own: unpacked, 256 KiB a message, printable texts) has a new view, `y`: the world seen
   from a marauder's head, or a flight through the cubes. Following a marauder needs the package
   `websockets`, which Shikigon installs only if you choose it. The panel asks once, before the
   first wake: **3D view: no** (the default), and a click turns it to **yes**; you can change it
