@@ -20,9 +20,9 @@ cosmergon-agent==0.34.1 \
     # via
     #   pyproject.toml
     #   cosmergon-decider-tree
-cosmergon-decider-tree==2.3.14 \
-    --hash=sha256:464a24ee33c2969d370fa9db56c1e09363a41d5e1e2bcf2e82b15e20b6867c1a \
-    --hash=sha256:6ce686135f97cda43314ad9684384d4e7400f9cae4214f264f5ca8b577bc04c5
+cosmergon-decider-tree==2.4.1 \
+    --hash=sha256:04304904bb01455dc9780b052d0923caf76ff2dc0c7d5d6072baba9ce2c7b142 \
+    --hash=sha256:4a9388b139ec5b6d96c4955020d1e0dbecf545e143003e87a545296d0faf036b
     # via pyproject.toml
 h11==0.16.0 \
     --hash=sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1 \
