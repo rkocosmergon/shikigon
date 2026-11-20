@@ -454,3 +454,19 @@ def test_the_mark_and_the_hint_use_the_shells_urgent_as_it_does() -> None:
     assert "bar && bar.urgent.a > 0 ? bar.urgent : Commons.Color.urgent" in bar
     assert "bar.background : Commons.Color.background" in bar
     assert not re.search(r"Ink:[^\n]*#[0-9a-fA-F]{3,8}", bar)
+
+
+def test_a_click_in_a_list_acts_on_the_entry_of_its_own_row() -> None:
+    """A row of the lists "who" and "models" hands its own entry to the click (cos20 #492, K53).
+
+    Until 0.1.19 a click took ``list[pick]``: had the advisor's server changed its model list
+    between the picture and the click, another model stood at that place.
+    """
+    bar = (QML / "BarWidget.qml").read_text()
+    rows = re.findall(r"PickButton \{ required property var modelData[^}]*\}", bar)
+    assert len(rows) == 2
+    assert all("value: modelData" in row for row in rows)
+    assert "onClicked: { root.pick = at; root.activateInTalk(value) }" in bar
+    assert "takeRow(chosen !== undefined ? chosen : whoList[pick])" in bar
+    assert "tryPicked(chosen !== undefined ? chosen : modelList.shown[pick])" in bar
+

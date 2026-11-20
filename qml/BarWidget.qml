@@ -223,10 +223,13 @@ BarWidget {
     if (step === "talk" && dy > 0 && pick >= n - 1) { askField.forceActiveFocus(); return }
     if (n > 0) pick = Math.max(0, Math.min(n - 1, pick + (dy !== 0 ? dy : dx)))
   }
-  function activateInTalk() {
+  // `chosen` is the entry of the row that was clicked: a click acts on what its row showed, not
+  // on whatever stands at that place of the list by now (cos20 #492, K53). The keyboard has no
+  // row of its own and takes the marked one.
+  function activateInTalk(chosen) {
     if (!service) return
-    if (step === "who") takeRow(whoList[pick])
-    else if (step === "models") tryPicked(modelList.shown[pick])
+    if (step === "who") takeRow(chosen !== undefined ? chosen : whoList[pick])
+    else if (step === "models") tryPicked(chosen !== undefined ? chosen : modelList.shown[pick])
     else if (step === "failed") {
       if (pick === 1 && pickedRow && pickedRow.sign_in && pickedRow.agent) {
         service.openSignIn(pickedRow.agent)
@@ -748,7 +751,7 @@ BarWidget {
             Repeater {
               model: root.step === "who" ? root.whoList : []
               PickButton { required property var modelData; required property int index
-                           at: index; label: String(modelData.text) }
+                           at: index; value: modelData; label: String(modelData.text) }
             }
             Line { color: root.dim; text: Model.WHO_DATA }
           }
@@ -794,7 +797,7 @@ BarWidget {
             Repeater {
               model: root.step === "models" ? root.modelList.shown : []
               PickButton { required property var modelData; required property int index
-                           at: index; label: String(modelData) }
+                           at: index; value: modelData; label: String(modelData) }
             }
             Line { visible: root.modelList.more > 0; color: root.dim
                    text: "and " + root.modelList.more + " more: name one in the config file" }
@@ -1254,6 +1257,7 @@ BarWidget {
   // A row of a list in the talk view: the same button, on the talk's own cursor (`pick`).
   component PickButton: Button {
     property int at: 0
+    property var value: undefined  // the entry of a list's row; fixed buttons have none
     property string label: ""
     text: Model.hostText(label)
     width: parent ? parent.width : implicitWidth
@@ -1262,7 +1266,7 @@ BarWidget {
     fontFamily: root.font
     bordered: true
     hasCursor: root.talking && !root.typing && root.pick === at
-    onClicked: { root.pick = at; root.activateInTalk() }
+    onClicked: { root.pick = at; root.activateInTalk(value) }
     onHovered: function(isHovered) { if (isHovered) root.pick = at }
   }
 }

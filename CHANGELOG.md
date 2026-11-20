@@ -5,8 +5,9 @@ What changed for someone who uses Shikigon. Newest first.
 ## 0.1.19 (2026-11-19)
 
 - **The terminal's view through a marauder's eyes, as a choice.** The Cosmergon terminal 0.34.0
-  (the lock holds `cosmergon-agent` 0.34.2, which mends a crash of this view and gives its stream
-  bounds of its own: unpacked, 256 KiB a message, printable texts) has a new view, `y`: the world seen
+  (the lock holds `cosmergon-agent` 0.34.3, which mends a crash of this view and gives its stream
+  bounds of its own: unpacked, 256 KiB a message, printable texts, and only bodies with a name
+  and a place in numbers) has a new view, `y`: the world seen
   from a marauder's head, or a flight through the cubes. Following a marauder needs the package
   `websockets`, which Shikigon installs only if you choose it. The panel asks once, before the
   first wake: **3D view: no** (the default), and a click turns it to **yes**; you can change it
@@ -16,6 +17,9 @@ What changed for someone who uses Shikigon. Newest first.
   `requirements.pov.lock` (`websockets` 17.4, with its hash, wheels only, like the other lock).
   With the view on, the terminal reads one public stream from the world and sends nothing over
   it, no key either. No other package moves.
+- **A click in the panel's lists takes the row you clicked.** In "Who should advise?" and in the
+  list of models a click acted on whatever stood at that place of the list by then; it now acts
+  on the entry its own row showed.
 - **The rule tree is 2.4.2.** It builds out a field (`upgrade_field`: stronger ground, walls,
   a fortified core) when the world offers a set it can pay for and enough energy stays to live
   on. As before, it buys an offer only up to the price of the house for that kind.
