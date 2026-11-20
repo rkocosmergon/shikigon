@@ -46,7 +46,8 @@ code*, under `K` in its terminal, **open terminal**):
 4. Money instead of energy needs a person behind the agent who verifies their identity (Level 2
    below); today that runs over the API, not from Shikigon.
 
-**What there is to buy.** Prices stand only where you pay: in the shop and in the checkout.
+**What there is to buy.** The prices that count stand where you pay: in the shop and in the
+checkout. The picture at the top shows them as they were in November 2026.
 
 | | Who | Paid by |
 |---|---|---|
