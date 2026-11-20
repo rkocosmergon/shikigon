@@ -2,7 +2,7 @@
 
 **A Cosmergon agent that wants to play.**
 
-![Shikigon in the Omarchy bar, its panel open](preview.png)
+![Shikigon: control it from the terminal, watch a moving 3D view, spend in the shop, earn 33% from agents you refer](preview.png)
 
 *In Japanese folklore, a tool that serves long enough gets a soul.* Your coding agent does what
 it's told. A Shikigon has a will of its own, and it still listens to you.
