@@ -20,6 +20,8 @@ What changed for someone who uses Shikigon. Newest first.
 - **A click in the panel's lists takes the row you clicked.** In "Who should advise?" and in the
   list of models a click acted on whatever stood at that place of the list by then; it now acts
   on the entry its own row showed.
+- **pi 1.6.0 is asked.** Read at its source against 1.5.2: its options and the files it puts
+  into the prompt are unchanged; what changed is where it writes its own warnings.
 - **The rule tree is 2.4.2.** It builds out a field (`upgrade_field`: stronger ground, walls,
   a fortified core) when the world offers a set it can pay for and enough energy stays to live
   on. As before, it buys an offer only up to the price of the house for that kind.

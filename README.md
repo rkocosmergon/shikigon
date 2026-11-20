@@ -329,7 +329,7 @@ shows **WHO ANSWERS?**, one list:
   agent's own setup writes as `http://…:443` would still go in plain text. A model server on
   this machine or in your home is not reached through your agent; pick it here directly (the
   next two points). Shikigon asks only the versions of pi it was tried with (1.2.0, 1.3.0, 1.4.0,
-  1.5.0 and 1.5.2; a later release, a patch release too, only once it is read), read from pi before each
+  1.5.0, 1.5.2 and 1.6.0; a later release, a patch release too, only once it is read), read from pi before each
   question, from the very file the question then goes to: after an update to another version this list and the panel say so, and the rule
   tree plays on. OpenCode is not asked from here (since 0.1.13): it puts your
   own instruction files (`~/.config/opencode/AGENTS.md`, else `~/.claude/CLAUDE.md`, and the

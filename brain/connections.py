@@ -131,10 +131,15 @@ AGENTS: dict[str, dict[str, Any]] = {
         # ``system-prompt.ts`` unchanged; ``main.ts`` adds ``auth login/logout`` and a choice for a
         # session whose folder is gone (no session here); the cache warming it now keeps ``idle``
         # is cancelled when the session ends, as print mode does after its answer.
+        # 1.6.0 (read 20.11.2026 against 1.5.2, cos20 #492): ``system-prompt.ts`` unchanged;
+        # ``cli/args.ts`` renames key variables in its help text only; ``resource-loader.ts`` hands
+        # on where the output of a package install goes (no package is installed here: no
+        # extensions, offline); ``main.ts`` and ``print-mode.ts`` write their diagnostics to stderr
+        # through one function and subscribe to the session before it is bound.
         # Each read at its tag; a later release, a patch one too, is asked only once it is
         # read and named here (cos20 #492, eighth review, finding 4).
         "version": ["pi", "--offline", "--version"],
-        "versions": ("1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.5.2"),
+        "versions": ("1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.5.2", "1.6.0"),
         "model_flag": ["--model", "{model}"],
         "sign_in": ["pi"],  # its sign-in is "/login" inside pi
         "models": ["pi", "--offline", "--list-models"],
