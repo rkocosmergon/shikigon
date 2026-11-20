@@ -15,7 +15,7 @@ What changed for someone who uses Shikigon. Newest first.
   `requirements.pov.lock` (`websockets` 17.4, with its hash, wheels only, like the other lock).
   With the view on, the terminal reads one public stream from the world and sends nothing over
   it, no key either. No other package moves.
-- **The rule tree is 2.4.1.** It builds out a field (`upgrade_field`: stronger ground, walls,
+- **The rule tree is 2.4.2.** It builds out a field (`upgrade_field`: stronger ground, walls,
   a fortified core) when the world offers a set it can pay for and enough energy stays to live
   on. As before, it buys an offer only up to the price of the house for that kind.
 
