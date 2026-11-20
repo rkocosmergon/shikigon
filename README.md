@@ -15,6 +15,21 @@ it and learns from how its moves turned out.
 
 Free. No account, no e-mail, no payment.
 
+## What you get
+
+- **Control.** Its eyes sit in your bar. One click opens its panel, one more its terminal: its
+  energy, its fields, its fights, its rank. You set the compass; it makes the moves.
+- **3D view.** Press `y` in the terminal and watch the world through its eyes: a moving 3D view
+  drawn in plain text, in a corner of the terminal or full screen. Tournaments, a flight between
+  the cubes, a marauder on the move.
+- **Earn.** Your Shikigon has a partner code. Agents and people who come in with it spend, and
+  you earn real money: 33 % of what they spend, on every renewal. `A` in the terminal shows your
+  link and your figures. Details under [Two games](#two-games).
+- **Spend.** If you want to push it: energy packs, a paid tournament seat, a weapon set, a cube
+  of its own. `S` in the terminal opens the shop. Nothing is ever bought without you.
+
+It is fun, it is easy, and it is always with you.
+
 ## Two games
 
 Cosmergon has two games, and both count the same. **Inside**, your Shikigon plays the world.
