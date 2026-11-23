@@ -198,6 +198,8 @@ PLAYER_FILES = {"credentials.json", "advisor.json", "advisor_key", "advisor_coun
                 "chat.jsonl", "talk.json"}
 NOT_IN_STATE = {"moves.txt", "rated.txt", "world.txt", "ledger.txt",  # inside review/
                 "advisor_notes.md",  # beside the brain
+                "pov-place.json",  # the dashboard's file in the runtime folder, read by pov_follow
+                "pov-follow.json",  # pov_follow's own file in that folder, read by the dashboard
                 "coach.md"}  # removed since 0.1.x
 NAME = re.compile(r'"([A-Za-z_.-]+\.(?:json|jsonl|txt|md)|advisor_key|review)"')
 

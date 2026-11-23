@@ -174,6 +174,8 @@ WHOLE_OR_AFTER_A_WAIT = {
                              "(test_betreuer_1d81304; the then-branch is under the lock)",
     ("speech.py", "_remember"): "after the model was asked, in a move: under files.one_move "
                                 "(test_betreuer_1d81304, B2)",
+    ("pov_follow.py", "announce"): "pov-follow.json in the runtime folder, not the state folder: "
+                                   "written whole by the follower alone, the dashboard only reads",
 }
 
 

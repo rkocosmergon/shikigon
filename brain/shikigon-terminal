@@ -65,6 +65,21 @@ export COSMERGON_ADVISOR_CMD
 # shikigon_brain.py). The dashboard reads it and opens [M] with the last ten exchanges; PgUp
 # fetches older ones. Needs cosmergon-agent >= 0.27.6; an older dashboard ignores it.
 export COSMERGON_ADVISOR_HISTORY="$state/chat.jsonl"
+# The follower of the 3D view (brain/pov_follow.py): puts the renderer's window the dashboard may
+# start over the area the dashboard names, under Hyprland only, so only then.
+# Started here, before the exec, as the brain is started (the same Python under -I; its own
+# folder is the brain's, ``${brain%/*}``). Who its parent is: the exec below replaces this shell
+# by the dashboard and keeps the process id, so the follower's parent stays this very process
+# and is the dashboard from then on; the follower ends when its parent changes (the dashboard
+# ended, or the terminal closed it), and it also sits next to the renderer, which is the
+# dashboard's child too. No pid is passed: the follower reads the dashboard's from its file.
+# Descriptors: stdin from /dev/null, stdout and stderr to /dev/null (in this order: ``2>&1``
+# after ``>/dev/null``), and 3 closed (``3<&-``) in case the one who started this left one open:
+# the key's descriptor 3 is made only by the redirection of the exec below, for the dashboard
+# alone, and the follower never gets near it.
+if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    "$venv/bin/python" -I "${brain%/*}/pov_follow.py" </dev/null >/dev/null 2>&1 3<&- &
+fi
 # The key on descriptor 3, from a pipe the dashboard reads to its end and closes
 # (cosmergon-agent >= 0.27.30). Through its module: the console script starts Python without -I.
 exec "$venv/bin/python" -I -m cosmergon_agent.dashboard --api-key-fd 3 \
