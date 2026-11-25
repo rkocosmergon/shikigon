@@ -1,6 +1,6 @@
 [project]
 name = "shikigon-brain"
-version = "0.1.20"
+version = "0.1.21"
 description = "Shikigon's brain: a Cosmergon agent that wants to play."
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -40,10 +40,11 @@ dependencies = [
     # 0.26.0 brought mission_word / mission_outcome_text (cos20 #475).
     # [dashboard]: "open terminal" starts cosmergon-dashboard, which needs textual; without
     # the extra the client only prints how to install it (seen in a fresh container, 11.10.2026).
-    # >=0.37.0: cosmergon_agent.view_install fetches the 3D picture, checked by SHA-256, and the
+    # >=0.37.1: cosmergon_agent.view_install fetches the 3D picture, checked by SHA-256, with one
+    #   limit of time for the whole download and no redirect body read (0.37.1); the
     #   [dashboard] extra brings websockets, which the view in characters needs (cos20 #853).
     #   0.35.0 brought the place of the picture's window that brain/pov_follow.py reads (#799).
-    "cosmergon-agent[dashboard]>=0.37.0",
+    "cosmergon-agent[dashboard]>=0.37.1",
     # >=2.4.2: upgrade_field (build out a field) where the world offers it (cos20 #777);
     # 2.4.1 dropped every offer that named a place.
     # >=2.3.14: a purchase only up to the house price of its kind, where the world names it (cos20 #765).

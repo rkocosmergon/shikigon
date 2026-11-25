@@ -155,14 +155,14 @@ def test_a_picture_that_could_not_be_fetched_is_a_sentence_not_a_failed_wake(
 
 def test_the_lock_holds_the_sdk_with_the_view_and_the_versions_agree() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    assert "cosmergon-agent[dashboard]>=0.37.0" in project["dependencies"]
+    assert "cosmergon-agent[dashboard]>=0.37.1" in project["dependencies"]
     locked = LOCK.read_text(encoding="utf-8")
-    assert re.search(r"^cosmergon-agent==0\.37\.0 ", locked, re.MULTILINE)
+    assert re.search(r"^cosmergon-agent==0\.37\.1 ", locked, re.MULTILINE)
     # The characters of the view need websockets: it is in the main lock, the second lock is gone.
     assert re.search(r"^websockets==", locked, re.MULTILINE)
     assert not (ROOT / "requirements.pov.lock").exists()
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == project["version"] == "0.1.20"
+    assert manifest["version"] == project["version"] == "0.1.21"
 
 
 def test_the_terminal_lets_the_picture_open_only_over_the_view() -> None:

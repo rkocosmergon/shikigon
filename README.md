@@ -100,7 +100,9 @@ terminal's own command for it (`cosmergon_agent.view_install --if-missing`), whi
 program `cosmergon-pov` (GPL-2.0, built from
 [cosmergon-pov](https://github.com/rkocosmergon/cosmergon-pov)) for this system and its game
 data (Freedoom, BSD licence), about 30 MB from GitHub, and checks each against a SHA-256 written
-in the locked `cosmergon-agent`, before anything is unpacked. They go to
+in the locked `cosmergon-agent`, before anything is unpacked; the download has one limit of
+time as a whole. The program's archives carry a build provenance attestation of the workflow
+that built them (`gh attestation verify <archive> --repo rkocosmergon/cosmergon-pov`). They go to
 `~/.local/share/cosmergon-pov`; a program that is there already is left as it is. If the fetch
 fails, the wake says so in one sentence and the view stays in characters. You can choose yes
 later in the panel, and `brain/shikigon-wake --pov` or `--no-pov` does the same by hand; the

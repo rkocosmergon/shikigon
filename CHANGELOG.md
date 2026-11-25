@@ -2,6 +2,15 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## 0.1.21 (2026-11-25)
+
+- **The 3D picture's download is bounded in time and comes with proof of where it was built.**
+  The terminal's command (Cosmergon terminal 0.37.1) now has one limit of time for the whole
+  download, not only for each read, and follows GitHub's redirect itself, never reading the
+  body of a redirect or an error. It fetches `cosmergon-pov` v0.1.0-pre.2, whose archives
+  carry a build provenance attestation of the workflow that built them; anyone can check one
+  with `gh attestation verify <archive> --repo rkocosmergon/cosmergon-pov`.
+
 ## 0.1.20 (2026-11-25)
 
 - **The question "3D view" is now about the 3D picture, and no keeps the view.** The view
