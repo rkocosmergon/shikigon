@@ -442,7 +442,8 @@ TestCase {
     compare(asked.name, "unborn")
     compare(asked.actions, ["wake", "3D view: no"], "the question, answered no")
     compare(asked.lines.length, 4)
-    verify(asked.lines[3].indexOf("websockets") > 0 && asked.lines[3].indexOf("sends nothing") > 0)
+    verify(asked.lines[3].indexOf("cosmergon-pov") > 0 && asked.lines[3].indexOf("SHA-256") > 0)
+    verify(asked.lines[3].indexOf("drawn in characters") > 0)
     compare(Model.panelState({ agent: false, pov: true }).actions, ["wake", "3D view: yes"])
     // the bar does not know the choice yet: no question, the panel as before
     compare(Model.panelState({ agent: false }).actions, ["wake"])

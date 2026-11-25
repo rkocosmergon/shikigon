@@ -2,6 +2,27 @@
 
 What changed for someone who uses Shikigon. Newest first.
 
+## 0.1.20 (2026-11-25)
+
+- **The question "3D view" is now about the 3D picture, and no keeps the view.** The view
+  through a marauder's eyes (`y` in the terminal) is there either way, drawn in characters: the
+  package it needs to follow a marauder, `websockets`, is now in the main lock, and the second
+  lock `requirements.pov.lock` is gone. **This takes back what 0.1.19 said**: that Shikigon
+  installs `websockets` only if you choose the view. With no, that view could not follow a
+  marauder at all. Yes now fetches the 3D picture: the program `cosmergon-pov` (GPL-2.0) built
+  for this system and its game data (Freedoom), about 30 MB from GitHub, with the terminal's own
+  command (`cosmergon_agent.view_install --if-missing`, Cosmergon terminal 0.37.0), which checks
+  each download against a SHA-256 written in that locked package before anything is unpacked.
+  It goes to `~/.local/share/cosmergon-pov`; a program that is there already stays. A fetch
+  that fails is one sentence, and the view stays in characters. Choosing yes later in the panel
+  fetches it at the next wake or start of the shell.
+- **The 3D picture lies over the view.** A new helper, `brain/pov_follow.py`, keeps the
+  picture's window over the view's place in the terminal: when you tile, switch workspaces, go
+  full screen or put another window in front, and it ends with the terminal. It works under
+  Hyprland only and moves one window only, the program the terminal started; the terminal's own
+  window it only reads. No text from a file or a window title goes into what it sends to
+  Hyprland. The terminal opens the picture only while the helper runs.
+
 ## 0.1.19 (2026-11-19)
 
 - **The terminal's view through a marauder's eyes, as a choice.** The Cosmergon terminal 0.34.0

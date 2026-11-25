@@ -660,14 +660,15 @@ function panelBase(facts) {
   return is("awake", serverSentence(status.next_step), [], actions, true)
 }
 
-// The 3D view in the terminal (the view through a marauder's eyes, cosmergon-agent 0.34.0) is a
-// choice, off until made: it adds the package websockets to the brain's environment
-// (requirements.pov.lock). The choice is kept in pov.json by the wake script; `facts.pov` is true or
-// false when the bar knows it, and the panel then asks the question as one more action.
+// The 3D picture of the view through a marauder's eyes (cosmergon-agent 0.37.0, cos20 #853) is a
+// choice, no until made: with yes the wake script fetches the program cosmergon-pov and its game
+// data (about 30 MB, checked by SHA-256) when they are not there. Without it the view is drawn in
+// characters. The choice is kept in pov.json by the wake script; `facts.pov` is true or false when
+// the bar knows it, and the panel then asks the question as one more action.
 var POV_ACTION = "3D view: "
-var POV_LINE = "3D view in the terminal (off unless you choose it): following a marauder's eyes "
-  + "needs the package websockets. The terminal then reads one public stream from the world and "
-  + "sends nothing over it, no key either."
+var POV_LINE = "3D picture of the terminal's view (no unless you choose it): the program "
+  + "cosmergon-pov and its game data, about 30 MB, each checked by SHA-256. Without it the view "
+  + "is drawn in characters."
 
 function povAction(on) { return POV_ACTION + (on ? "yes" : "no") }
 function isPovAction(action) { return String(action).indexOf(POV_ACTION) === 0 }

@@ -87,20 +87,26 @@ It needs nothing beyond Omarchy itself: Python 3.11 or newer with its `venv` mod
 
 Its eyes appear in the bar, closed. Click them and press **wake**. That one click:
 
-1. sets up its brain: 18 pure-Python packages from PyPI (`cosmergon-agent`,
+1. sets up its brain: 19 packages from PyPI, wheels only (`cosmergon-agent`,
    `cosmergon-decider-tree` and what they need), each pinned with its version and hashes in
    `requirements.lock`, into an environment of its own, `~/.local/share/shikigon/venv`
    (about 40 MB, never system-wide);
 2. creates an anonymous agent on cosmergon.com.
 
 Before that click the panel asks one question, **3D view: no**, which a click turns to **yes**.
-It is no until you choose. Yes adds one more package, `websockets`, pinned with its hash in
-`requirements.pov.lock` (19 packages then, not 18): the terminal's view through a marauder's
-eyes (`y`) needs it to follow a marauder; without it that view still draws the flight through
-the cubes and says what is missing when you ask for a marauder. You can change the choice later
-in the panel, and `brain/shikigon-wake --pov` or `--no-pov` does the same by hand. A changed
-choice rebuilds the environment at the next wake, or, if a Shikigon lives here, at the next
-start of the shell (`omarchy restart shell`); the choice is kept in `pov.json` (below).
+It is no until you choose. The terminal's view through a marauder's eyes (`y`) is there either
+way, drawn in characters. Yes adds its 3D picture: after the brain is set up, the wake runs the
+terminal's own command for it (`cosmergon_agent.view_install --if-missing`), which fetches the
+program `cosmergon-pov` (GPL-2.0, built from
+[cosmergon-pov](https://github.com/rkocosmergon/cosmergon-pov)) for this system and its game
+data (Freedoom, BSD licence), about 30 MB from GitHub, and checks each against a SHA-256 written
+in the locked `cosmergon-agent`, before anything is unpacked. They go to
+`~/.local/share/cosmergon-pov`; a program that is there already is left as it is. If the fetch
+fails, the wake says so in one sentence and the view stays in characters. You can choose yes
+later in the panel, and `brain/shikigon-wake --pov` or `--no-pov` does the same by hand; the
+picture is then fetched at the next wake, or, if a Shikigon lives here, at the next start of
+the shell (`omarchy restart shell`). No does not delete a picture that is there. The choice is
+kept in `pov.json` (below).
 
 Nothing is installed and nothing is sent before that click. The panel says where it stands
 ("setting up its brain…", "waking…") and, if something does not work, why in one sentence, with
@@ -202,10 +208,21 @@ On your desktop, the bar runs inside the shell and touches only this:
   finds in a notification as a click.
 - **3D view:** the terminal's view through a marauder's eyes (`y`, opened by you in the terminal)
   reads public pictures of a cube's levels and the lists of cubes and levels
-  (`/api/v1/render/iso/...`), whatever you chose. With the choice on (panel, or `--pov`) it also
-  reads one public stream from the world, the entities of one cube (`/ws/entities/{cube}`), with
-  the package `websockets`. It sends nothing over any of them and no key. The choice itself stays
-  in `pov.json` on this machine and is sent nowhere.
+  (`/api/v1/render/iso/...`) and one public stream from the world, the entities of one cube
+  (`/ws/entities/{cube}`). It sends nothing over any of them and no key. With the 3D picture
+  chosen (panel, or `--pov`), the wake fetches it once from GitHub (the release of
+  `cosmergon-pov` and of Freedoom; nothing is sent but the requests for the files). The choice
+  itself stays in `pov.json` on this machine and is sent nowhere.
+- **3D picture:** the terminal starts `~/.local/share/cosmergon-pov/cosmergon-pov` only from a
+  folder that others cannot write, without a shell, and tells it what the view shows on its
+  stdin. Its window lies over the view's place in the terminal: a helper, `brain/pov_follow.py`,
+  started with the terminal, talks to Hyprland over its own sockets
+  (`$XDG_RUNTIME_DIR/hypr/...`), only to move and size the window of the program the terminal
+  started (class `com.cosmergon.pov`, a child of the terminal) over the place the terminal names
+  in `$XDG_RUNTIME_DIR/cosmergon/pov-place.json`. It reads Hyprland's list of windows and touches
+  no other. Next to that file it writes `pov-follow.json` (its process id, 0600), so that the
+  terminal starts the program only while the helper runs. It ends with the terminal, and
+  anywhere but Hyprland at once.
 - **Programs:** the brain (its own Python environment), and on your click the terminal, your
   model's agent (pi) or Omarchy's agent setup. When you press **ask**, the brain looks for who
   could answer: it asks `mise` where pi is, if Omarchy's placeholder stands in its place, asks
@@ -587,7 +604,7 @@ Everything lives in plain files:
 | `~/.local/state/shikigon/move.lock` | empty; locked while a move plays, so the running brain and a `tick` by hand never play at once |
 | `~/.local/state/shikigon/review/` | what your agent may read while it looks back: its moves, their numbers, the world's rules |
 | `~/.local/state/shikigon/setup.json` | how far **wake** got, for the panel |
-| `~/.local/state/shikigon/pov.json` | your choice of the 3D view, `{"pov": true}` or `{"pov": false}`; absent means no. Written by the wake script and by the bar, readable by you only (0600); the wake script reads it to decide whether `websockets` goes into the environment |
+| `~/.local/state/shikigon/pov.json` | your choice of the 3D picture, `{"pov": true}` or `{"pov": false}`; absent means no. Written by the wake script and by the bar, readable by you only (0600); the wake script reads it to decide whether it fetches the picture |
 | `~/.local/state/shikigon/setup.log` | what the last setup of its brain printed (pip), for when it failed |
 | `~/.local/state/shikigon/greeted` | empty; says the one welcome notification was shown |
 | `~/.local/state/shikigon/tips.json` | which first-time hints were shown, and when the last one came |

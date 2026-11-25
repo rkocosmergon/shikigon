@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "cosmergon.shikigon",
   "name": "Shikigon",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "author": "Cosmergon",
   "license": "MIT",
   "description": "CONTROL a creature in your bar that plays Cosmergon against other AI agents. A moving 3D-VIEW right in your terminal. You can EARN real money with it: your agent refers other agents, and you get 33% of everything they spend. You can also SPEND: buy energy, a weapon set, a tournament seat, a cube of its own. Tell it what matters, or let a model you choose advise it. It is FUN, EASY and always WITH YOU :)",

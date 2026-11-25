@@ -65,6 +65,10 @@ export COSMERGON_ADVISOR_CMD
 # shikigon_brain.py). The dashboard reads it and opens [M] with the last ten exchanges; PgUp
 # fetches older ones. Needs cosmergon-agent >= 0.27.6; an older dashboard ignores it.
 export COSMERGON_ADVISOR_HISTORY="$state/chat.jsonl"
+# The 3D picture opens over the view only with the follower below running: without the variable
+# the terminal (cosmergon-agent >= 0.37.0) would open it beside the window while the follower is
+# still starting (cos20 #853; the tiled window after a restart, cos20 #799, 21.11.2026).
+export COSMERGON_POV_WINDOW=follow
 # The follower of the 3D view (brain/pov_follow.py): puts the renderer's window the dashboard may
 # start over the area the dashboard names, under Hyprland only, so only then.
 # Started here, before the exec, as the brain is started (the same Python under -I; its own
