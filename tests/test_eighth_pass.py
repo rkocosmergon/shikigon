@@ -171,7 +171,7 @@ def test_a_release_never_read_is_not_asked(says: str) -> None:
 
     why = connections.untried("pi", run)
     assert why.startswith("pi is not asked"), why
-    assert "1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.5.2, 1.6.0" in why, why
+    assert "1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.5.2, 1.6.0, 1.6.1" in why, why
 
 
 # --- 5: every call of a model is counted ----------------------------------------------------------

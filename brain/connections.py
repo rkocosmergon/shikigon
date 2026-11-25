@@ -136,10 +136,13 @@ AGENTS: dict[str, dict[str, Any]] = {
         # on where the output of a package install goes (no package is installed here: no
         # extensions, offline); ``main.ts`` and ``print-mode.ts`` write their diagnostics to stderr
         # through one function and subscribe to the session before it is bound.
+        # 1.6.1 (read 25.11.2026 against 1.6.0, cos20 #492): ``system-prompt.ts``, ``cli/args.ts``
+        # and ``resource-loader.ts`` unchanged; ``main.ts`` changes one comment of the interactive
+        # first-time setup; ``print-mode.ts`` handles SIGHUP on Windows too (Linux as before).
         # Each read at its tag; a later release, a patch one too, is asked only once it is
         # read and named here (cos20 #492, eighth review, finding 4).
         "version": ["pi", "--offline", "--version"],
-        "versions": ("1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.5.2", "1.6.0"),
+        "versions": ("1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.5.2", "1.6.0", "1.6.1"),
         "model_flag": ["--model", "{model}"],
         "sign_in": ["pi"],  # its sign-in is "/login" inside pi
         "models": ["pi", "--offline", "--list-models"],

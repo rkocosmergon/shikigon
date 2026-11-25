@@ -10,6 +10,8 @@ What changed for someone who uses Shikigon. Newest first.
   body of a redirect or an error. It fetches `cosmergon-pov` v0.1.0-pre.2, whose archives
   carry a build provenance attestation of the workflow that built them; anyone can check one
   with `gh attestation verify <archive> --repo rkocosmergon/cosmergon-pov`.
+- **pi 1.6.1 is asked.** Read at its source against 1.6.0: its options and the files it puts
+  into the prompt are unchanged; it now handles SIGHUP on Windows too.
 
 ## 0.1.20 (2026-11-25)
 
